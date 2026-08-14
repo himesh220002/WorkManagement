@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 // @ts-ignore
 import Gantt from "frappe-gantt";
-import { addPipeline, updatePipelineProgress, updatePipelineDates, addPipelineTodo, togglePipelineTodo, deletePipelineTodo, reorderPipelineTodos } from "@/actions";
+import { addPipeline, updatePipelineProgress, updatePipelineDates, addPipelineTodo, togglePipelineTodo, deletePipelineTodo, reorderPipelineTodos, deletePipeline } from "@/actions";
 
 function PipelineCard({ pipeline }: { pipeline: any }) {
   const [todos, setTodos] = useState(pipeline.todos || []);
@@ -38,173 +38,199 @@ function PipelineCard({ pipeline }: { pipeline: any }) {
 
   return (
     <div className="p-6 rounded-2xl shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex flex-col justify-between hover:shadow-md transition-all duration-200">
-      <div className="p-4">
-        <div>
-          {/* Header */}
-          <div className="p-4 flex justify-between items-start mb-3 gap-2">
-            <h4 className="text-base font-bold text-gray-900 dark:text-gray-100 leading-snug">{pipeline.name}</h4>
+
+      <div>
+        {/* Header */}
+        <div className="p-4 flex justify-between items-start mb-3 gap-2">
+          <h4 className="text-base font-bold text-gray-900 dark:text-gray-100 leading-snug">{pipeline.name}</h4>
+          <div className="flex items-center gap-2">
             <span className={`px-2.5 py-0.5 text-[11px] rounded-full font-bold whitespace-nowrap ${pipeline.priority === 'High' ? 'bg-red-500/10 text-red-600 border border-red-500/20' :
               pipeline.priority === 'Medium' ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' :
                 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
               }`}>
               {pipeline.priority}
             </span>
-          </div>
-
-          {/* Tags */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            <span className="px-2.5 py-0.5 text-[10px] rounded-md font-semibold uppercase tracking-wider bg-blue-500/10 text-blue-600 border border-blue-500/20">
-              {pipeline.category}
-            </span>
-            <span className="px-2.5 py-0.5 text-[10px] rounded-md font-semibold uppercase tracking-wider bg-gray-500/10 text-gray-600 dark:text-gray-300 border border-gray-500/20">
-              {pipeline.status}
-            </span>
-          </div>
-
-          {/* Metadata */}
-          <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1.5 mb-4">
-            <div className="flex justify-between items-center"><span className="font-semibold text-gray-600 dark:text-gray-300">Owner:</span> <span>{pipeline.owner || 'Unassigned'}</span></div>
-            <div className="flex justify-between items-center"><span className="font-semibold text-gray-600 dark:text-gray-300">Timeline:</span> <span>{pipeline.startDate ? pipeline.startDate.split('T')[0] : 'TBD'} to {pipeline.endDate ? pipeline.endDate.split('T')[0] : 'TBD'}</span></div>
-            {pipeline.objectives && (
-              <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                <span className="font-semibold text-gray-600 dark:text-gray-300 block mb-0.5">Objectives:</span>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2">{pipeline.objectives}</p>
-              </div>
-            )}
-            {pipeline.kpis && (
-              <div className="mt-1">
-                <span className="font-semibold text-gray-600 dark:text-gray-300 block mb-0.5">KPIs:</span>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1">{pipeline.kpis}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Progress & Risk */}
-          <div className="my-4 pt-3 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex justify-between items-center mb-1 text-xs">
-              <span className="text-gray-500 dark:text-gray-400 font-medium">Progress</span>
-              <span className="font-bold text-gray-900 dark:text-gray-100">{pipeline.progress}%</span>
-            </div>
-            <div className="w-full h-2 bg-gray-50 dark:bg-gray-700/50 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700">
-              <div className="h-full bg-blue-600 rounded-full transition-all duration-300" style={{ width: `${pipeline.progress}%` }}></div>
-            </div>
-            <div className="flex justify-between items-center mt-2.5 text-xs">
-              <span className="text-gray-500 dark:text-gray-400 font-medium">Risk Level:</span>
-              <span className={`font-semibold text-[11px] px-2 py-0.5 rounded ${pipeline.riskLevel === 'High' ? 'bg-red-500/10 text-red-600' :
-                pipeline.riskLevel === 'Medium' ? 'bg-amber-500/10 text-amber-600' :
-                  'bg-emerald-500/10 text-emerald-600'
-                }`}>
-                {pipeline.riskLevel}
-              </span>
-            </div>
+            <form action={deletePipeline} className="m-0 flex" onSubmit={(e) => { if (!window.confirm("Are you sure you want to delete this pipeline?")) e.preventDefault(); }}>
+              <input type="hidden" name="pipelineId" value={pipeline._id.toString()} />
+              <button type="submit" className="text-gray-400 hover:text-red-500 transition-colors p-1 cursor-pointer" title="Delete Pipeline">
+                <i className="fa-solid fa-trash-can"></i>
+              </button>
+            </form>
           </div>
         </div>
 
-        {/* Todo List Section */}
-        <div className="mt-2 border-t border-gray-200 dark:border-gray-700 pt-4">
-          <div className="flex justify-between items-center mb-2.5">
-            <h5 className="font-bold text-xs uppercase tracking-wider text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
-              <i className="fa-solid fa-list-check text-blue-600"></i> Checklist
-            </h5>
-            <button
-              type="button"
-              onClick={() => setIsReorderMode(!isReorderMode)}
-              className={`text-[11px] px-2.5 py-1 rounded-md font-medium transition-all ${isReorderMode
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                }`}
-            >
-              <i className="fa-solid fa-arrows-up-down mr-1"></i> {isReorderMode ? 'Done' : 'Reorder'}
-            </button>
+        {/* Tags */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <span className="px-2.5 py-0.5 text-[10px] rounded-md font-semibold uppercase tracking-wider bg-blue-500/10 text-blue-600 border border-blue-500/20">
+            {pipeline.category}
+          </span>
+          <span className="px-2.5 py-0.5 text-[10px] rounded-md font-semibold uppercase tracking-wider bg-gray-500/10 text-gray-600 dark:text-gray-300 border border-gray-500/20">
+            {pipeline.status}
+          </span>
+        </div>
+
+        {/* Metadata */}
+        <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1.5 mb-4">
+          <div className="flex justify-between items-center"><span className="font-semibold text-gray-600 dark:text-gray-300">Owner:</span> <span>{pipeline.owner || 'Unassigned'}</span></div>
+          <div className="flex justify-between items-center"><span className="font-semibold text-gray-600 dark:text-gray-300">Timeline:</span> <span>{pipeline.startDate ? pipeline.startDate.split('T')[0] : 'TBD'} to {pipeline.endDate ? pipeline.endDate.split('T')[0] : 'TBD'}</span></div>
+          {pipeline.objectives && (
+            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <span className="font-semibold text-gray-600 dark:text-gray-300 block mb-0.5">Objectives:</span>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2">{pipeline.objectives}</p>
+            </div>
+          )}
+          {pipeline.kpis && (
+            <div className="mt-1">
+              <span className="font-semibold text-gray-600 dark:text-gray-300 block mb-0.5">KPIs:</span>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1">{pipeline.kpis}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Progress & Risk */}
+        <div className="my-4 pt-3 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex justify-between items-center mb-1 text-xs">
+            <span className="text-gray-500 dark:text-gray-400 font-medium">Progress</span>
+            <span className="font-bold text-gray-900 dark:text-gray-100">{pipeline.progress}%</span>
           </div>
-
-          <div className="space-y-1.5 mb-3 max-h-48 overflow-y-auto pr-0.5">
-            {todos.map((todo: any, index: number) => (
-              <div
-                key={todo._id || index}
-                draggable={isReorderMode}
-                onDragStart={(e) => handleDragStart(e, index)}
-                onDragOver={(e) => handleDragOver(e, index)}
-                onDrop={handleDrop}
-                className={`flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 text-xs transition-all ${isReorderMode ? 'cursor-move hover:bg-blue-500/10 border-blue-400' : ''
-                  } ${draggedIndex === index ? 'opacity-40 border-dashed border-blue-500' : ''}`}
-              >
-                {isReorderMode && <i className="fa-solid fa-grip-vertical text-gray-500 dark:text-gray-400 cursor-move"></i>}
-                {!isReorderMode && (
-                  <input
-                    type="checkbox"
-                    className="rounded cursor-pointer accent-blue-600 w-3.5 h-3.5"
-                    checked={todo.completed}
-                    onChange={(e) => {
-                      const newCompleted = e.target.checked;
-                      const newTodos = [...todos];
-                      newTodos[index].completed = newCompleted;
-                      setTodos(newTodos);
-                      togglePipelineTodo(pipeline._id, todo._id, newCompleted);
-                    }}
-                  />
-                )}
-                <span className={`flex-1 break-words ${todo.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100 font-medium'}`}>
-                  {todo.text}
-                </span>
-                {!isReorderMode && (
-                  <button
-                    type="button"
-                    className="text-red-400 hover:text-red-600 transition-colors p-1 cursor-pointer"
-                    onClick={() => {
-                      const newTodos = [...todos];
-                      newTodos.splice(index, 1);
-                      setTodos(newTodos);
-                      deletePipelineTodo(pipeline._id, todo._id);
-                    }}
-                  >
-                    <i className="fa-solid fa-trash-can text-[11px]"></i>
-                  </button>
-                )}
-              </div>
-            ))}
-            {todos.length === 0 && (
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 italic text-center py-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-dashed border-gray-200 dark:border-gray-700">
-                No tasks added yet
-              </p>
-            )}
+          <div className="w-full h-2 bg-gray-50 dark:bg-gray-700/50 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700">
+            <div className="h-full bg-blue-600 rounded-full transition-all duration-300" style={{ width: `${pipeline.progress}%` }}></div>
           </div>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const form = e.currentTarget;
-              const formData = new FormData(form);
-              const text = formData.get("text") as string;
-              if (!text || !text.trim()) return;
-
-              const newTodo = { _id: Date.now().toString(), text: text.trim(), completed: false };
-              setTodos((prev: any) => [...prev, newTodo]);
-              form.reset();
-
-              // Background async save without blocking UI thread
-              addPipelineTodo(pipeline._id, formData);
-            }}
-            id={`todo-form-${pipeline._id}`}
-            className="flex gap-1.5"
-          >
-            <input
-              type="text"
-              name="text"
-              placeholder="Add task..."
-              className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
-              required
-            />
-            <button
-              type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-all flex items-center justify-center cursor-pointer"
-            >
-              <i className="fa-solid fa-plus"></i>
-            </button>
-          </form>
+          <div className="flex justify-between items-center mt-2.5 text-xs">
+            <span className="text-gray-500 dark:text-gray-400 font-medium">Risk Level:</span>
+            <span className={`font-semibold text-[11px] px-2 py-0.5 rounded ${pipeline.riskLevel === 'High' ? 'bg-red-500/10 text-red-600' :
+              pipeline.riskLevel === 'Medium' ? 'bg-amber-500/10 text-amber-600' :
+                'bg-emerald-500/10 text-emerald-600'
+              }`}>
+              {pipeline.riskLevel}
+            </span>
+          </div>
         </div>
       </div>
+
+      {/* Todo List Section */}
+      <div className="mt-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+        <div className="flex justify-between items-center mb-2.5">
+          <h5 className="font-bold text-xs uppercase tracking-wider text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+            <i className="fa-solid fa-list-check text-blue-600"></i> Checklist
+          </h5>
+          <button
+            type="button"
+            onClick={() => setIsReorderMode(!isReorderMode)}
+            className={`text-[11px] px-2.5 py-1 rounded-md font-medium transition-all ${isReorderMode
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-blue-50 hover:text-blue-600'
+              }`}
+          >
+            <i className="fa-solid fa-arrows-up-down mr-1"></i> {isReorderMode ? 'Done' : 'Reorder'}
+          </button>
+        </div>
+
+        <div className="space-y-1.5 mb-3 max-h-48 overflow-y-auto pr-0.5">
+          {todos.map((todo: any, index: number) => (
+            <div
+              key={todo._id || index}
+              draggable={isReorderMode}
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDrop={handleDrop}
+              className={`flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 text-xs transition-all ${isReorderMode ? 'cursor-move hover:bg-blue-500/10 border-blue-400' : ''
+                } ${draggedIndex === index ? 'opacity-40 border-dashed border-blue-500' : ''}`}
+            >
+              {isReorderMode && <i className="fa-solid fa-grip-vertical text-gray-500 dark:text-gray-400 cursor-move"></i>}
+              {!isReorderMode && (
+                <input
+                  type="checkbox"
+                  className="rounded cursor-pointer accent-blue-600 w-3.5 h-3.5"
+                  checked={todo.completed}
+                  onChange={(e) => {
+                    const newCompleted = e.target.checked;
+                    const newTodos = [...todos];
+                    newTodos[index].completed = newCompleted;
+                    setTodos(newTodos);
+                    togglePipelineTodo(pipeline._id, todo._id, newCompleted);
+                  }}
+                />
+              )}
+              <span className={`flex-1 break-words ${todo.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100 font-medium'}`}>
+                {todo.text}
+              </span>
+              {todo.assigneeName && !isReorderMode && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 font-semibold whitespace-nowrap hidden sm:inline-block">
+                  {todo.assigneeType === 'Group' ? <i className="fa-solid fa-users mr-1"></i> : <i className="fa-solid fa-user mr-1"></i>}
+                  {todo.assigneeName}
+                </span>
+              )}
+              {!isReorderMode && (
+                <button
+                  type="button"
+                  className="text-red-400 hover:text-red-600 transition-colors p-1 cursor-pointer"
+                  onClick={() => {
+                    const newTodos = [...todos];
+                    newTodos.splice(index, 1);
+                    setTodos(newTodos);
+                    deletePipelineTodo(pipeline._id, todo._id);
+                  }}
+                >
+                  <i className="fa-solid fa-trash-can text-[11px]"></i>
+                </button>
+              )}
+            </div>
+          ))}
+          {todos.length === 0 && (
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 italic text-center py-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-dashed border-gray-200 dark:border-gray-700">
+              No tasks added yet
+            </p>
+          )}
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const form = e.currentTarget;
+            const formData = new FormData(form);
+            const text = formData.get("text") as string;
+            const assigneeType = formData.get("assigneeType") as string || "Individual";
+            const assigneeName = formData.get("assigneeName") as string || "";
+            if (!text || !text.trim()) return;
+
+            const newTodo = { _id: Date.now().toString(), text: text.trim(), completed: false, assigneeType, assigneeName };
+            setTodos((prev: any) => [...prev, newTodo]);
+            form.reset();
+
+            // Background async save without blocking UI thread
+            addPipelineTodo(pipeline._id, formData);
+          }}
+          id={`todo-form-${pipeline._id}`}
+          className="flex gap-1.5 flex-wrap md:flex-nowrap items-center"
+        >
+          <input
+            type="text"
+            name="text"
+            placeholder="Add task..."
+            className="flex-1 min-w-[120px] px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+            required
+          />
+          <select name="assigneeType" className="w-24 px-2 py-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all cursor-pointer">
+            <option value="Individual">Individual</option>
+            <option value="Group">Group</option>
+          </select>
+          <input
+            type="text"
+            name="assigneeName"
+            placeholder="Assignee Name..."
+            className="w-28 px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+          />
+          <button
+            type="submit"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-all flex items-center justify-center cursor-pointer shrink-0"
+          >
+            <i className="fa-solid fa-plus"></i>
+          </button>
+        </form>
+      </div>
     </div>
+
   );
 }
 
@@ -212,6 +238,7 @@ export default function TimelineClient({ tasks }: { tasks: any[] }) {
   const ganttWrapperRef = useRef<HTMLDivElement>(null);
   const ganttInstance = useRef<any>(null);
   const [activeCategory, setActiveCategory] = useState("All");
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
   const categories = ["All", "Development", "Sales", "Finance", "HR", "Operations", "Marketing", "General"];
 
@@ -410,76 +437,88 @@ export default function TimelineClient({ tasks }: { tasks: any[] }) {
         </div>
 
         {/* Form to Add Detailed Pipeline */}
-        <div>
-          <h4 className="mb-4 text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <i className="fa-solid fa-layer-group text-blue-600"></i> Initialize New Pipeline
-          </h4>
-          <form action={addPipeline} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-inner">
-            <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
-              <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Pipeline Name *</label>
-              <input type="text" name="name" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="e.g. Frontend Sprint Q3" required />
-            </div>
-            <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
-              <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Category</label>
-              <select name="category" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
-                {categories.filter(c => c !== "All").map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
-              <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Owner / Lead</label>
-              <input type="text" name="owner" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="Person or Team" />
-            </div>
-            <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
-              <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Priority</label>
-              <select name="priority" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
-            </div>
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+          <button
+            type="button"
+            onClick={() => setIsFormOpen(!isFormOpen)}
+            className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center justify-between w-full py-2 hover:opacity-80 transition-opacity cursor-pointer outline-none"
+          >
+            <span className="flex items-center gap-2">
+              <i className="fa-solid fa-layer-group text-blue-600"></i> Initialize New Pipeline
+            </span>
+            <i className={`fa-solid fa-chevron-${isFormOpen ? 'up' : 'down'} text-gray-500 dark:text-gray-400 text-sm transition-transform`}></i>
+          </button>
 
-            <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
-              <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Start Date *</label>
-              <input type="date" name="startDate" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" required />
-            </div>
-            <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
-              <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">End Date *</label>
-              <input type="date" name="endDate" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" required />
-            </div>
-            <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
-              <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Initial Progress (%)</label>
-              <input type="number" name="progress" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" min="0" max="100" defaultValue="0" />
-            </div>
-            <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
-              <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Risk Level</label>
-              <select name="riskLevel" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-              </select>
-            </div>
+          <div className={`grid transition-all duration-300 ease-in-out ${isFormOpen ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0'}`}>
+            <div className="overflow-hidden">
+              <form action={addPipeline} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-inner">
+                <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                  <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Pipeline Name *</label>
+                  <input type="text" name="name" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="e.g. Frontend Sprint Q3" required />
+                </div>
+                <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                  <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Category</label>
+                  <select name="category" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
+                    {categories.filter(c => c !== "All").map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                  <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Owner / Lead</label>
+                  <input type="text" name="owner" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="Person or Team" />
+                </div>
+                <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                  <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Priority</label>
+                  <select name="priority" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
 
-            <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400 lg:col-span-2">
-              <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Objectives / Goals</label>
-              <input type="text" name="objectives" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="What does this pipeline achieve?" />
-            </div>
-            <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400 lg:col-span-2">
-              <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">KPIs / Metrics</label>
-              <input type="text" name="kpis" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="e.g. Latency < 200ms" />
-            </div>
+                <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                  <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Start Date *</label>
+                  <input type="date" name="startDate" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" required />
+                </div>
+                <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                  <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">End Date *</label>
+                  <input type="date" name="endDate" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" required />
+                </div>
+                <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                  <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Initial Progress (%)</label>
+                  <input type="number" name="progress" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" min="0" max="100" defaultValue="0" />
+                </div>
+                <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                  <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Risk Level</label>
+                  <select name="riskLevel" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                  </select>
+                </div>
 
-            <div className="lg:col-span-4 flex justify-end mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <button type="submit" className="px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-sm font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer">
-                <i className="fa-solid fa-plus"></i> Create Pipeline
-              </button>
+                <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400 lg:col-span-2">
+                  <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Objectives / Goals</label>
+                  <input type="text" name="objectives" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="What does this pipeline achieve?" />
+                </div>
+                <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400 lg:col-span-2">
+                  <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">KPIs / Metrics</label>
+                  <input type="text" name="kpis" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="e.g. Latency < 200ms" />
+                </div>
+
+                <div className="lg:col-span-4 flex justify-end mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <button type="submit" className="px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-sm font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer">
+                    <i className="fa-solid fa-plus"></i> Create Pipeline
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          </div>
         </div>
       </section>
 
       {/* Frappe Gantt Chart Section */}
-      <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-2 md:p-6 rounded-xl shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 mb-8 overflow-hidden">
-        <div className="w-full overflow-x-auto min-h-[400px]">
+      <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-2 md:p-6 mb-8 overflow-hidden">
+        <div className="w-full overflow-x-auto">
           <div ref={ganttWrapperRef} className="min-w-[800px]"></div>
         </div>
       </section>
@@ -489,7 +528,7 @@ export default function TimelineClient({ tasks }: { tasks: any[] }) {
         <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6 flex items-center gap-3">
           <i className="fa-solid fa-layer-group text-blue-600"></i> Pipeline Details
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTasks.map(pipeline => (
             <PipelineCard key={pipeline._id} pipeline={pipeline} />
           ))}

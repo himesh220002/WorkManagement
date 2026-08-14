@@ -124,7 +124,9 @@ const pipelineSchema = new mongoose.Schema({
   notes: { type: String, default: "" },
   todos: [{
     text: String,
-    completed: { type: Boolean, default: false }
+    completed: { type: Boolean, default: false },
+    assigneeType: { type: String, enum: ["Individual", "Group"], default: "Individual" },
+    assigneeName: { type: String, default: "" }
   }]
 });
 export const Pipeline = mongoose.models.Pipeline || mongoose.model("Pipeline", pipelineSchema);

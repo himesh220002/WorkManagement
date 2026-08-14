@@ -123,6 +123,9 @@ export async function updatePipelineDates(taskId: string, startDate: string, end
 
 export async function addPipelineTodo(pipelineId: string, formData: FormData) {
   const text = formData.get("text") as string;
+  const assigneeType = formData.get("assigneeType") as string || "Individual";
+  const assigneeName = formData.get("assigneeName") as string || "";
+  
   if (!text) return;
   await connectToDatabase();
   const pipeline = await Pipeline.findById(pipelineId);
@@ -130,7 +133,7 @@ export async function addPipelineTodo(pipelineId: string, formData: FormData) {
     if (!Array.isArray(pipeline.todos)) {
       pipeline.todos = [];
     }
-    pipeline.todos.push({ text, completed: false });
+    pipeline.todos.push({ text, completed: false, assigneeType, assigneeName });
     await pipeline.save();
   }
 }
@@ -153,4 +156,12 @@ export async function deletePipelineTodo(pipelineId: string, todoId: string) {
 export async function reorderPipelineTodos(pipelineId: string, todos: any[]) {
   await connectToDatabase();
   await Pipeline.findByIdAndUpdate(pipelineId, { todos });
+}
+
+export async function deletePipeline(formData: FormData) {
+  const pipelineId = formData.get("pipelineId") as string;
+  if (!pipelineId) return;
+  await connectToDatabase();
+  await Pipeline.findByIdAndDelete(pipelineId);
+  revalidatePath("/dev/timeline");
 }
