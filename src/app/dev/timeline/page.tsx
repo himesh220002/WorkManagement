@@ -30,6 +30,13 @@ export default async function TimelinePage() {
     tags: t.tags || "",
     riskLevel: t.riskLevel || "Low",
     notes: t.notes || "",
+    todos: Array.isArray(t.todos)
+      ? t.todos.map((todo: any) => ({
+          _id: todo._id ? todo._id.toString() : Math.random().toString(),
+          text: todo.text || "",
+          completed: Boolean(todo.completed),
+        }))
+      : [],
   }));
 
   return <TimelineClient tasks={cleanTasks} />;

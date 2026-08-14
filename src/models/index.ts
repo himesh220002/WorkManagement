@@ -121,6 +121,10 @@ const pipelineSchema = new mongoose.Schema({
   kpis: { type: String, default: "" },
   tags: { type: String, default: "" },
   riskLevel: { type: String, enum: ["Low", "Medium", "High"], default: "Low" },
-  notes: { type: String, default: "" }
+  notes: { type: String, default: "" },
+  todos: [{
+    text: String,
+    completed: { type: Boolean, default: false }
+  }]
 });
 export const Pipeline = mongoose.models.Pipeline || mongoose.model("Pipeline", pipelineSchema);

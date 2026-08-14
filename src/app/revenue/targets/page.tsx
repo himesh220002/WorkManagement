@@ -1,6 +1,6 @@
 import connectToDatabase from "@/lib/mongodb";
 import { Target } from "@/models";
-import RevenueTargetsClient from "./RevenueTargetsClient";
+import RevenueTargetsClient from "@/app/revenue/targets/RevenueTargetsClient";
 
 export default async function RevenueTargetsPage() {
   await connectToDatabase();

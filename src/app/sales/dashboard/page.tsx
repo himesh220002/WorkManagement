@@ -1,13 +1,13 @@
 import connectToDatabase from "@/lib/mongodb";
 import { Lead, Campaign } from "@/models";
-import SalesDashboardClient from "./SalesDashboardClient";
+import SalesDashboardClient from "@/app/sales/dashboard/SalesDashboardClient";
 
 export default async function SalesDashboardPage() {
   await connectToDatabase();
 
   let leads: any[] = [];
   let campaigns: any[] = [];
-  
+
   try {
     leads = await Lead.find({}).lean();
     campaigns = await Campaign.find({}).lean();

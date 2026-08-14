@@ -120,3 +120,37 @@ export async function updatePipelineDates(taskId: string, startDate: string, end
     revalidatePath("/dev/timeline");
   }
 }
+
+export async function addPipelineTodo(pipelineId: string, formData: FormData) {
+  const text = formData.get("text") as string;
+  if (!text) return;
+  await connectToDatabase();
+  const pipeline = await Pipeline.findById(pipelineId);
+  if (pipeline) {
+    if (!Array.isArray(pipeline.todos)) {
+      pipeline.todos = [];
+    }
+    pipeline.todos.push({ text, completed: false });
+    await pipeline.save();
+  }
+}
+
+export async function togglePipelineTodo(pipelineId: string, todoId: string, completed: boolean) {
+  await connectToDatabase();
+  await Pipeline.updateOne(
+    { _id: pipelineId, "todos._id": todoId },
+    { $set: { "todos.$.completed": completed } }
+  );
+}
+
+export async function deletePipelineTodo(pipelineId: string, todoId: string) {
+  await connectToDatabase();
+  await Pipeline.findByIdAndUpdate(pipelineId, {
+    $pull: { todos: { _id: todoId } }
+  });
+}
+
+export async function reorderPipelineTodos(pipelineId: string, todos: any[]) {
+  await connectToDatabase();
+  await Pipeline.findByIdAndUpdate(pipelineId, { todos });
+}

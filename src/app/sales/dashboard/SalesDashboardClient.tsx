@@ -60,15 +60,15 @@ export default function SalesDashboardClient({
   };
 
   return (
-    <main className="main-dashboard p-6 flex-1">
-      <header className="dashboard-banner glass-card p-6 rounded-lg mb-6 border-l-4 border-emerald-500 flex justify-between items-center">
+    <main className="flex flex-col min-w-0 p-6 flex-1">
+      <header className=" bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg mb-6 border-l-4 border-emerald-500 flex justify-between items-center">
         <div>
-          <h1 className="list-heading text-3xl font-bold text-[var(--text-primary)]">Sales Pipeline Management</h1>
-          <div className="date-badge mt-2 text-sm text-[var(--text-muted)] flex items-center gap-2">
+          <h1 className=" text-3xl font-bold text-gray-900 dark:text-gray-100">Sales Pipeline Management</h1>
+          <div className="date-badge mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
             <i className="fa-solid fa-chart-line"></i> Active Campaigns Overview
           </div>
         </div>
-        <div className="storage-tag px-3 py-1 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-full text-sm font-medium text-[var(--text-secondary)]">
+        <div className="storage-tag px-3 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full text-sm font-medium text-gray-600 dark:text-gray-300">
           <span className="w-2 h-2 rounded-full bg-green-500 inline-block mr-2"></span>
           Active
         </div>
@@ -76,12 +76,12 @@ export default function SalesDashboardClient({
 
       {/* Data Entry Forms */}
       <div className="flex flex-wrap md:flex-nowrap gap-6 mb-6">
-        <div className="glass-card p-5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] flex-1">
-          <h4 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">Add New Lead</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-1">
+          <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Add New Lead</h4>
           <form action={addLead} className="flex gap-2 flex-wrap items-center">
-            <input type="text" name="name" className="flex-1 min-w-[150px] p-2 rounded border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--text-primary)]" placeholder="Lead Name" required />
-            <input type="text" name="owner" className="w-32 p-2 rounded border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--text-primary)]" placeholder="Owner" required />
-            <select name="status" className="w-32 p-2 rounded border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--text-primary)]">
+            <input type="text" name="name" className="flex-1 min-w-[150px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Lead Name" required />
+            <input type="text" name="owner" className="w-32 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Owner" required />
+            <select name="status" className="w-32 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
               <option value="New">New</option>
               <option value="Working">Working</option>
               <option value="Qualified">Qualified</option>
@@ -91,12 +91,12 @@ export default function SalesDashboardClient({
           </form>
         </div>
         
-        <div className="glass-card p-5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] flex-1">
-          <h4 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">Add New Campaign</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-1">
+          <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Add New Campaign</h4>
           <form action={addCampaign} className="flex gap-2 flex-wrap items-center">
-            <input type="text" name="name" className="flex-1 min-w-[150px] p-2 rounded border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--text-primary)]" placeholder="Campaign Name" required />
-            <input type="number" name="leadsGenerated" className="w-24 p-2 rounded border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--text-primary)]" placeholder="Leads" required />
-            <input type="number" name="expectedRevenue" className="w-32 p-2 rounded border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--text-primary)]" placeholder="Est. Rev ($)" required />
+            <input type="text" name="name" className="flex-1 min-w-[150px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Campaign Name" required />
+            <input type="number" name="leadsGenerated" className="w-24 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Leads" required />
+            <input type="number" name="expectedRevenue" className="w-32 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Est. Rev ($)" required />
             <button type="submit" className="px-4 py-2 bg-emerald-500 text-white rounded hover:bg-emerald-600 transition-colors">Add Campaign</button>
           </form>
         </div>
@@ -104,34 +104,34 @@ export default function SalesDashboardClient({
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="glass-card p-5 text-center rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)]">
-          <h4 className="text-[var(--text-muted)] mb-2 text-sm">Total Leads</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Total Leads</h4>
           <h2 className="text-3xl font-bold text-blue-500">{leads ? leads.length : 0}</h2>
         </div>
-        <div className="glass-card p-5 text-center rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)]">
-          <h4 className="text-[var(--text-muted)] mb-2 text-sm">Active Campaigns</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Active Campaigns</h4>
           <h2 className="text-3xl font-bold text-emerald-500">{campaigns ? campaigns.length : 0}</h2>
         </div>
-        <div className="glass-card p-5 text-center rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)]">
-          <h4 className="text-[var(--text-muted)] mb-2 text-sm">Expected Revenue</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Expected Revenue</h4>
           <h2 className="text-3xl font-bold text-amber-500">$2.4M</h2>
         </div>
-        <div className="glass-card p-5 text-center rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)]">
-          <h4 className="text-[var(--text-muted)] mb-2 text-sm">Conversion Rate</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Conversion Rate</h4>
           <h2 className="text-3xl font-bold text-violet-500">18%</h2>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="glass-card p-5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] md:col-span-2">
-          <h3 className="text-md font-semibold mb-4 text-[var(--text-primary)]">Top Campaigns by Leads Generated</h3>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 md:col-span-2">
+          <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Top Campaigns by Leads Generated</h3>
           <div className="h-72">
             <Bar data={campaignsData} options={{ indexAxis: "y", responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }} />
           </div>
         </div>
 
-        <div className="glass-card p-5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)]">
-          <h3 className="text-md font-semibold mb-4 text-[var(--text-primary)]">Expected Revenue by Channel</h3>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Expected Revenue by Channel</h3>
           <div className="h-72">
             <Doughnut data={revenueData} options={{ responsive: true, maintainAspectRatio: false }} />
           </div>
@@ -139,38 +139,38 @@ export default function SalesDashboardClient({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="glass-card p-5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)]">
-          <h3 className="text-md font-semibold mb-4 text-[var(--text-primary)]">Lead Status by Owner</h3>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Lead Status by Owner</h3>
           <div className="h-64">
             <Bar data={leadsData} options={{ indexAxis: "y", responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }} />
           </div>
         </div>
 
-        <div className="glass-card p-5 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)]">
-          <h3 className="text-md font-semibold mb-4 text-[var(--text-primary)]">Recent Leads</h3>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Recent Leads</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-[var(--glass-border)]">
-                  <th className="p-3 text-sm font-semibold text-[var(--text-secondary)]">Name</th>
-                  <th className="p-3 text-sm font-semibold text-[var(--text-secondary)]">Status</th>
-                  <th className="p-3 text-sm font-semibold text-[var(--text-secondary)]">Source</th>
+                <tr className="border-b border-gray-200 dark:border-gray-700">
+                  <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Name</th>
+                  <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Status</th>
+                  <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Source</th>
                 </tr>
               </thead>
               <tbody>
                 {leads && leads.length > 0 ? (
                   leads.slice(0, 5).map((l, i) => (
-                    <tr key={i} className="border-b border-[var(--glass-border)] hover:bg-[var(--glass-bg-hover)]">
-                      <td className="p-3 text-sm text-[var(--text-primary)]">{l.name}</td>
+                    <tr key={i} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:bg-gray-700/50">
+                      <td className="p-3 text-sm text-gray-900 dark:text-gray-100">{l.name}</td>
                       <td className="p-3">
                         <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-full font-medium">{l.status}</span>
                       </td>
-                      <td className="p-3 text-sm text-[var(--text-primary)]">{l.source}</td>
+                      <td className="p-3 text-sm text-gray-900 dark:text-gray-100">{l.source}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={3} className="p-3 text-center text-[var(--text-muted)] text-sm">No leads yet.</td>
+                    <td colSpan={3} className="p-3 text-center text-gray-500 dark:text-gray-400 text-sm">No leads yet.</td>
                   </tr>
                 )}
               </tbody>

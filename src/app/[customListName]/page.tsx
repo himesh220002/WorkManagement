@@ -111,36 +111,36 @@ export default async function TodoListPage({ params }: { params: Promise<{ custo
   const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   return (
-    <main className="main-dashboard p-6 flex-1">
-      <header className="dashboard-banner glass-card p-6 rounded-lg mb-6 flex justify-between items-center">
+    <main className="flex flex-col min-w-0 p-6 flex-1">
+      <header className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6 flex justify-between items-center">
         <div>
-          <h1 className="list-heading text-3xl font-bold text-[var(--text-primary)]">{customListName}</h1>
-          <div className="date-badge mt-2 text-sm text-[var(--text-muted)] flex items-center gap-2">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{customListName}</h1>
+          <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
             <i className="fa-regular fa-calendar-alt"></i>
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
           </div>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <div className="text-sm text-[var(--text-muted)]">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
             <strong>{completedCount}</strong> of <strong>{totalCount}</strong> completed ({percent}%)
           </div>
-          <div className="w-48 h-2 bg-[var(--glass-border)] rounded-full overflow-hidden">
+          <div className="w-48 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${percent}%` }}></div>
           </div>
         </div>
       </header>
 
       {/* Add New Task Form */}
-      <form action={addItem} className="glass-card p-6 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] mb-6 flex gap-4 flex-wrap items-center">
+      <form action={addItem} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6 flex gap-4 flex-wrap items-center">
         <input type="hidden" name="listName" value={customListName} />
         <input
           type="text"
           name="newItem"
-          className="flex-1 min-w-[200px] p-2 rounded border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--text-primary)]"
+          className="flex-1 min-w-[200px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
           placeholder={`Add a new task to ${customListName}...`}
           required
         />
-        <select name="priority" className="p-2 rounded border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--text-primary)]">
+        <select name="priority" className="p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
           <option value="high">🔥 High</option>
           <option value="medium" defaultValue="medium">⚡ Medium</option>
           <option value="low">🌱 Low</option>
@@ -153,7 +153,7 @@ export default async function TodoListPage({ params }: { params: Promise<{ custo
       <div className="space-y-4">
         {listItems && listItems.length > 0 ? (
           listItems.map((item: any) => (
-            <div key={item._id.toString()} className={`glass-card p-4 rounded-lg border border-[var(--glass-border)] flex justify-between items-center transition-all hover:bg-[var(--glass-bg-hover)] ${item.completed ? 'opacity-50' : 'bg-[var(--glass-bg)]'}`}>
+            <div key={item._id.toString()} className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-4 flex justify-between items-center transition-all hover:bg-gray-50 dark:hover:bg-gray-700/50 ${item.completed ? 'opacity-50' : ''}`}>
               <div className="flex items-center gap-4">
                 <form action={toggleItem} className="m-0 flex items-center">
                   <input type="hidden" name="itemId" value={item._id.toString()} />
@@ -161,7 +161,7 @@ export default async function TodoListPage({ params }: { params: Promise<{ custo
                   <input type="hidden" name="currentStatus" value={item.completed.toString()} />
                   <AutoSubmitCheckbox defaultChecked={item.completed} />
                 </form>
-                <span className={`text-lg font-medium ${item.completed ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-primary)]'}`}>
+                <span className={`text-lg font-medium ${item.completed ? 'text-gray-500 dark:text-gray-400 line-through' : 'text-gray-900 dark:text-gray-100'}`}>
                   {item.name}
                 </span>
               </div>
@@ -185,10 +185,10 @@ export default async function TodoListPage({ params }: { params: Promise<{ custo
             </div>
           ))
         ) : (
-          <div className="glass-card p-10 text-center rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)]">
-            <i className="fa-solid fa-clipboard-check text-4xl text-[var(--text-muted)] mb-4"></i>
-            <h3 className="text-xl font-semibold text-[var(--text-primary)]">No tasks found</h3>
-            <p className="text-[var(--text-muted)] mt-2">Add a task above to get started!</p>
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-10 text-center">
+            <i className="fa-solid fa-clipboard-check text-4xl text-gray-500 dark:text-gray-400 mb-4"></i>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">No tasks found</h3>
+            <p className="text-gray-500 dark:text-gray-400 mt-2">Add a task above to get started!</p>
           </div>
         )}
       </div>

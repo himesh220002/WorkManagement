@@ -29,10 +29,15 @@ export default function RootLayout({
             try {
               const savedTheme = localStorage.getItem('taskflow_theme') || 'light';
               document.documentElement.setAttribute('data-theme', savedTheme);
+              if (savedTheme === 'dark') {
+                document.documentElement.classList.add('dark');
+              } else {
+                document.documentElement.classList.remove('dark');
+              }
             } catch (e) {}
           `}
         </Script>
-        <div className="app-container">
+        <div className="w-full max-w-full p-4 md:p-6 flex flex-col xl:grid xl:grid-cols-[260px_1fr] gap-6 flex-1 min-h-screen mx-auto">
           <Sidebar />
           {children}
         </div>
