@@ -1,5 +1,5 @@
 import connectToDatabase from "@/lib/mongodb";
-import { Lead, Campaign, Pipeline } from "@/models";
+import { Lead, Campaign, Pipeline, Project, Team, TaskNode, User } from "@/models";
 import SalesDashboardClient from "@/app/sales/dashboard/SalesDashboardClient";
 
 export default async function SalesDashboardPage() {
@@ -8,11 +8,19 @@ export default async function SalesDashboardPage() {
   let leads: any[] = [];
   let campaigns: any[] = [];
   let pipelines: any[] = [];
+  let projects: any[] = [];
+  let teams: any[] = [];
+  let taskNodes: any[] = [];
+  let users: any[] = [];
 
   try {
     leads = await Lead.find({}).lean();
     campaigns = await Campaign.find({}).lean();
     pipelines = await Pipeline.find({ category: "Sales" }).sort({ progress: -1 }).lean();
+    projects = await Project.find({}, { name: 1 }).lean();
+    teams = await Team.find({}, { name: 1 }).lean();
+    taskNodes = await TaskNode.find({}, { name: 1 }).lean();
+    users = await User.find({}, { name: 1 }).lean();
   } catch (err) {
     console.error(err);
   }
@@ -43,6 +51,10 @@ export default async function SalesDashboardPage() {
     riskLevel: p.riskLevel,
     objectives: p.objectives,
     kpis: p.kpis,
+    projectId: p.projectId ? p.projectId.toString() : "",
+    teamId: p.teamId ? p.teamId.toString() : "",
+    taskId: p.taskId ? p.taskId.toString() : "",
+    memberId: p.memberId ? p.memberId.toString() : "",
     todos: Array.isArray(p.todos)
       ? p.todos.map((todo: any) => ({
           _id: todo._id ? todo._id.toString() : Math.random().toString(),
@@ -54,5 +66,12 @@ export default async function SalesDashboardPage() {
       : [],
   }));
 
-  return <SalesDashboardClient leads={cleanLeads} campaigns={cleanCampaigns} pipelines={cleanPipelines} />;
+  const options = {
+    projects: projects.map(p => ({ id: p._id.toString(), name: p.name })),
+    teams: teams.map(t => ({ id: t._id.toString(), name: t.name })),
+    tasks: taskNodes.map(t => ({ id: t._id.toString(), name: t.name })),
+    users: users.map(u => ({ id: u._id.toString(), name: u.name })),
+  };
+
+  return <SalesDashboardClient leads={cleanLeads} campaigns={cleanCampaigns} pipelines={cleanPipelines} options={options} />;
 }

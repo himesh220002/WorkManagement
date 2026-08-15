@@ -11,8 +11,9 @@ import {
   Legend,
 } from "chart.js";
 import { Bar, Doughnut } from "react-chartjs-2";
-import { addLead, addCampaign } from "@/actions";
+import { addLead, addCampaign, addPipeline } from "@/actions";
 import PipelineCard from "@/components/PipelineCard";
+import { useMemo } from "react";
 
 ChartJS.register(
   CategoryScale,
@@ -28,37 +29,63 @@ export default function SalesDashboardClient({
   leads,
   campaigns,
   pipelines = [],
+  options = { projects: [], teams: [], tasks: [], users: [] },
 }: {
   leads: any[];
   campaigns: any[];
   pipelines?: any[];
+  options?: { projects: any[]; teams: any[]; tasks: any[]; users: any[] };
 }) {
+  const totalLeads = leads?.length || 0;
+  const activeCampaigns = campaigns?.length || 0;
+  const expectedRevenue = campaigns?.reduce((sum, c) => sum + (c.expectedRevenue || 0), 0) || 0;
+  const qualifiedLeads = leads?.filter((l) => l.status === "Qualified").length || 0;
+  const conversionRate = totalLeads > 0 ? Math.round((qualifiedLeads / totalLeads) * 100) : 0;
+
+  // Campaigns Data (Top 5 by leads)
+  const sortedCampaigns = useMemo(() => {
+    return [...(campaigns || [])]
+      .sort((a, b) => (b.leadsGenerated || 0) - (a.leadsGenerated || 0))
+      .slice(0, 5);
+  }, [campaigns]);
+
   const campaignsData = {
-    labels: ["Q3 Webinar", "Email Blast v2", "Trade Show 2026", "Social Media Ads", "Cold Call Blitz"],
+    labels: sortedCampaigns.length > 0 ? sortedCampaigns.map((c) => c.name) : ["No Data"],
     datasets: [
-      { label: "Hot", data: [30, 20, 15, 10, 5], backgroundColor: "#3b82f6" },
-      { label: "Warm", data: [40, 25, 20, 15, 10], backgroundColor: "#10b981" },
-      { label: "Cool", data: [20, 15, 10, 20, 25], backgroundColor: "#8b5cf6" },
+      {
+        label: "Leads Generated",
+        data: sortedCampaigns.length > 0 ? sortedCampaigns.map((c) => c.leadsGenerated || 0) : [0],
+        backgroundColor: "#3b82f6",
+      },
     ],
   };
 
   const revenueData = {
-    labels: ["Event", "Web Marketing", "Email", "Social Media", "Other"],
+    labels: sortedCampaigns.length > 0 ? sortedCampaigns.map((c) => c.name) : ["No Data"],
     datasets: [
       {
-        data: [35, 25, 20, 15, 5],
+        data: sortedCampaigns.length > 0 ? sortedCampaigns.map((c) => c.expectedRevenue || 0) : [0],
         backgroundColor: ["#3b82f6", "#06b6d4", "#10b981", "#f59e0b", "#6366f1"],
       },
     ],
   };
 
+  const leadsByOwner = useMemo(() => {
+    return leads?.reduce((acc: any, lead) => {
+      if (!acc[lead.owner]) acc[lead.owner] = { New: 0, Working: 0, Qualified: 0, Unqualified: 0 };
+      acc[lead.owner][lead.status] = (acc[lead.owner][lead.status] || 0) + 1;
+      return acc;
+    }, {});
+  }, [leads]);
+
+  const ownerLabels = Object.keys(leadsByOwner || {});
   const leadsData = {
-    labels: ["Bill West", "Sarah Lee", "John Doe", "Emma Stone"],
+    labels: ownerLabels.length > 0 ? ownerLabels : ["No Data"],
     datasets: [
-      { label: "New", data: [5, 2, 8, 3], backgroundColor: "#3b82f6" },
-      { label: "Working", data: [10, 15, 5, 8], backgroundColor: "#06b6d4" },
-      { label: "Qualified", data: [3, 5, 2, 4], backgroundColor: "#10b981" },
-      { label: "Unqualified", data: [2, 1, 4, 1], backgroundColor: "#f59e0b" },
+      { label: "New", data: ownerLabels.length > 0 ? ownerLabels.map((o) => leadsByOwner[o].New) : [0], backgroundColor: "#3b82f6" },
+      { label: "Working", data: ownerLabels.length > 0 ? ownerLabels.map((o) => leadsByOwner[o].Working) : [0], backgroundColor: "#06b6d4" },
+      { label: "Qualified", data: ownerLabels.length > 0 ? ownerLabels.map((o) => leadsByOwner[o].Qualified) : [0], backgroundColor: "#10b981" },
+      { label: "Unqualified", data: ownerLabels.length > 0 ? ownerLabels.map((o) => leadsByOwner[o].Unqualified) : [0], backgroundColor: "#f59e0b" },
     ],
   };
 
@@ -78,29 +105,58 @@ export default function SalesDashboardClient({
       </header>
 
       {/* Data Entry Forms */}
-      <div className="flex flex-wrap md:flex-nowrap gap-6 mb-6">
+      <div className="flex flex-wrap lg:flex-nowrap gap-6 mb-6">
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 flex-1">
           <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Add New Lead</h4>
           <form action={addLead} className="flex gap-2 flex-wrap items-center">
-            <input type="text" name="name" className="flex-1 min-w-[150px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Lead Name" required />
-            <input type="text" name="owner" className="w-32 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Owner" required />
-            <select name="status" className="w-32 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+            <input type="text" name="name" className="flex-1 min-w-[120px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Lead Name" required />
+            <input type="text" name="owner" className="w-28 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Owner" required />
+            <select name="status" className="w-28 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
               <option value="New">New</option>
               <option value="Working">Working</option>
               <option value="Qualified">Qualified</option>
               <option value="Unqualified">Unqualified</option>
             </select>
-            <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">Add Lead</button>
+            <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">Add</button>
           </form>
         </div>
         
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 flex-1">
           <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Add New Campaign</h4>
           <form action={addCampaign} className="flex gap-2 flex-wrap items-center">
-            <input type="text" name="name" className="flex-1 min-w-[150px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Campaign Name" required />
-            <input type="number" name="leadsGenerated" className="w-24 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Leads" required />
-            <input type="number" name="expectedRevenue" className="w-32 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Est. Rev ($)" required />
-            <button type="submit" className="px-4 py-2 bg-emerald-500 text-white rounded hover:bg-emerald-600 transition-colors">Add Campaign</button>
+            <input type="text" name="name" className="flex-1 min-w-[120px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Campaign Name" required />
+            <input type="number" name="leadsGenerated" className="w-20 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Leads" required />
+            <input type="number" name="expectedRevenue" className="w-28 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Est. Rev ($)" required />
+            <button type="submit" className="px-4 py-2 bg-emerald-500 text-white rounded hover:bg-emerald-600 transition-colors">Add</button>
+          </form>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 flex-1">
+          <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Create Sales Pipeline</h4>
+          <form action={addPipeline} className="flex gap-2 flex-wrap items-center">
+            <input type="hidden" name="category" value="Sales" />
+            <input type="text" name="name" className="flex-1 min-w-[120px] p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Pipeline Name" required />
+            <input type="text" name="owner" className="w-28 p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Owner" />
+            
+            <select name="projectId" className="p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+              <option value="">No Project</option>
+              {options.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <select name="teamId" className="p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+              <option value="">No Team</option>
+              {options.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            <select name="taskId" className="p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+              <option value="">No Task</option>
+              {options.tasks.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            <input type="text" name="createTaskName" className="w-32 p-2 text-sm rounded border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-gray-900 dark:text-gray-100" placeholder="Auto-Create Task" />
+            <select name="memberId" className="p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+              <option value="">No Member</option>
+              {options.users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+
+            <button type="submit" className="px-4 py-2 bg-violet-500 text-white rounded text-sm hover:bg-violet-600 transition-colors">Add</button>
           </form>
         </div>
       </div>
@@ -109,19 +165,19 @@ export default function SalesDashboardClient({
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Total Leads</h4>
-          <h2 className="text-3xl font-bold text-blue-500">{leads ? leads.length : 0}</h2>
+          <h2 className="text-3xl font-bold text-blue-500">{totalLeads}</h2>
         </div>
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Active Campaigns</h4>
-          <h2 className="text-3xl font-bold text-emerald-500">{campaigns ? campaigns.length : 0}</h2>
+          <h2 className="text-3xl font-bold text-emerald-500">{activeCampaigns}</h2>
         </div>
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Expected Revenue</h4>
-          <h2 className="text-3xl font-bold text-amber-500">$2.4M</h2>
+          <h2 className="text-3xl font-bold text-amber-500">${expectedRevenue.toLocaleString()}</h2>
         </div>
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Conversion Rate</h4>
-          <h2 className="text-3xl font-bold text-violet-500">18%</h2>
+          <h2 className="text-3xl font-bold text-violet-500">{conversionRate}%</h2>
         </div>
       </div>
 
@@ -129,12 +185,12 @@ export default function SalesDashboardClient({
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 md:col-span-2">
           <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Top Campaigns by Leads Generated</h3>
           <div className="h-72">
-            <Bar data={campaignsData} options={{ indexAxis: "y", responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }} />
+            <Bar data={campaignsData} options={{ indexAxis: "y", responsive: true, maintainAspectRatio: false }} />
           </div>
         </div>
 
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5">
-          <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Expected Revenue by Channel</h3>
+          <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Expected Revenue by Campaign</h3>
           <div className="h-72">
             <Doughnut data={revenueData} options={{ responsive: true, maintainAspectRatio: false }} />
           </div>
@@ -192,7 +248,7 @@ export default function SalesDashboardClient({
             <PipelineCard key={pipeline._id} pipeline={pipeline} />
           ))}
           {pipelines.length === 0 && (
-            <div className="col-span-full text-center text-sm text-gray-500 dark:text-gray-400 py-6">No active sales pipelines found.</div>
+            <div className="col-span-full text-center text-sm text-gray-500 dark:text-gray-400 py-6">No active sales pipelines found. Create one above to get started.</div>
           )}
         </div>
       </div>

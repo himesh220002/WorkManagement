@@ -1,7 +1,7 @@
 "use server";
 
 import connectToDatabase from "@/lib/mongodb";
-import { Pipeline, TaskNode, Lead, Campaign, Deal, Target, Goal, Team, User, Project } from "@/models";
+import { Pipeline, TaskNode, Lead, Campaign, Deal, Target, Goal, Team, User, Project, ResourceAllocation, Cycle } from "@/models";
 import { revalidatePath } from "next/cache";
 
 export async function addPipeline(formData: FormData) {
@@ -18,12 +18,48 @@ export async function addPipeline(formData: FormData) {
   const budget = formData.get("budget") as string;
   const kpis = formData.get("kpis") as string;
   const riskLevel = formData.get("riskLevel") as string;
+  const dependencies = formData.get("dependencies") as string;
+  const outcome = formData.get("outcome") as string;
+  
+  const projectId = formData.get("projectId") as string || undefined;
+  const teamId = formData.get("teamId") as string || undefined;
+  const taskId = formData.get("taskId") as string || undefined;
+  const memberId = formData.get("memberId") as string || undefined;
+  const createTaskName = formData.get("createTaskName") as string || undefined;
 
   if (name) {
+    let finalTaskId = taskId;
+
+    // If both project and team are linked, assign team to project
+    if (projectId && teamId) {
+      await Project.findByIdAndUpdate(projectId, { team: teamId });
+    }
+
+    // Auto-create initial task if requested
+    if (createTaskName && projectId) {
+      const assigneeArray = memberId ? [memberId] : undefined;
+      const newTask = await TaskNode.create({
+        name: createTaskName,
+        description: `Auto-generated task from pipeline: ${name}`,
+        projectId: projectId,
+        assignee: memberId ? memberId : "Unassigned", // Legacy string
+        assignees: assigneeArray, // Real ID reference
+        status: "Todo",
+        priority,
+        dueDate: endDate
+      });
+      finalTaskId = newTask._id.toString();
+    }
+
     await Pipeline.create({ 
-      name, category, owner, status, priority, startDate, endDate, progress, objectives, budget, kpis, riskLevel 
+      name, category, owner, status, priority, startDate, endDate, progress, objectives, budget, kpis, riskLevel, dependencies, outcome,
+      projectId, teamId, taskId: finalTaskId, memberId
     } as any);
+    
     revalidatePath("/dev/timeline");
+    revalidatePath("/sales/dashboard");
+    revalidatePath("/revenue/dashboard");
+    revalidatePath("/projects");
   }
 }
 
@@ -98,12 +134,10 @@ export async function addProject(formData: FormData) {
   await connectToDatabase();
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;
-  const teamId = formData.get("teamId") as string;
-  
+  const category = formData.get("category") as string || "Internal";
+
   if (name) {
-    const data: any = { name, description };
-    if (teamId) data.team = teamId;
-    await Project.create(data);
+    await Project.create({ name, description, category });
     revalidatePath("/projects");
   }
 }
@@ -223,3 +257,100 @@ export async function deletePipeline(formData: FormData) {
   await Pipeline.findByIdAndDelete(pipelineId);
   revalidatePath("/dev/timeline");
 }
+
+export async function addResourceAllocation(formData: FormData) {
+  await connectToDatabase();
+  const name = formData.get("name") as string;
+  const type = formData.get("type") as string || "Budget";
+  const totalAllocated = Number(formData.get("totalAllocated")) || 0;
+  const totalUsed = Number(formData.get("totalUsed")) || 0;
+  const riskLevel = formData.get("riskLevel") as string || "Low";
+  const assignedToProjectId = formData.get("assignedToProjectId") as string;
+
+  if (name) {
+    const data: any = { name, type, totalAllocated, totalUsed, riskLevel };
+    if (assignedToProjectId) data.assignedToProjectId = assignedToProjectId;
+    
+    await ResourceAllocation.create(data);
+    revalidatePath("/exec/resources");
+  }
+}
+
+export async function addTaskNode(formData: FormData) {
+  await connectToDatabase();
+  const name = formData.get("name") as string;
+  const projectId = formData.get("projectId") as string;
+  const status = formData.get("status") as string || "open";
+  const severity = formData.get("severity") as string || "medium";
+  const module = formData.get("module") as string || "General";
+  const estimatedHours = Number(formData.get("estimatedHours")) || 0;
+  const actualHours = Number(formData.get("actualHours")) || 0;
+  
+  if (name && projectId && projectId !== "all") {
+    await TaskNode.create({
+      name, projectId, status, severity, module, estimatedHours, actualHours
+    });
+    revalidatePath("/dev/dashboard");
+  }
+}
+
+export async function addCycle(formData: FormData) {
+  await connectToDatabase();
+  const name = formData.get("name") as string;
+  const project = formData.get("projectId") as string;
+  const startDate = formData.get("startDate") as string;
+  const endDate = formData.get("endDate") as string;
+
+  if (name && project && project !== "all") {
+    await Cycle.create({
+      name, project, startDate, endDate
+    });
+    revalidatePath("/dev/dashboard");
+  }
+}
+
+export async function deleteGoal(formData: FormData) {
+  await connectToDatabase();
+  const goalId = formData.get("goalId") as string;
+  if (goalId) {
+    await Goal.findByIdAndDelete(goalId);
+    await Target.deleteMany({ goalId: goalId });
+    revalidatePath("/exec/dashboard");
+    revalidatePath("/revenue/targets");
+  }
+}
+
+export async function deleteTarget(formData: FormData) {
+  await connectToDatabase();
+  const targetId = formData.get("targetId") as string;
+  if (targetId) {
+    await Target.findByIdAndDelete(targetId);
+    revalidatePath("/revenue/targets");
+    revalidatePath("/exec/dashboard");
+  }
+}
+
+export async function updateTarget(formData: FormData) {
+  await connectToDatabase();
+  const targetId = formData.get("targetId") as string;
+  const name = formData.get("name") as string;
+  const expectedValue = Number(formData.get("expectedValue")) || 0;
+  const actualValue = Number(formData.get("actualValue")) || 0;
+  const industry = formData.get("industry") as string;
+  const region = formData.get("region") as string;
+  const status = formData.get("status") as string;
+
+  if (targetId) {
+    await Target.findByIdAndUpdate(targetId, {
+      name,
+      expectedValue,
+      actualValue,
+      industry,
+      region,
+      status
+    });
+    revalidatePath("/revenue/targets");
+    revalidatePath("/exec/dashboard");
+  }
+}
+

@@ -13,6 +13,7 @@ import {
 } from "chart.js";
 import { Bar, Doughnut } from "react-chartjs-2";
 import PipelineCard from "@/components/PipelineCard";
+import { addTaskNode, addCycle } from "@/actions";
 
 ChartJS.register(
   CategoryScale,
@@ -175,6 +176,63 @@ export default function DevDashboardClient({
               scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, display: false } },
             }}
           />
+        </div>
+      </div>
+
+      {/* Data Entry Forms */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6">
+          <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <i className="fa-solid fa-list-check text-blue-600"></i> Add Task
+          </h3>
+          <form action={addTaskNode} className="space-y-3">
+            <input type="hidden" name="projectId" value={selectedProjectId} />
+            <input type="text" name="name" placeholder="Task Name" className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none" required />
+            <div className="flex gap-3">
+              <select name="status" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm">
+                <option value="open">Open</option>
+                <option value="in_progress">In Progress</option>
+                <option value="review">Code Review</option>
+                <option value="completed">Completed</option>
+              </select>
+              <select name="severity" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+            <div className="flex gap-3">
+              <input type="number" name="estimatedHours" placeholder="Est. Hours" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm" />
+              <input type="number" name="actualHours" placeholder="Actual Hours" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm" />
+            </div>
+            <button type="submit" disabled={selectedProjectId === "all"} className="w-full p-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              {selectedProjectId === "all" ? "Select a Project First" : "Add Task"}
+            </button>
+          </form>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6">
+          <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <i className="fa-solid fa-rotate text-emerald-600"></i> Add Sprint/Cycle
+          </h3>
+          <form action={addCycle} className="space-y-3">
+            <input type="hidden" name="projectId" value={selectedProjectId} />
+            <input type="text" name="name" placeholder="Sprint Name (e.g. Sprint 42)" className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" required />
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">Start Date</label>
+                <input type="date" name="startDate" className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm" required />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">End Date</label>
+                <input type="date" name="endDate" className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm" required />
+              </div>
+            </div>
+            <button type="submit" disabled={selectedProjectId === "all"} className="w-full mt-[14px] p-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+              {selectedProjectId === "all" ? "Select a Project First" : "Add Cycle"}
+            </button>
+          </form>
         </div>
       </div>
 

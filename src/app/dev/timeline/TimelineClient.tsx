@@ -4,9 +4,12 @@ import { useEffect, useRef, useState, useMemo } from "react";
 // @ts-ignore
 import Gantt from "frappe-gantt";
 import { addPipeline, updatePipelineProgress, updatePipelineDates } from "@/actions";
+
+interface Option { id: string, name: string }
+interface Options { projects: Option[], teams: Option[], tasks: Option[], users: Option[] }
 import PipelineCard from "@/components/PipelineCard";
 
-export default function TimelineClient({ tasks }: { tasks: any[] }) {
+export default function TimelineClient({ tasks, options }: { tasks: any[], options?: Options }) {
   const ganttWrapperRef = useRef<HTMLDivElement>(null);
   const ganttInstance = useRef<any>(null);
   const [activeCategory, setActiveCategory] = useState("All");
@@ -24,7 +27,7 @@ export default function TimelineClient({ tasks }: { tasks: any[] }) {
   ];
 
   const filteredTasks = useMemo(() => {
-    return tasks.filter(t => activeCategory === "All" || t.category === activeCategory);
+    return tasks.filter((t: any) => activeCategory === "All" || t.category === activeCategory);
   }, [tasks, activeCategory]);
 
   useEffect(() => {
@@ -254,7 +257,7 @@ export default function TimelineClient({ tasks }: { tasks: any[] }) {
                   </select>
                 </div>
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
-                  <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Owner / Lead</label>
+                  <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Owner (Text fallback)</label>
                   <input type="text" name="owner" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="Person or Team" />
                 </div>
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
@@ -286,6 +289,43 @@ export default function TimelineClient({ tasks }: { tasks: any[] }) {
                     <option value="High">High</option>
                   </select>
                 </div>
+
+                {options && (
+                  <>
+                    <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                      <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Link Project</label>
+                      <select name="projectId" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
+                        <option value="">None</option>
+                        {options.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                      <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Link Team</label>
+                      <select name="teamId" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
+                        <option value="">None</option>
+                        {options.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                      <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Link Task</label>
+                      <select name="taskId" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
+                        <option value="">None (or Auto-Create Below)</option>
+                        {options.tasks.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                      <label className="mb-2 font-semibold text-blue-600 dark:text-blue-400">Auto-Create Task Name</label>
+                      <input type="text" name="createTaskName" className="w-full px-4 py-2.5 rounded-lg border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="Generate new execution task..." />
+                    </div>
+                    <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                      <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Assign Member</label>
+                      <select name="memberId" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
+                        <option value="">None</option>
+                        {options.users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                    </div>
+                  </>
+                )}
 
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400 lg:col-span-2">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Objectives / Goals</label>
@@ -320,7 +360,7 @@ export default function TimelineClient({ tasks }: { tasks: any[] }) {
           <i className="fa-solid fa-layer-group text-blue-600"></i> Pipeline Details
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredTasks.map(pipeline => (
+          {filteredTasks.map((pipeline: any) => (
             <PipelineCard key={pipeline._id} pipeline={pipeline} />
           ))}
           {filteredTasks.length === 0 && (

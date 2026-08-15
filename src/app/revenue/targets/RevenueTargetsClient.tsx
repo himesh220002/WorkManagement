@@ -1,10 +1,12 @@
 "use client";
 
-import { addTarget, toggleTargetChecklist, updateTargetChecklist } from "@/actions";
+import { addTarget, toggleTargetChecklist, updateTargetChecklist, deleteTarget, updateTarget } from "@/actions";
 
 import { useState } from "react";
 
 export default function RevenueTargetsClient({ targets, goals = [] }: { targets: any[], goals?: any[] }) {
+  const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
+
   return (
     <main className="flex flex-col min-w-0 p-6 flex-1">
       <header className=" bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg mb-6 flex justify-between items-center">
@@ -50,26 +52,67 @@ export default function RevenueTargetsClient({ targets, goals = [] }: { targets:
                   <i className="fa-solid fa-link"></i> Linked
                 </div>
               )}
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h4 className="text-xl font-semibold mb-1 text-gray-900 dark:text-gray-100">{target.name}</h4>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    <i className="fa-solid fa-industry mr-1"></i> {target.industry || "N/A"} &nbsp;|&nbsp;
-                    <i className="fa-solid fa-earth-americas ml-1 mr-1"></i> {target.region || "N/A"}
+              
+              {editingTargetId === target._id ? (
+                <form action={async (formData) => {
+                  await updateTarget(formData);
+                  setEditingTargetId(null);
+                }} className="flex flex-col gap-3 mb-4">
+                  <input type="hidden" name="targetId" value={target._id} />
+                  <input type="text" name="name" defaultValue={target.name} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-semibold" required />
+                  <div className="flex gap-2">
+                    <input type="number" name="actualValue" defaultValue={target.actualValue} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Actual" required />
+                    <input type="number" name="expectedValue" defaultValue={target.expectedValue} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Expected" required />
                   </div>
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
-                      Actual: {target.actualValue}
+                  <div className="flex gap-2">
+                    <input type="text" name="industry" defaultValue={target.industry} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Industry" />
+                    <input type="text" name="region" defaultValue={target.region} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Region" />
+                  </div>
+                  <select name="status" defaultValue={target.status} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+                    <option value="Active">Active</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                  <div className="flex gap-2 justify-end mt-2">
+                    <button type="button" onClick={() => setEditingTargetId(null)} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">Cancel</button>
+                    <button type="submit" className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">Save Changes</button>
+                  </div>
+                </form>
+              ) : (
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{target.name}</h4>
+                      <button onClick={() => setEditingTargetId(target._id)} className="text-gray-400 hover:text-blue-500 transition-colors p-1" title="Edit Target">
+                        <i className="fa-solid fa-pen text-xs"></i>
+                      </button>
                     </div>
-                    <div className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
-                      Expected: {target.expectedValue}
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                      <i className="fa-solid fa-industry mr-1"></i> {target.industry || "N/A"} &nbsp;|&nbsp;
+                      <i className="fa-solid fa-earth-americas ml-1 mr-1"></i> {target.region || "N/A"}
                     </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <div className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                        Actual: {target.actualValue}
+                      </div>
+                      <div className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                        Expected: {target.expectedValue}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className={`px-2 py-1 text-xs rounded-full font-medium ${target.status === "Completed" ? "bg-emerald-100 text-emerald-700" : target.status === "Rejected" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                      {target.status}
+                    </span>
+                    <form action={deleteTarget} className="m-0" onSubmit={(e) => { if (!window.confirm("Are you sure you want to delete this Target?")) e.preventDefault(); }}>
+                      <input type="hidden" name="targetId" value={target._id.toString()} />
+                      <button type="submit" className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Delete Target">
+                        <i className="fa-solid fa-trash-can text-sm"></i>
+                      </button>
+                    </form>
                   </div>
                 </div>
-                <span className={`px-2 py-1 text-xs rounded-full font-medium ${target.status === "Completed" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                  {target.status}
-                </span>
-              </div>
+              )}
 
               {/* Checklist */}
               <div className="flex-1 mb-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-md border border-gray-300 dark:border-gray-600">

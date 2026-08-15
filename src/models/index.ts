@@ -71,7 +71,10 @@ const targetSchema = new mongoose.Schema({
   rejectionReason: String,
   checklist: [{ name: String, isCompleted: { type: Boolean, default: false } }]
 });
-export const Target = mongoose.models.Target || mongoose.model("Target", targetSchema);
+if (mongoose.models.Target) {
+  delete mongoose.models.Target;
+}
+export const Target = mongoose.model("Target", targetSchema);
 
 // --- Missing Legacy Schemas ---
 const itemsSchema = new mongoose.Schema({
@@ -90,9 +93,14 @@ export const List = mongoose.models.List || mongoose.model("List", listSchema);
 
 const userSchema = new mongoose.Schema({
   name: String,
-  role: { type: String, default: "Member" }
+  role: { type: String, default: "Member" },
+  position: String,
+  rank: String
 });
-export const User = mongoose.models.User || mongoose.model("User", userSchema);
+if (mongoose.models.User) {
+  delete mongoose.models.User;
+}
+export const User = mongoose.model("User", userSchema);
 
 const teamSchema = new mongoose.Schema({
   name: String,
@@ -103,6 +111,7 @@ export const Team = mongoose.models.Team || mongoose.model("Team", teamSchema);
 const projectSchema = new mongoose.Schema({
   name: String,
   description: String,
+  category: { type: String, enum: ["Internal", "Client", "Product", "Research", "Other"], default: "Internal" },
   team: { type: mongoose.Schema.Types.ObjectId, ref: 'Team' },
   deadline: Date,
   scaling: { type: Number, default: 1 },
@@ -130,9 +139,14 @@ const pipelineSchema = new mongoose.Schema({
   priority: { type: String, enum: ["High", "Medium", "Low"], default: "Medium" },
   objectives: { type: String, default: "" },
   dependencies: { type: String, default: "" },
+  outcome: { type: String, default: "" },
   budget: { type: String, default: "" },
   kpis: { type: String, default: "" },
   tags: { type: String, default: "" },
+  projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },
+  teamId: { type: mongoose.Schema.Types.ObjectId, ref: 'Team' },
+  taskId: { type: mongoose.Schema.Types.ObjectId, ref: 'TaskNode' },
+  memberId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   riskLevel: { type: String, enum: ["Low", "Medium", "High"], default: "Low" },
   notes: { type: String, default: "" },
   todos: [{
@@ -146,3 +160,17 @@ if (mongoose.models.Pipeline) {
   delete mongoose.models.Pipeline;
 }
 export const Pipeline = mongoose.model("Pipeline", pipelineSchema);
+
+// --- Resource Allocation Schema ---
+const resourceAllocationSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  type: { type: String, enum: ["Budget", "Headcount", "Infrastructure"], default: "Budget" },
+  totalAllocated: { type: Number, default: 0 },
+  totalUsed: { type: Number, default: 0 },
+  assignedToProjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },
+  riskLevel: { type: String, enum: ["Low", "Medium", "High"], default: "Low" }
+});
+if (mongoose.models.ResourceAllocation) {
+  delete mongoose.models.ResourceAllocation;
+}
+export const ResourceAllocation = mongoose.model("ResourceAllocation", resourceAllocationSchema);

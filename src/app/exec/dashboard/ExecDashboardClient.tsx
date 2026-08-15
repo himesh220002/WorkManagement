@@ -29,7 +29,7 @@ ChartJS.register(
   Filler
 );
 
-import { addGoal } from "@/actions";
+import { addGoal, deleteGoal } from "@/actions";
 
 export default function ExecDashboardClient({ cleanPipelines, goals = [] }: { cleanPipelines: any[], goals?: any[] }) {
   const financeData = {
@@ -139,7 +139,15 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [] }: { cl
                 <div className="progress-bar-bg w-full h-2 bg-gray-200 dark:bg-gray-700 rounded mt-3">
                   <div className={`h-full bg-${color} rounded`} style={{ width: `${goal.progress}%` }}></div>
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 line-clamp-1">{goal.description || "No specific key result description"}</div>
+                <div className="flex justify-between items-center mt-2">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 flex-1 pr-2">{goal.description || "No specific key result description"}</div>
+                  <form action={deleteGoal} className="m-0 flex" onSubmit={(e) => { if (!window.confirm("Are you sure you want to delete this Goal and all its connected Targets?")) e.preventDefault(); }}>
+                    <input type="hidden" name="goalId" value={goal._id.toString()} />
+                    <button type="submit" className="text-gray-400 hover:text-red-500 transition-colors p-1 cursor-pointer" title="Delete Goal">
+                      <i className="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                  </form>
+                </div>
               </div>
             );
           }) : (

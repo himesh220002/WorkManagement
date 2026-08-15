@@ -2,14 +2,13 @@ import connectToDatabase from "@/lib/mongodb";
 import { Project, TaskNode, Pipeline, Cycle } from "@/models";
 import DevDashboardClient from "@/app/dev/dashboard/DevDashboardClient";
 
-export default async function DevDashboardPage({
-  searchParams,
-}: {
-  searchParams: { projectId?: string };
-}) {
+export default async function DevDashboardPage(
+  props: { searchParams: Promise<{ projectId?: string }> }
+) {
+  const searchParams = await props.searchParams;
   await connectToDatabase();
 
-  const selectedProjectId = searchParams.projectId || "all";
+  const selectedProjectId = searchParams?.projectId || "all";
 
   let projects: any[] = [];
   let tasks: any[] = [];

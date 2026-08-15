@@ -82,6 +82,22 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
               <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1">{pipeline.kpis}</p>
             </div>
           )}
+          {pipeline.dependencies && (
+            <div className="mt-1">
+              <span className="font-semibold text-gray-600 dark:text-gray-300 block mb-0.5">Dependencies:</span>
+              <p className="text-[11px] text-orange-500 dark:text-orange-400 line-clamp-1 flex items-center gap-1">
+                <i className="fa-solid fa-link text-[10px]"></i> {pipeline.dependencies}
+              </p>
+            </div>
+          )}
+          {pipeline.outcome && (
+            <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-md">
+              <span className="font-semibold text-blue-700 dark:text-blue-400 block mb-0.5 flex items-center gap-1">
+                <i className="fa-solid fa-bullseye text-[10px]"></i> Deliverable
+              </span>
+              <p className="text-[11px] text-blue-600 dark:text-blue-300 line-clamp-2">{pipeline.outcome}</p>
+            </div>
+          )}
         </div>
 
         {/* Progress & Risk */}

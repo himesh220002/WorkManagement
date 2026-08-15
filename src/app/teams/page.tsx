@@ -1,5 +1,6 @@
 import connectToDatabase from "@/lib/mongodb";
-import { Team } from "@/models";
+import { Team, User } from "@/models";
+import AddMemberForm from "@/app/teams/AddMemberForm";
 import { revalidatePath } from "next/cache";
 
 async function addTeam(formData: FormData) {
@@ -20,6 +21,34 @@ async function deleteTeam(formData: FormData) {
 
   if (id) {
     await Team.findByIdAndDelete(id);
+    revalidatePath("/teams");
+  }
+}
+async function addTeamMember(formData: FormData) {
+  "use server";
+  await connectToDatabase();
+  const teamId = formData.get("teamId") as string;
+  const name = formData.get("name") as string;
+  const role = formData.get("role") as string;
+  const position = formData.get("position") as string;
+  const rank = formData.get("rank") as string;
+
+  if (teamId && name && role) {
+    const newUser = await User.create({ name, role, position, rank });
+    await Team.findByIdAndUpdate(teamId, { $push: { members: newUser._id } });
+    revalidatePath("/teams");
+  }
+}
+
+async function removeTeamMember(formData: FormData) {
+  "use server";
+  await connectToDatabase();
+  const teamId = formData.get("teamId") as string;
+  const userId = formData.get("userId") as string;
+
+  if (teamId && userId) {
+    await Team.findByIdAndUpdate(teamId, { $pull: { members: userId } });
+    await User.findByIdAndDelete(userId);
     revalidatePath("/teams");
   }
 }
@@ -56,22 +85,58 @@ export default async function TeamsPage() {
       <div className="space-y-4">
         {teams && teams.length > 0 ? (
           teams.map((t: any) => (
-            <div key={t._id.toString()} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex justify-between items-center transition-all hover:bg-gray-50 dark:bg-gray-700/50">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center text-violet-500">
-                  <i className="fa-solid fa-user-group"></i>
+            <div key={t._id.toString()} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden transition-all">
+              {/* Team Header */}
+              <div className="p-4 bg-gray-50 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center text-violet-500">
+                    <i className="fa-solid fa-user-group"></i>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-900 dark:text-gray-100 text-lg">{t.name}</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">{t.members?.length || 0} Members</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-semibold text-gray-900 dark:text-gray-100 text-lg">{t.name}</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">{t.members?.length || 0} Members</div>
-                </div>
+                <form action={deleteTeam} className="m-0">
+                  <input type="hidden" name="teamId" value={t._id.toString()} />
+                  <button type="submit" className="text-red-500 hover:text-red-600 transition-colors p-2" title="Delete Team">
+                    <i className="fa-solid fa-trash"></i>
+                  </button>
+                </form>
               </div>
-              <form action={deleteTeam} className="m-0">
-                <input type="hidden" name="teamId" value={t._id.toString()} />
-                <button type="submit" className="text-red-500 hover:text-red-600 transition-colors" title="Delete Team">
-                  <i className="fa-solid fa-trash"></i>
-                </button>
-              </form>
+
+              {/* Member List */}
+              <div className="p-4 space-y-3">
+                {t.members && t.members.length > 0 ? (
+                  t.members.map((member: any) => (
+                    <div key={member._id.toString()} className="flex justify-between items-center bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-100 dark:border-gray-600">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400 text-xs font-bold uppercase">
+                          {member.name.substring(0, 2)}
+                        </div>
+                        <div>
+                          <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{member.name}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {member.role} {member.position && `- ${member.position}`} {member.rank && `(Rank ${member.rank})`}
+                          </div>
+                        </div>
+                      </div>
+                      <form action={removeTeamMember} className="m-0">
+                        <input type="hidden" name="teamId" value={t._id.toString()} />
+                        <input type="hidden" name="userId" value={member._id.toString()} />
+                        <button type="submit" className="text-gray-400 hover:text-red-500 text-sm transition-colors p-1" title="Remove Member">
+                          <i className="fa-solid fa-times"></i>
+                        </button>
+                      </form>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-gray-500 dark:text-gray-400 italic py-2">No members in this team yet.</div>
+                )}
+
+                {/* Add Member Form Client Component */}
+                <AddMemberForm teamId={t._id.toString()} action={addTeamMember} />
+              </div>
             </div>
           ))
         ) : (
