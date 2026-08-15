@@ -1,5 +1,5 @@
 import connectToDatabase from "@/lib/mongodb";
-import { Project, TaskNode, Pipeline } from "@/models";
+import { Project, TaskNode, Pipeline, Cycle } from "@/models";
 import DevDashboardClient from "@/app/dev/dashboard/DevDashboardClient";
 
 export default async function DevDashboardPage({
@@ -14,14 +14,17 @@ export default async function DevDashboardPage({
   let projects: any[] = [];
   let tasks: any[] = [];
   let pipelines: any[] = [];
+  let cycles: any[] = [];
 
   try {
     projects = await Project.find({}).lean();
     pipelines = await Pipeline.find({}).sort({ progress: -1 }).lean();
     if (selectedProjectId && selectedProjectId !== "all") {
       tasks = await TaskNode.find({ projectId: selectedProjectId }).lean();
+      cycles = await Cycle.find({ project: selectedProjectId }).lean();
     } else {
       tasks = await TaskNode.find({}).lean();
+      cycles = await Cycle.find({}).lean();
     }
   } catch (err) {
     console.error(err);
@@ -36,13 +39,35 @@ export default async function DevDashboardPage({
     ? (totalPipelineProgress / pipelines.length).toFixed(1)
     : 0;
 
+  // Calculate average cycle time
+  let totalCycleDays = 0;
+  let validCycles = 0;
+  cycles.forEach((c: any) => {
+    if (c.startDate && c.endDate) {
+      const start = new Date(c.startDate).getTime();
+      const end = new Date(c.endDate).getTime();
+      const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+      if (diffDays >= 0) {
+        totalCycleDays += diffDays;
+        validCycles++;
+      }
+    }
+  });
+  const avgCycleTime = validCycles > 0 ? Math.round(totalCycleDays / validCycles) : 0;
+
   // Calculate dynamic metrics
   let totalHours = 0;
   let severityCounts = { critical: 0, high: 0, medium: 0, low: 0 };
   let statusCounts = { open: 0, in_progress: 0, review: 0, completed: 0 };
+  let moduleHours: Record<string, { estimated: number, actual: number }> = {};
 
   tasks.forEach((t: any) => {
     totalHours += (t.actualHours || 0);
+
+    const mod = t.module || "General";
+    if (!moduleHours[mod]) moduleHours[mod] = { estimated: 0, actual: 0 };
+    moduleHours[mod].estimated += (t.estimatedHours || 0);
+    moduleHours[mod].actual += (t.actualHours || 0);
 
     if (t.severity) {
       // @ts-ignore
@@ -57,10 +82,17 @@ export default async function DevDashboardPage({
     else statusCounts.open += 1;
   });
 
+  const modules = Object.keys(moduleHours);
+  const estimatedHoursData = modules.map(m => moduleHours[m].estimated);
+  const actualHoursData = modules.map(m => moduleHours[m].actual);
+
   const chartData = {
     severity: [severityCounts.critical, severityCounts.high, severityCounts.medium, severityCounts.low],
     status: [statusCounts.open, statusCounts.in_progress, statusCounts.review, statusCounts.completed],
-    totalHours
+    totalHours,
+    modules,
+    estimatedHoursData,
+    actualHoursData
   };
 
   // Convert ObjectIds to strings for passing to client components
@@ -74,15 +106,31 @@ export default async function DevDashboardPage({
     name: t.name,
   }));
 
-  const cleanPipelines = pipelines.map((p: any) => ({
-    _id: p._id.toString(),
-    name: p.name,
-    progress: p.progress,
-    category: p.category,
-    owner: p.owner,
-    priority: p.priority,
-    status: p.status
-  }));
+  const cleanPipelines = pipelines
+    .filter((p: any) => p.category === "Development")
+    .map((p: any) => ({
+      _id: p._id.toString(),
+      name: p.name,
+      progress: p.progress,
+      category: p.category,
+      owner: p.owner,
+      priority: p.priority,
+      status: p.status,
+      startDate: p.startDate ? new Date(p.startDate).toISOString() : null,
+      endDate: p.endDate ? new Date(p.endDate).toISOString() : null,
+      riskLevel: p.riskLevel,
+      objectives: p.objectives,
+      kpis: p.kpis,
+      todos: Array.isArray(p.todos)
+        ? p.todos.map((todo: any) => ({
+            _id: todo._id ? todo._id.toString() : Math.random().toString(),
+            text: todo.text || "",
+            completed: Boolean(todo.completed),
+            assigneeType: todo.assigneeType || "Individual",
+            assigneeName: todo.assigneeName || "",
+          }))
+        : [],
+    }));
 
   return (
     <DevDashboardClient
@@ -90,6 +138,7 @@ export default async function DevDashboardPage({
       tasks={cleanTasks}
       pipelines={cleanPipelines}
       avgPipelineProgress={avgPipelineProgress}
+      avgCycleTime={avgCycleTime}
       selectedProjectId={selectedProjectId}
       chartData={chartData}
     />

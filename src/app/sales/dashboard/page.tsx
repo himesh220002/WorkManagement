@@ -1,5 +1,5 @@
 import connectToDatabase from "@/lib/mongodb";
-import { Lead, Campaign } from "@/models";
+import { Lead, Campaign, Pipeline } from "@/models";
 import SalesDashboardClient from "@/app/sales/dashboard/SalesDashboardClient";
 
 export default async function SalesDashboardPage() {
@@ -7,10 +7,12 @@ export default async function SalesDashboardPage() {
 
   let leads: any[] = [];
   let campaigns: any[] = [];
+  let pipelines: any[] = [];
 
   try {
     leads = await Lead.find({}).lean();
     campaigns = await Campaign.find({}).lean();
+    pipelines = await Pipeline.find({ category: "Sales" }).sort({ progress: -1 }).lean();
   } catch (err) {
     console.error(err);
   }
@@ -28,5 +30,29 @@ export default async function SalesDashboardPage() {
     name: c.name,
   }));
 
-  return <SalesDashboardClient leads={cleanLeads} campaigns={cleanCampaigns} />;
+  const cleanPipelines = pipelines.map((p: any) => ({
+    _id: p._id.toString(),
+    name: p.name,
+    progress: p.progress,
+    category: p.category,
+    owner: p.owner,
+    priority: p.priority,
+    status: p.status,
+    startDate: p.startDate ? new Date(p.startDate).toISOString() : null,
+    endDate: p.endDate ? new Date(p.endDate).toISOString() : null,
+    riskLevel: p.riskLevel,
+    objectives: p.objectives,
+    kpis: p.kpis,
+    todos: Array.isArray(p.todos)
+      ? p.todos.map((todo: any) => ({
+          _id: todo._id ? todo._id.toString() : Math.random().toString(),
+          text: todo.text || "",
+          completed: Boolean(todo.completed),
+          assigneeType: todo.assigneeType || "Individual",
+          assigneeName: todo.assigneeName || "",
+        }))
+      : [],
+  }));
+
+  return <SalesDashboardClient leads={cleanLeads} campaigns={cleanCampaigns} pipelines={cleanPipelines} />;
 }

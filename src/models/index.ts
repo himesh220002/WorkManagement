@@ -49,11 +49,24 @@ const dealSchema = new mongoose.Schema({
 });
 export const Deal = mongoose.models.Deal || mongoose.model("Deal", dealSchema);
 
+// --- Goal Schema ---
+const goalSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: String,
+  category: { type: String, enum: ["Company", "Department", "Team"], default: "Company" },
+  status: { type: String, enum: ["On Track", "At Risk", "Behind", "Completed"], default: "On Track" },
+  progress: { type: Number, default: 0 },
+});
+export const Goal = mongoose.models.Goal || mongoose.model("Goal", goalSchema);
+
 // --- Target Schema ---
 const targetSchema = new mongoose.Schema({
-  name: String,
+  name: { type: String, required: true },
+  goalId: { type: mongoose.Schema.Types.ObjectId, ref: "Goal" },
   industry: String,
   region: String,
+  expectedValue: { type: Number, default: 100 },
+  actualValue: { type: Number, default: 0 },
   status: { type: String, enum: ["Active", "Rejected", "Completed"], default: "Active" },
   rejectionReason: String,
   checklist: [{ name: String, isCompleted: { type: Boolean, default: false } }]
@@ -129,4 +142,7 @@ const pipelineSchema = new mongoose.Schema({
     assigneeName: { type: String, default: "" }
   }]
 });
-export const Pipeline = mongoose.models.Pipeline || mongoose.model("Pipeline", pipelineSchema);
+if (mongoose.models.Pipeline) {
+  delete mongoose.models.Pipeline;
+}
+export const Pipeline = mongoose.model("Pipeline", pipelineSchema);

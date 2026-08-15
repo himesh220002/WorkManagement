@@ -12,6 +12,7 @@ import {
 } from "chart.js";
 import { Bar, Doughnut } from "react-chartjs-2";
 import { addLead, addCampaign } from "@/actions";
+import PipelineCard from "@/components/PipelineCard";
 
 ChartJS.register(
   CategoryScale,
@@ -26,9 +27,11 @@ ChartJS.register(
 export default function SalesDashboardClient({
   leads,
   campaigns,
+  pipelines = [],
 }: {
   leads: any[];
   campaigns: any[];
+  pipelines?: any[];
 }) {
   const campaignsData = {
     labels: ["Q3 Webinar", "Email Blast v2", "Trade Show 2026", "Social Media Ads", "Cold Call Blitz"],
@@ -61,7 +64,7 @@ export default function SalesDashboardClient({
 
   return (
     <main className="flex flex-col min-w-0 p-6 flex-1">
-      <header className=" bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg mb-6 border-l-4 border-emerald-500 flex justify-between items-center">
+      <header className=" bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6 border-l-4 border-emerald-500 flex justify-between items-center">
         <div>
           <h1 className=" text-3xl font-bold text-gray-900 dark:text-gray-100">Sales Pipeline Management</h1>
           <div className="date-badge mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
@@ -76,7 +79,7 @@ export default function SalesDashboardClient({
 
       {/* Data Entry Forms */}
       <div className="flex flex-wrap md:flex-nowrap gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-1">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 flex-1">
           <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Add New Lead</h4>
           <form action={addLead} className="flex gap-2 flex-wrap items-center">
             <input type="text" name="name" className="flex-1 min-w-[150px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Lead Name" required />
@@ -91,7 +94,7 @@ export default function SalesDashboardClient({
           </form>
         </div>
         
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-1">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 flex-1">
           <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Add New Campaign</h4>
           <form action={addCampaign} className="flex gap-2 flex-wrap items-center">
             <input type="text" name="name" className="flex-1 min-w-[150px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Campaign Name" required />
@@ -104,33 +107,33 @@ export default function SalesDashboardClient({
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Total Leads</h4>
           <h2 className="text-3xl font-bold text-blue-500">{leads ? leads.length : 0}</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Active Campaigns</h4>
           <h2 className="text-3xl font-bold text-emerald-500">{campaigns ? campaigns.length : 0}</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Expected Revenue</h4>
           <h2 className="text-3xl font-bold text-amber-500">$2.4M</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Conversion Rate</h4>
           <h2 className="text-3xl font-bold text-violet-500">18%</h2>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 md:col-span-2">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 md:col-span-2">
           <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Top Campaigns by Leads Generated</h3>
           <div className="h-72">
             <Bar data={campaignsData} options={{ indexAxis: "y", responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }} />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5">
           <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Expected Revenue by Channel</h3>
           <div className="h-72">
             <Doughnut data={revenueData} options={{ responsive: true, maintainAspectRatio: false }} />
@@ -139,14 +142,14 @@ export default function SalesDashboardClient({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5">
           <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Lead Status by Owner</h3>
           <div className="h-64">
             <Bar data={leadsData} options={{ indexAxis: "y", responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }} />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5">
           <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Recent Leads</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -176,6 +179,21 @@ export default function SalesDashboardClient({
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      {/* Active Sales Pipelines */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6">
+        <h3 className="text-lg font-bold mb-6 text-gray-900 dark:text-gray-100 flex items-center gap-2">
+          <i className="fa-solid fa-layer-group text-blue-600"></i> Active Sales Pipelines
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {pipelines.map((pipeline: any) => (
+            <PipelineCard key={pipeline._id} pipeline={pipeline} />
+          ))}
+          {pipelines.length === 0 && (
+            <div className="col-span-full text-center text-sm text-gray-500 dark:text-gray-400 py-6">No active sales pipelines found.</div>
+          )}
         </div>
       </div>
     </main>

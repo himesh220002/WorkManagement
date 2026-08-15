@@ -12,6 +12,7 @@ import {
 } from "chart.js";
 import { Bar, Doughnut } from "react-chartjs-2";
 import { addDeal } from "@/actions";
+import PipelineCard from "@/components/PipelineCard";
 
 ChartJS.register(
   CategoryScale,
@@ -26,9 +27,11 @@ ChartJS.register(
 export default function RevenueDashboardClient({
   deals,
   targets,
+  pipelines = [],
 }: {
   deals: any[];
   targets: any[];
+  pipelines?: any[];
 }) {
   const pipelineData = {
     labels: ["Prospect", "Initial Analysis", "Due Diligence", "Signing & Closing", "Integration"],
@@ -77,7 +80,7 @@ export default function RevenueDashboardClient({
 
       {/* Data Entry Forms */}
       <div className="flex flex-wrap gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-1">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 flex-1">
           <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Add New Deal</h4>
           <form action={addDeal} className="flex gap-2 flex-wrap items-center">
             <input type="text" name="name" className="flex-1 min-w-[150px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Deal Name" required />
@@ -96,33 +99,33 @@ export default function RevenueDashboardClient({
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">New Targets (30 Days)</h4>
           <h2 className="text-3xl font-bold text-blue-500">50</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Targets in Analysis</h4>
           <h2 className="text-3xl font-bold text-emerald-500">12</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Targets in Signing</h4>
           <h2 className="text-3xl font-bold text-amber-500">6</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Contribution (Closed)</h4>
           <h2 className="text-3xl font-bold text-violet-500">$160m</h2>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 md:col-span-2">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 md:col-span-2">
           <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Pipeline Revenue by Deal Stage & Lead ($m)</h3>
           <div className="h-72">
             <Bar data={pipelineData} options={{ indexAxis: "y", responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }} />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5">
           <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Target Count by Region</h3>
           <div className="h-72">
             <Doughnut data={regionData} options={{ responsive: true, maintainAspectRatio: false }} />
@@ -130,10 +133,25 @@ export default function RevenueDashboardClient({
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 mb-6">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 mb-6">
         <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Target Count by Industry / Vertical</h3>
         <div className="h-64">
           <Bar data={industryData} options={{ responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
+        </div>
+      </div>
+
+      {/* Active Financial Pipelines */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6">
+        <h3 className="text-lg font-bold mb-6 text-gray-900 dark:text-gray-100 flex items-center gap-2">
+          <i className="fa-solid fa-layer-group text-blue-600"></i> Financial Operational Pipelines
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {pipelines.map((pipeline: any) => (
+            <PipelineCard key={pipeline._id} pipeline={pipeline} />
+          ))}
+          {pipelines.length === 0 && (
+            <div className="col-span-full text-center text-sm text-gray-500 dark:text-gray-400 py-6">No active financial pipelines found.</div>
+          )}
         </div>
       </div>
     </main>

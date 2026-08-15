@@ -12,6 +12,7 @@ import {
   Legend,
 } from "chart.js";
 import { Bar, Doughnut } from "react-chartjs-2";
+import PipelineCard from "@/components/PipelineCard";
 
 ChartJS.register(
   CategoryScale,
@@ -28,6 +29,7 @@ export default function DevDashboardClient({
   tasks,
   pipelines = [],
   avgPipelineProgress = 0,
+  avgCycleTime = 0,
   selectedProjectId,
   chartData,
 }: {
@@ -35,6 +37,7 @@ export default function DevDashboardClient({
   tasks: any[];
   pipelines?: any[];
   avgPipelineProgress?: number | string;
+  avgCycleTime?: number;
   selectedProjectId: string;
   chartData: any;
 }) {
@@ -45,17 +48,17 @@ export default function DevDashboardClient({
   };
 
   const hoursData = {
-    labels: ["M1", "M2", "M3", "M4", "M5", "M6"],
+    labels: chartData.modules && chartData.modules.length > 0 ? chartData.modules : ["No Data"],
     datasets: [
       {
         label: "Estimated Hours",
-        data: [896, 593, 576, 550, 493, 700],
+        data: chartData.estimatedHoursData && chartData.estimatedHoursData.length > 0 ? chartData.estimatedHoursData : [0],
         backgroundColor: "#e2e8f0",
         hoverBackgroundColor: "#cbd5e1",
       },
       {
         label: "Actual Hours",
-        data: [754, 591, 545, 423, 548, 680],
+        data: chartData.actualHoursData && chartData.actualHoursData.length > 0 ? chartData.actualHoursData : [0],
         backgroundColor: "#3b82f6",
         hoverBackgroundColor: "#2563eb",
       },
@@ -124,7 +127,7 @@ export default function DevDashboardClient({
         </div>
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium">Avg Cycle Time</h4>
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 m-0">5 Days</h2>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 m-0">{avgCycleTime} Days</h2>
         </div>
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium">Global Pipeline Progress</h4>
@@ -177,26 +180,14 @@ export default function DevDashboardClient({
 
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6">
         <h3 className="text-lg font-bold mb-6 text-gray-900 dark:text-gray-100 flex items-center gap-2">
-          <i className="fa-solid fa-layer-group text-blue-600"></i> Top Active Pipelines
+          <i className="fa-solid fa-layer-group text-blue-600"></i> Active Development Pipelines
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {pipelines.slice(0, 3).map((pipeline, i) => (
-            <div key={i} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700 flex flex-col hover:-translate-y-1 transition-transform shadow-xs">
-              <div className="flex justify-between items-center mb-4">
-                <span className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate" title={pipeline.name}>{pipeline.name}</span>
-                <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-md font-bold">{pipeline.progress}%</span>
-              </div>
-              <div className="w-full bg-white dark:bg-gray-900 h-2 rounded-full overflow-hidden mb-3 border border-gray-200 dark:border-gray-700">
-                <div className="h-full bg-blue-600 rounded-full transition-all" style={{ width: `${pipeline.progress}%` }}></div>
-              </div>
-              <div className="flex justify-between text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider font-bold">
-                <span>{pipeline.category || 'General'}</span>
-                <span>{pipeline.status || 'Active'}</span>
-              </div>
-            </div>
+          {pipelines.map((pipeline: any) => (
+            <PipelineCard key={pipeline._id} pipeline={pipeline} />
           ))}
           {pipelines.length === 0 && (
-            <div className="col-span-full text-center text-sm text-gray-500 dark:text-gray-400 py-6">No active pipelines found. Head to Parallel Pipeline to create one.</div>
+            <div className="col-span-full text-center text-sm text-gray-500 dark:text-gray-400 py-6">No active development pipelines found. Head to Parallel Pipeline to create one.</div>
           )}
         </div>
       </div>

@@ -35,6 +35,8 @@ export default async function TimelinePage() {
           _id: todo._id ? todo._id.toString() : Math.random().toString(),
           text: todo.text || "",
           completed: Boolean(todo.completed),
+          assigneeType: todo.assigneeType || "Individual",
+          assigneeName: todo.assigneeName || "",
         }))
       : [],
   }));

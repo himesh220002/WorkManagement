@@ -1,19 +1,9 @@
 import connectToDatabase from "@/lib/mongodb";
-import { Project } from "@/models";
+import { Project, Team } from "@/models";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-async function addProject(formData: FormData) {
-  "use server";
-  await connectToDatabase();
-  const name = formData.get("projectName");
-  const description = formData.get("description");
-
-  if (name) {
-    await Project.create({ name, description });
-    revalidatePath("/projects");
-  }
-}
+import { addProject } from "@/actions";
 
 async function deleteProject(formData: FormData) {
   "use server";
@@ -28,7 +18,8 @@ async function deleteProject(formData: FormData) {
 
 export default async function ProjectsPage() {
   await connectToDatabase();
-  const projects = await Project.find({}).lean();
+  const projects = await Project.find({}).populate("team").lean();
+  const teams = await Team.find({}).lean();
 
   return (
     <main className="flex flex-col min-w-0 p-6 flex-1">
@@ -42,10 +33,10 @@ export default async function ProjectsPage() {
       </header>
 
       {/* Create Project Form */}
-      <form action={addProject} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 mb-6 flex gap-4 flex-wrap items-center">
+      <form action={addProject} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6 flex gap-4 flex-wrap items-center">
         <input
           type="text"
-          name="projectName"
+          name="name"
           className="flex-1 min-w-[200px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
           placeholder="New Project Name..."
           required
@@ -56,6 +47,12 @@ export default async function ProjectsPage() {
           className="flex-1 min-w-[200px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
           placeholder="Description..."
         />
+        <select name="teamId" className="p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+          <option value="">No Team Assigned</option>
+          {teams.map((t: any) => (
+            <option key={t._id.toString()} value={t._id.toString()}>{t.name}</option>
+          ))}
+        </select>
         <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors flex items-center gap-2">
           <i className="fa-solid fa-plus"></i> Create
         </button>

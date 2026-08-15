@@ -4,7 +4,7 @@ import { addTarget, toggleTargetChecklist, updateTargetChecklist } from "@/actio
 
 import { useState } from "react";
 
-export default function RevenueTargetsClient({ targets }: { targets: any[] }) {
+export default function RevenueTargetsClient({ targets, goals = [] }: { targets: any[], goals?: any[] }) {
   return (
     <main className="flex flex-col min-w-0 p-6 flex-1">
       <header className=" bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg mb-6 flex justify-between items-center">
@@ -21,10 +21,20 @@ export default function RevenueTargetsClient({ targets }: { targets: any[] }) {
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 mb-6">
         <h4 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">Create New Target</h4>
         <form action={addTarget} className="flex gap-4 flex-wrap items-center">
-          <input type="text" name="name" className="flex-1 min-w-[200px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Target Name" required />
-          <input type="text" name="industry" className="w-48 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Industry (Optional)" />
-          <input type="text" name="region" className="w-48 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Region (Optional)" />
-          <button type="submit" className="px-4 py-2 bg-emerald-500 text-white rounded hover:bg-emerald-600 transition-colors flex items-center gap-2">
+          <input type="text" name="name" className="flex-1 min-w-[150px] p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Target Name" required />
+          <input type="number" name="expectedValue" className="w-32 p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Expected Val" required />
+          <input type="number" name="actualValue" className="w-32 p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Actual Val" />
+          
+          <select name="goalId" className="w-48 p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+            <option value="">No Linked Goal</option>
+            {goals.map(g => (
+              <option key={g._id} value={g._id}>{g.title}</option>
+            ))}
+          </select>
+          
+          <input type="text" name="industry" className="w-32 p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Industry" />
+          <input type="text" name="region" className="w-32 p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Region" />
+          <button type="submit" className="px-4 py-2 bg-emerald-500 text-white text-sm rounded hover:bg-emerald-600 transition-colors flex items-center gap-2">
             <i className="fa-solid fa-plus"></i> Create Target
           </button>
         </form>
@@ -34,13 +44,26 @@ export default function RevenueTargetsClient({ targets }: { targets: any[] }) {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {targets && targets.length > 0 ? (
           targets.map((target) => (
-            <div key={target._id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col h-full">
+            <div key={target._id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 flex flex-col h-full relative">
+              {target.goalId && (
+                <div className="absolute -top-3 -right-3 bg-blue-500 text-white text-xs px-2 py-1 rounded-full shadow border-2 border-white dark:border-gray-800">
+                  <i className="fa-solid fa-link"></i> Linked
+                </div>
+              )}
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h4 className="text-xl font-semibold mb-1 text-gray-900 dark:text-gray-100">{target.name}</h4>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                     <i className="fa-solid fa-industry mr-1"></i> {target.industry || "N/A"} &nbsp;|&nbsp;
                     <i className="fa-solid fa-earth-americas ml-1 mr-1"></i> {target.region || "N/A"}
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                      Actual: {target.actualValue}
+                    </div>
+                    <div className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                      Expected: {target.expectedValue}
+                    </div>
                   </div>
                 </div>
                 <span className={`px-2 py-1 text-xs rounded-full font-medium ${target.status === "Completed" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
