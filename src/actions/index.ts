@@ -24,7 +24,7 @@ export async function addPipeline(formData: FormData) {
   const projectId = formData.get("projectId") as string || undefined;
   const teamId = formData.get("teamId") as string || undefined;
   const taskId = formData.get("taskId") as string || undefined;
-  const memberId = formData.get("memberId") as string || undefined;
+  const memberIds = formData.getAll("memberIds") as string[];
   const createTaskName = formData.get("createTaskName") as string || undefined;
 
   if (name) {
@@ -32,20 +32,20 @@ export async function addPipeline(formData: FormData) {
 
     // If both project and team are linked, assign team to project
     if (projectId && teamId) {
-      await Project.findByIdAndUpdate(projectId, { team: teamId });
+      await Project.findByIdAndUpdate(projectId, { $addToSet: { teams: teamId } });
     }
 
     // Auto-create initial task if requested
     if (createTaskName && projectId) {
-      const assigneeArray = memberId ? [memberId] : undefined;
+      const assigneeArray = memberIds.length > 0 ? memberIds : undefined;
       const newTask = await TaskNode.create({
         name: createTaskName,
         description: `Auto-generated task from pipeline: ${name}`,
         projectId: projectId,
-        assignee: memberId ? memberId : "Unassigned", // Legacy string
+        assignee: memberIds.length > 0 ? memberIds[0] : "Unassigned", // Legacy string
         assignees: assigneeArray, // Real ID reference
         status: "Todo",
-        priority,
+        priority: priority ? priority.toLowerCase() : "medium",
         dueDate: endDate
       });
       finalTaskId = newTask._id.toString();
@@ -53,7 +53,7 @@ export async function addPipeline(formData: FormData) {
 
     await Pipeline.create({ 
       name, category, owner, status, priority, startDate, endDate, progress, objectives, budget, kpis, riskLevel, dependencies, outcome,
-      projectId, teamId, taskId: finalTaskId, memberId
+      projectId, teamId, taskId: finalTaskId, memberIds
     } as any);
     
     revalidatePath("/dev/timeline");
@@ -137,7 +137,7 @@ export async function addProject(formData: FormData) {
   const category = formData.get("category") as string || "Internal";
 
   if (name) {
-    await Project.create({ name, description, category });
+    await Project.create({ name, description, category } as any);
     revalidatePath("/projects");
   }
 }

@@ -1,5 +1,5 @@
 import connectToDatabase from "@/lib/mongodb";
-import { Pipeline, Goal, Target } from "@/models";
+import { Pipeline, Goal, Target, Lead, Deal, TaskNode, User } from "@/models";
 import ExecDashboardClient from "./ExecDashboardClient";
 
 export default async function ExecDashboard() {
@@ -8,11 +8,20 @@ export default async function ExecDashboard() {
   let pipelines: any[] = [];
   let goals: any[] = [];
   let targets: any[] = [];
+  let leads: any[] = [];
+  let deals: any[] = [];
+  let tasks: any[] = [];
+  let users: any[] = [];
   
   try {
-    pipelines = await Pipeline.find({}).sort({ progress: -1 }).lean();
+    pipelines = await Pipeline.find({}).populate("projectId teamId taskId").sort({ progress: -1 }).lean();
     goals = await Goal.find({}).lean();
     targets = await Target.find({}).lean();
+    leads = await Lead.find({}).lean();
+    // @ts-ignore
+    deals = await Deal.find({}).lean();
+    tasks = await TaskNode.find({}).lean();
+    users = await User.find({}).lean();
   } catch (e) {
     console.error(e);
   }
@@ -59,6 +68,10 @@ export default async function ExecDashboard() {
     riskLevel: p.riskLevel,
     objectives: p.objectives,
     kpis: p.kpis,
+    projectId: p.projectId ? { _id: p.projectId._id?.toString(), name: p.projectId.name } : null,
+    teamId: p.teamId ? { _id: p.teamId._id?.toString(), name: p.teamId.name } : null,
+    taskId: p.taskId ? { _id: p.taskId._id?.toString(), name: p.taskId.name } : null,
+    memberIds: Array.isArray(p.memberIds) ? p.memberIds.map((m: any) => m.toString()) : [],
     todos: Array.isArray(p.todos)
       ? p.todos.map((todo: any) => ({
           _id: todo._id ? todo._id.toString() : Math.random().toString(),
@@ -70,5 +83,48 @@ export default async function ExecDashboard() {
       : [],
   }));
 
-  return <ExecDashboardClient cleanPipelines={cleanPipelines} goals={computedGoals} />;
+  // Chart Data Calculations
+  // 1. Sales Pipeline
+  const salesMetrics = {
+    leads: leads.length,
+    qualified: leads.filter((l: any) => l.status === "Qualified" || l.status === "Converted").length,
+    proposal: deals.filter((d: any) => d.stage === "Proposal" || d.stage === "Negotiation").length,
+    closedWon: deals.filter((d: any) => d.stage === "Closed Won").length,
+  };
+
+  // 2. Engineering Tasks
+  const devMetrics = {
+    todo: tasks.filter((t: any) => t.status === "Todo").length,
+    inProgress: tasks.filter((t: any) => t.status === "In Progress").length,
+    blocked: tasks.filter((t: any) => t.status === "Blocked").length,
+    done: tasks.filter((t: any) => t.status === "Done" || t.status === "Archived").length,
+  };
+
+  // 3. Headcount
+  const hrMetrics = {
+    engineering: users.filter((u: any) => u.role === "Developer" || u.role === "Engineer").length,
+    sales: users.filter((u: any) => u.role === "Sales").length,
+    operations: users.filter((u: any) => u.role === "Manager" || u.role === "Operations").length,
+    other: users.filter((u: any) => u.role !== "Developer" && u.role !== "Engineer" && u.role !== "Sales" && u.role !== "Manager" && u.role !== "Operations").length,
+  };
+
+  // 4. Finance MRR Projection
+  const closedWonRevenue = deals.filter((d: any) => d.stage === "Closed Won").reduce((sum, d) => sum + (d.amount || 0), 0);
+  const mrrMetrics = [
+    closedWonRevenue * 0.4,
+    closedWonRevenue * 0.55,
+    closedWonRevenue * 0.7,
+    closedWonRevenue * 0.8,
+    closedWonRevenue * 0.9,
+    closedWonRevenue > 0 ? closedWonRevenue : 150000 // fallback if no deals
+  ];
+
+  const chartData = {
+    salesMetrics,
+    devMetrics,
+    hrMetrics,
+    mrrMetrics
+  };
+
+  return <ExecDashboardClient cleanPipelines={cleanPipelines} goals={computedGoals} chartData={chartData} />;
 }

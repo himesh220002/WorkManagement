@@ -5,14 +5,18 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
+  PointElement,
+  LineElement,
   ArcElement,
   Title,
   Tooltip,
   Legend,
+  Filler,
 } from "chart.js";
-import { Bar, Doughnut } from "react-chartjs-2";
+import { Line, Bar, Doughnut } from "react-chartjs-2";
 import { addLead, addCampaign, addPipeline } from "@/actions";
 import PipelineCard from "@/components/PipelineCard";
+import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import { useMemo } from "react";
 
 ChartJS.register(
@@ -120,7 +124,7 @@ export default function SalesDashboardClient({
             <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">Add</button>
           </form>
         </div>
-        
+
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 flex-1">
           <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Add New Campaign</h4>
           <form action={addCampaign} className="flex gap-2 flex-wrap items-center">
@@ -137,7 +141,7 @@ export default function SalesDashboardClient({
             <input type="hidden" name="category" value="Sales" />
             <input type="text" name="name" className="flex-1 min-w-[120px] p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Pipeline Name" required />
             <input type="text" name="owner" className="w-28 p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Owner" />
-            
+
             <select name="projectId" className="p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
               <option value="">No Project</option>
               {options.projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -151,10 +155,9 @@ export default function SalesDashboardClient({
               {options.tasks.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
             <input type="text" name="createTaskName" className="w-32 p-2 text-sm rounded border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-gray-900 dark:text-gray-100" placeholder="Auto-Create Task" />
-            <select name="memberId" className="p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-              <option value="">No Member</option>
-              {options.users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
+            <div className="w-48">
+              <MultiSelectDropdown name="memberIds" options={options.users} placeholder="Members..." />
+            </div>
 
             <button type="submit" className="px-4 py-2 bg-violet-500 text-white rounded text-sm hover:bg-violet-600 transition-colors">Add</button>
           </form>

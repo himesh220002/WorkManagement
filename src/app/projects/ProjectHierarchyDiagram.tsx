@@ -14,24 +14,29 @@ export default function ProjectHierarchyDiagram({ project }: { project: any }) {
       
       // Generate Mermaid Code
       const pNode = `P_${project._id}`;
-      const tNode = `Team_${project.team?._id || 'none'}`;
       const tasksNode = `Tasks_${project._id}`;
 
       let chart = `flowchart TD\n`;
       chart += `  ${pNode}["Project: ${project.name.replace(/["']/g, '')}"]\n`;
       
-      if (project.team) {
-        chart += `  ${tNode}["Team: ${project.team.name.replace(/["']/g, '')}"]\n`;
-        chart += `  ${pNode} --> ${tNode}\n`;
+      const allMembers: any[] = [];
 
-        if (project.team.members && project.team.members.length > 0) {
-          project.team.members.forEach((m: any) => {
-            const mNode = `M_${m._id}`;
-            const roleStr = m.position ? `${m.role} - ${m.position}` : m.role;
-            chart += `  ${mNode}["${m.name} (${roleStr})"]\n`;
-            chart += `  ${tNode} --> ${mNode}\n`;
-          });
-        }
+      if (project.teams && project.teams.length > 0) {
+        project.teams.forEach((team: any) => {
+          const tNode = `Team_${team._id}`;
+          chart += `  ${tNode}["Team: ${team.name.replace(/["']/g, '')}"]\n`;
+          chart += `  ${pNode} --> ${tNode}\n`;
+
+          if (team.members && team.members.length > 0) {
+            team.members.forEach((m: any) => {
+              allMembers.push(m);
+              const mNode = `M_${m._id}`;
+              const roleStr = m.position ? `${m.role} - ${m.position}` : m.role;
+              chart += `  ${mNode}["${m.name} (${roleStr})"]\n`;
+              chart += `  ${tNode} --> ${mNode}\n`;
+            });
+          }
+        });
       }
 
       if (project.tasks && project.tasks.length > 0) {
@@ -42,8 +47,8 @@ export default function ProjectHierarchyDiagram({ project }: { project: any }) {
           chart += `  ${taskNodeStr}["${task.name.replace(/["']/g, '')}"]\n`;
           chart += `  ${tasksNode} --> ${taskNodeStr}\n`;
           
-          if (task.assignee && task.assignee !== "Unassigned" && project.team?.members) {
-            const member = project.team.members.find((m: any) => m.name === task.assignee);
+          if (task.assignee && task.assignee !== "Unassigned") {
+            const member = allMembers.find((m: any) => m.name === task.assignee);
             if (member) {
               chart += `  ${taskNodeStr} -. "Assigned to" .-> M_${member._id}\n`;
             }

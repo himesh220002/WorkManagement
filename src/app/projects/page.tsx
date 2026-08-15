@@ -21,7 +21,7 @@ export default async function ProjectsPage() {
   await connectToDatabase();
   const projectsData = await Project.find({})
     .populate({
-      path: "team",
+      path: "teams",
       populate: { path: "members" }
     })
     .lean();

@@ -8,6 +8,7 @@ import { addPipeline, updatePipelineProgress, updatePipelineDates } from "@/acti
 interface Option { id: string, name: string }
 interface Options { projects: Option[], teams: Option[], tasks: Option[], users: Option[] }
 import PipelineCard from "@/components/PipelineCard";
+import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 
 export default function TimelineClient({ tasks, options }: { tasks: any[], options?: Options }) {
   const ganttWrapperRef = useRef<HTMLDivElement>(null);
@@ -318,11 +319,8 @@ export default function TimelineClient({ tasks, options }: { tasks: any[], optio
                       <input type="text" name="createTaskName" className="w-full px-4 py-2.5 rounded-lg border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="Generate new execution task..." />
                     </div>
                     <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
-                      <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Assign Member</label>
-                      <select name="memberId" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
-                        <option value="">None</option>
-                        {options.users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                      </select>
+                      <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Assign Member(s)</label>
+                      <MultiSelectDropdown name="memberIds" options={options.users} placeholder="Select team members..." />
                     </div>
                   </>
                 )}

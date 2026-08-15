@@ -9,10 +9,12 @@ import {
   Title,
   Tooltip,
   Legend,
+  Filler,
 } from "chart.js";
-import { Bar, Doughnut } from "react-chartjs-2";
+import { Line, Bar, Doughnut } from "react-chartjs-2";
 import { addDeal, addPipeline } from "@/actions";
 import PipelineCard from "@/components/PipelineCard";
+import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import { useMemo } from "react";
 
 ChartJS.register(
@@ -157,10 +159,9 @@ export default function RevenueDashboardClient({
               {options.tasks.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
             <input type="text" name="createTaskName" className="w-32 p-2 text-sm rounded border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-gray-900 dark:text-gray-100" placeholder="Auto-Create Task" />
-            <select name="memberId" className="p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-              <option value="">No Member</option>
-              {options.users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
+            <div className="w-48">
+              <MultiSelectDropdown name="memberIds" options={options.users} placeholder="Members..." />
+            </div>
 
             <button type="submit" className="px-4 py-2 bg-emerald-500 text-white rounded text-sm hover:bg-emerald-600 transition-colors">Add</button>
           </form>

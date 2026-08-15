@@ -12,7 +12,7 @@ export default async function TimelinePage() {
   let users: any[] = [];
 
   try {
-    tasks = await Pipeline.find({}).lean();
+    tasks = await Pipeline.find({}).populate("projectId teamId taskId").lean();
     projects = await Project.find({}, { name: 1 }).lean();
     teams = await Team.find({}, { name: 1 }).lean();
     taskNodes = await TaskNode.find({}, { name: 1 }).lean();
@@ -39,10 +39,10 @@ export default async function TimelinePage() {
     tags: t.tags || "",
     riskLevel: t.riskLevel || "Low",
     notes: t.notes || "",
-    projectId: t.projectId ? t.projectId.toString() : "",
-    teamId: t.teamId ? t.teamId.toString() : "",
-    taskId: t.taskId ? t.taskId.toString() : "",
-    memberId: t.memberId ? t.memberId.toString() : "",
+    projectId: t.projectId ? { _id: t.projectId._id?.toString(), name: t.projectId.name } : null,
+    teamId: t.teamId ? { _id: t.teamId._id?.toString(), name: t.teamId.name } : null,
+    taskId: t.taskId ? { _id: t.taskId._id?.toString(), name: t.taskId.name } : null,
+    memberIds: Array.isArray(t.memberIds) ? t.memberIds.map((m: any) => m.toString()) : [],
     todos: Array.isArray(t.todos)
       ? t.todos.map((todo: any) => ({
           _id: todo._id ? todo._id.toString() : Math.random().toString(),

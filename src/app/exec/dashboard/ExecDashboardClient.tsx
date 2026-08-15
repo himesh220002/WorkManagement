@@ -31,13 +31,21 @@ ChartJS.register(
 
 import { addGoal, deleteGoal } from "@/actions";
 
-export default function ExecDashboardClient({ cleanPipelines, goals = [] }: { cleanPipelines: any[], goals?: any[] }) {
+export default function ExecDashboardClient({ cleanPipelines, goals = [], chartData }: { cleanPipelines: any[], goals?: any[], chartData?: any }) {
+  // Use real data if provided, fallback to defaults
+  const m = chartData || {
+    salesMetrics: { leads: 500, qualified: 250, proposal: 100, closedWon: 45 },
+    devMetrics: { todo: 45, inProgress: 52, blocked: 38, done: 60 },
+    hrMetrics: { engineering: 45, sales: 20, operations: 15, other: 10 },
+    mrrMetrics: [120000, 135000, 125000, 150000, 180000, 210000]
+  };
+
   const financeData = {
     labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
     datasets: [
       {
-        label: "MRR ($k)",
-        data: [120, 135, 125, 150, 180, 210],
+        label: "MRR ($)",
+        data: m.mrrMetrics,
         borderColor: "#10b981",
         tension: 0.4,
         fill: true,
@@ -51,18 +59,18 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [] }: { cl
     datasets: [
       {
         label: "Count",
-        data: [500, 250, 100, 45],
+        data: [m.salesMetrics.leads, m.salesMetrics.qualified, m.salesMetrics.proposal, m.salesMetrics.closedWon],
         backgroundColor: ["#e5e7eb", "#93c5fd", "#3b82f6", "#1d4ed8"],
       },
     ],
   };
 
   const devData = {
-    labels: ["Sprint 1", "Sprint 2", "Sprint 3", "Sprint 4"],
+    labels: ["Todo", "In Progress", "Blocked", "Done"],
     datasets: [
       {
-        label: "Story Points Completed",
-        data: [45, 52, 38, 60],
+        label: "Tasks Count",
+        data: [m.devMetrics.todo, m.devMetrics.inProgress, m.devMetrics.blocked, m.devMetrics.done],
         backgroundColor: "#8b5cf6",
         borderRadius: 4,
       },
@@ -70,10 +78,10 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [] }: { cl
   };
 
   const hrData = {
-    labels: ["Engineering", "Sales", "Operations", "G&A"],
+    labels: ["Engineering", "Sales", "Operations", "Other"],
     datasets: [
       {
-        data: [45, 20, 15, 10],
+        data: [m.hrMetrics.engineering, m.hrMetrics.sales, m.hrMetrics.operations, m.hrMetrics.other],
         backgroundColor: ["#3b82f6", "#10b981", "#f59e0b", "#6b7280"],
       },
     ],

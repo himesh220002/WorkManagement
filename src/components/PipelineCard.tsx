@@ -68,6 +68,22 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
 
         {/* Metadata */}
         <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1.5 mb-4">
+          {(pipeline.projectId || pipeline.teamId) && (
+            <div className="flex flex-col gap-1.5 mb-3 bg-gray-50 dark:bg-gray-700/30 p-2.5 rounded-md border border-gray-100 dark:border-gray-700">
+              {pipeline.projectId && (
+                <div className="flex items-center gap-2" title={`Project: ${pipeline.projectId.name}`}>
+                  <i className="fa-solid fa-folder-tree text-blue-500 w-3"></i>
+                  <span className="font-bold text-gray-700 dark:text-gray-300 truncate">{pipeline.projectId.name}</span>
+                </div>
+              )}
+              {pipeline.teamId && (
+                <div className="flex items-center gap-2" title={`Team: ${pipeline.teamId.name}`}>
+                  <i className="fa-solid fa-users-gear text-indigo-500 w-3"></i>
+                  <span className="font-medium text-gray-600 dark:text-gray-400 truncate">{pipeline.teamId.name}</span>
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex justify-between items-center"><span className="font-semibold text-gray-600 dark:text-gray-300">Owner:</span> <span>{pipeline.owner || 'Unassigned'}</span></div>
           <div className="flex justify-between items-center"><span className="font-semibold text-gray-600 dark:text-gray-300">Timeline:</span> <span>{pipeline.startDate ? pipeline.startDate.split('T')[0] : 'TBD'} to {pipeline.endDate ? pipeline.endDate.split('T')[0] : 'TBD'}</span></div>
           {pipeline.objectives && (

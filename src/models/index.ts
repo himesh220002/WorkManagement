@@ -112,12 +112,15 @@ const projectSchema = new mongoose.Schema({
   name: String,
   description: String,
   category: { type: String, enum: ["Internal", "Client", "Product", "Research", "Other"], default: "Internal" },
-  team: { type: mongoose.Schema.Types.ObjectId, ref: 'Team' },
+  teams: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Team' }],
   deadline: Date,
   scaling: { type: Number, default: 1 },
   status: { type: String, default: "Active" }
 });
-export const Project = mongoose.models.Project || mongoose.model("Project", projectSchema);
+if (mongoose.models.Project) {
+  delete mongoose.models.Project;
+}
+export const Project = mongoose.model("Project", projectSchema);
 
 const cycleSchema = new mongoose.Schema({
   name: String,
@@ -146,7 +149,7 @@ const pipelineSchema = new mongoose.Schema({
   projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },
   teamId: { type: mongoose.Schema.Types.ObjectId, ref: 'Team' },
   taskId: { type: mongoose.Schema.Types.ObjectId, ref: 'TaskNode' },
-  memberId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  memberIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   riskLevel: { type: String, enum: ["Low", "Medium", "High"], default: "Low" },
   notes: { type: String, default: "" },
   todos: [{

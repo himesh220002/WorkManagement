@@ -16,7 +16,7 @@ export default async function SalesDashboardPage() {
   try {
     leads = await Lead.find({}).lean();
     campaigns = await Campaign.find({}).lean();
-    pipelines = await Pipeline.find({ category: "Sales" }).sort({ progress: -1 }).lean();
+    pipelines = await Pipeline.find({ category: "Sales" }).populate("projectId teamId taskId").sort({ progress: -1 }).lean();
     projects = await Project.find({}, { name: 1 }).lean();
     teams = await Team.find({}, { name: 1 }).lean();
     taskNodes = await TaskNode.find({}, { name: 1 }).lean();
@@ -51,10 +51,10 @@ export default async function SalesDashboardPage() {
     riskLevel: p.riskLevel,
     objectives: p.objectives,
     kpis: p.kpis,
-    projectId: p.projectId ? p.projectId.toString() : "",
-    teamId: p.teamId ? p.teamId.toString() : "",
-    taskId: p.taskId ? p.taskId.toString() : "",
-    memberId: p.memberId ? p.memberId.toString() : "",
+    projectId: p.projectId ? { _id: p.projectId._id?.toString(), name: p.projectId.name } : null,
+    teamId: p.teamId ? { _id: p.teamId._id?.toString(), name: p.teamId.name } : null,
+    taskId: p.taskId ? { _id: p.taskId._id?.toString(), name: p.taskId.name } : null,
+    memberIds: Array.isArray(p.memberIds) ? p.memberIds.map((m: any) => m.toString()) : [],
     todos: Array.isArray(p.todos)
       ? p.todos.map((todo: any) => ({
           _id: todo._id ? todo._id.toString() : Math.random().toString(),
