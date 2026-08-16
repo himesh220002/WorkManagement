@@ -170,20 +170,32 @@ export default function RevenueDashboardClient({
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Deals in Prospect</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm flex justify-center items-center gap-1">
+            Deals in Prospect
+            <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Count of deals currently in the 'Prospect' stage"></i>
+          </h4>
           <h2 className="text-3xl font-bold text-blue-500">{dealsInProspect}</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Deals in Analysis</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm flex justify-center items-center gap-1">
+            Deals in Analysis
+            <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Count of deals in 'Initial Analysis' or 'Due Diligence'"></i>
+          </h4>
           <h2 className="text-3xl font-bold text-emerald-500">{dealsInAnalysis}</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Deals in Closing</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm flex justify-center items-center gap-1">
+            Deals in Closing
+            <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Count of deals in 'Signing & Closing' or 'Closing' stages"></i>
+          </h4>
           <h2 className="text-3xl font-bold text-amber-500">{dealsInClosing}</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Contribution (Closed)</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm flex justify-center items-center gap-1">
+            Contribution (Closed)
+            <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Total amount of deals in 'Closed' or 'Integration' stages"></i>
+          </h4>
           <h2 className="text-3xl font-bold text-violet-500">${revenueClosed.toLocaleString()}</h2>
         </div>
       </div>

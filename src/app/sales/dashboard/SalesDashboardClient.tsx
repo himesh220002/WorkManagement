@@ -174,12 +174,18 @@ export default function SalesDashboardClient({
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Active Campaigns</h4>
           <h2 className="text-3xl font-bold text-emerald-500">{activeCampaigns}</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Expected Revenue</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm flex justify-center items-center gap-1">
+            Expected Revenue
+            <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Sum of expected revenue from all active campaigns"></i>
+          </h4>
           <h2 className="text-3xl font-bold text-amber-500">${expectedRevenue.toLocaleString()}</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Conversion Rate</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm flex justify-center items-center gap-1">
+            Conversion Rate
+            <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Percentage of total leads that are currently marked as 'Qualified'"></i>
+          </h4>
           <h2 className="text-3xl font-bold text-violet-500">{conversionRate}%</h2>
         </div>
       </div>

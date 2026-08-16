@@ -17,7 +17,9 @@ const taskNodeSchema = new mongoose.Schema({
   endDate: { type: Date },
   progress: { type: Number, default: 0 },
   dependencies: [{ type: String }],
-  assignee: { type: String, default: "Unassigned" }
+  assignee: { type: String, default: "Unassigned" },
+  pipelineId: { type: mongoose.Schema.Types.ObjectId, ref: "Pipeline" },
+  cycleId: { type: mongoose.Schema.Types.ObjectId, ref: "Cycle" }
 });
 export const TaskNode = mongoose.models.TaskNode || mongoose.model("TaskNode", taskNodeSchema);
 

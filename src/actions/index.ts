@@ -285,11 +285,41 @@ export async function addTaskNode(formData: FormData) {
   const module = formData.get("module") as string || "General";
   const estimatedHours = Number(formData.get("estimatedHours")) || 0;
   const actualHours = Number(formData.get("actualHours")) || 0;
+  const pipelineId = formData.get("pipelineId") as string;
+  const cycleId = formData.get("cycleId") as string;
   
   if (name && projectId && projectId !== "all") {
-    await TaskNode.create({
-      name, projectId, status, severity, module, estimatedHours, actualHours
-    });
+    const data: any = { name, projectId, status, severity, module, estimatedHours, actualHours };
+    if (pipelineId && pipelineId !== "none") data.pipelineId = pipelineId;
+    if (cycleId && cycleId !== "none") data.cycleId = cycleId;
+    
+    await TaskNode.create(data);
+    revalidatePath("/dev/dashboard");
+  }
+}
+
+export async function updateTaskNode(formData: FormData) {
+  await connectToDatabase();
+  const taskId = formData.get("taskId") as string;
+  const name = formData.get("name") as string;
+  const status = formData.get("status") as string;
+  const severity = formData.get("severity") as string;
+  const estimatedHours = Number(formData.get("estimatedHours")) || 0;
+  const actualHours = Number(formData.get("actualHours")) || 0;
+  const pipelineId = formData.get("pipelineId") as string;
+  const cycleId = formData.get("cycleId") as string;
+
+  if (taskId) {
+    const updateData: any = {};
+    if (name) updateData.name = name;
+    if (status) updateData.status = status;
+    if (severity) updateData.severity = severity;
+    if (formData.has("estimatedHours")) updateData.estimatedHours = estimatedHours;
+    if (formData.has("actualHours")) updateData.actualHours = actualHours;
+    if (pipelineId) updateData.pipelineId = pipelineId === "none" ? null : pipelineId;
+    if (cycleId) updateData.cycleId = cycleId === "none" ? null : cycleId;
+
+    await TaskNode.findByIdAndUpdate(taskId, updateData);
     revalidatePath("/dev/dashboard");
   }
 }
@@ -315,6 +345,20 @@ export async function deleteGoal(formData: FormData) {
   if (goalId) {
     await Goal.findByIdAndDelete(goalId);
     await Target.deleteMany({ goalId: goalId });
+    revalidatePath("/exec/dashboard");
+    revalidatePath("/revenue/targets");
+  }
+}
+
+export async function updateGoal(formData: FormData) {
+  await connectToDatabase();
+  const goalId = formData.get("goalId") as string;
+  const title = formData.get("title") as string;
+  const description = formData.get("description") as string;
+  const category = formData.get("category") as string;
+
+  if (goalId) {
+    await Goal.findByIdAndUpdate(goalId, { title, description, category });
     revalidatePath("/exec/dashboard");
     revalidatePath("/revenue/targets");
   }

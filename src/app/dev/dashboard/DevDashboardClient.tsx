@@ -14,6 +14,8 @@ import {
 import { Bar, Doughnut } from "react-chartjs-2";
 import PipelineCard from "@/components/PipelineCard";
 import { addTaskNode, addCycle } from "@/actions";
+import WorkflowGuide from "./WorkflowGuide";
+import EditableTaskList from "./EditableTaskList";
 
 ChartJS.register(
   CategoryScale,
@@ -29,6 +31,7 @@ export default function DevDashboardClient({
   projects,
   tasks,
   pipelines = [],
+  cycles = [],
   avgPipelineProgress = 0,
   avgCycleTime = 0,
   selectedProjectId,
@@ -37,6 +40,7 @@ export default function DevDashboardClient({
   projects: any[];
   tasks: any[];
   pipelines?: any[];
+  cycles?: any[];
   avgPipelineProgress?: number | string;
   avgCycleTime?: number;
   selectedProjectId: string;
@@ -122,27 +126,42 @@ export default function DevDashboardClient({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium">Total Tasks</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium flex justify-center items-center gap-1">
+            Total Tasks
+            <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Total number of tasks associated with the selected project context"></i>
+          </h4>
           <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 m-0">{tasks.length}</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium">Avg Cycle Time</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium flex justify-center items-center gap-1">
+            Avg Cycle Time
+            <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Average duration of all sprints/cycles in days based on start and end dates"></i>
+          </h4>
           <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 m-0">{avgCycleTime} Days</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium">Global Pipeline Progress</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium flex justify-center items-center gap-1">
+            Global Pipeline Progress
+            <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Average progress percentage across all active development pipelines"></i>
+          </h4>
           <h2 className="text-3xl font-bold text-blue-600 m-0">{avgPipelineProgress}%</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium">Billable Hours</h4>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium flex justify-center items-center gap-1">
+            Billable Hours
+            <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Sum of actual hours logged (or calculated from task completion dates)"></i>
+          </h4>
           <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 m-0">{chartData.totalHours}</h2>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 md:col-span-2">
-          <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100">Estimated vs Actual Work Hours</h3>
+          <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            Estimated vs Actual Work Hours
+            <i className="fa-solid fa-circle-info text-gray-400 text-sm cursor-help" title="Actual hours are directly entered or fall back to calculating the difference between task completion and start dates"></i>
+          </h3>
           <div className="h-64">
             <Bar data={hoursData} options={{ responsive: true, maintainAspectRatio: false }} />
           </div>
@@ -189,6 +208,10 @@ export default function DevDashboardClient({
             <input type="hidden" name="projectId" value={selectedProjectId} />
             <input type="text" name="name" placeholder="Task Name" className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none" required />
             <div className="flex gap-3">
+              <input type="number" name="estimatedHours" placeholder="Est. Hours" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm" />
+              <input type="number" name="actualHours" placeholder="Actual Hours" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm" />
+            </div>
+            <div className="flex gap-3">
               <select name="status" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm">
                 <option value="open">Open</option>
                 <option value="in_progress">In Progress</option>
@@ -203,8 +226,14 @@ export default function DevDashboardClient({
               </select>
             </div>
             <div className="flex gap-3">
-              <input type="number" name="estimatedHours" placeholder="Est. Hours" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm" />
-              <input type="number" name="actualHours" placeholder="Actual Hours" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm" />
+              <select name="pipelineId" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm">
+                <option value="none">No Pipeline</option>
+                {pipelines.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+              </select>
+              <select name="cycleId" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm">
+                <option value="none">No Sprint</option>
+                {cycles.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+              </select>
             </div>
             <button type="submit" disabled={selectedProjectId === "all"} className="w-full p-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
               {selectedProjectId === "all" ? "Select a Project First" : "Add Task"}
@@ -236,6 +265,8 @@ export default function DevDashboardClient({
         </div>
       </div>
 
+      <EditableTaskList tasks={tasks} pipelines={pipelines} cycles={cycles} />
+
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6">
         <h3 className="text-lg font-bold mb-6 text-gray-900 dark:text-gray-100 flex items-center gap-2">
           <i className="fa-solid fa-layer-group text-blue-600"></i> Active Development Pipelines
@@ -249,6 +280,8 @@ export default function DevDashboardClient({
           )}
         </div>
       </div>
+      
+      <WorkflowGuide />
     </main>
   );
 }

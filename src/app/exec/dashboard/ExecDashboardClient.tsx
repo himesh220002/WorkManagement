@@ -29,9 +29,12 @@ ChartJS.register(
   Filler
 );
 
-import { addGoal, deleteGoal } from "@/actions";
+import { addGoal, deleteGoal, updateGoal } from "@/actions";
+import { useState } from "react";
 
 export default function ExecDashboardClient({ cleanPipelines, goals = [], chartData }: { cleanPipelines: any[], goals?: any[], chartData?: any }) {
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+
   // Use real data if provided, fallback to defaults
   const m = chartData || {
     salesMetrics: { leads: 500, qualified: 250, proposal: 100, closedWon: 45 },
@@ -140,22 +143,50 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
             if (goal.status === "Behind") color = "rose-500";
             
             return (
-              <div key={goal._id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm kpi-card p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 relative overflow-hidden">
+              <div key={goal._id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm kpi-card p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 relative overflow-hidden flex flex-col h-full">
                 <div className="absolute top-0 right-0 p-2 text-xs font-semibold text-gray-400">{goal.category}</div>
-                <div className="kpi-title text-sm text-gray-600 dark:text-gray-300 mb-1 pr-16">{goal.title}</div>
-                <div className={`kpi-value text-2xl font-bold text-${color}`}>{goal.progress}%</div>
-                <div className="progress-bar-bg w-full h-2 bg-gray-200 dark:bg-gray-700 rounded mt-3">
-                  <div className={`h-full bg-${color} rounded`} style={{ width: `${goal.progress}%` }}></div>
-                </div>
-                <div className="flex justify-between items-center mt-2">
-                  <div className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 flex-1 pr-2">{goal.description || "No specific key result description"}</div>
-                  <form action={deleteGoal} className="m-0 flex" onSubmit={(e) => { if (!window.confirm("Are you sure you want to delete this Goal and all its connected Targets?")) e.preventDefault(); }}>
-                    <input type="hidden" name="goalId" value={goal._id.toString()} />
-                    <button type="submit" className="text-gray-400 hover:text-red-500 transition-colors p-1 cursor-pointer" title="Delete Goal">
-                      <i className="fa-solid fa-trash-can text-xs"></i>
-                    </button>
+                
+                {editingGoalId === goal._id ? (
+                  <form action={async (formData) => {
+                    await updateGoal(formData);
+                    setEditingGoalId(null);
+                  }} className="flex flex-col gap-2 mt-4 z-10 relative bg-white dark:bg-gray-800">
+                    <input type="hidden" name="goalId" value={goal._id} />
+                    <input type="text" name="title" defaultValue={goal.title} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-semibold" required />
+                    <input type="text" name="description" defaultValue={goal.description} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" />
+                    <select name="category" defaultValue={goal.category} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+                      <option value="Company">Company</option>
+                      <option value="Department">Department</option>
+                      <option value="Team">Team</option>
+                    </select>
+                    <div className="flex gap-2 justify-end mt-2">
+                      <button type="button" onClick={() => setEditingGoalId(null)} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">Cancel</button>
+                      <button type="submit" className="px-3 py-1.5 text-xs bg-emerald-500 text-white rounded hover:bg-emerald-600 transition-colors">Save</button>
+                    </div>
                   </form>
-                </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 mb-1 pr-16 relative z-10">
+                      <div className="kpi-title text-sm text-gray-600 dark:text-gray-300 font-semibold truncate">{goal.title}</div>
+                      <button onClick={() => setEditingGoalId(goal._id)} className="text-gray-400 hover:text-emerald-500 transition-colors p-1" title="Edit Goal">
+                        <i className="fa-solid fa-pen text-xs"></i>
+                      </button>
+                    </div>
+                    <div className={`kpi-value text-2xl font-bold text-${color} relative z-10`}>{goal.progress}%</div>
+                    <div className="progress-bar-bg w-full h-2 bg-gray-200 dark:bg-gray-700 rounded mt-3 relative z-10">
+                      <div className={`h-full bg-${color} rounded`} style={{ width: `${goal.progress}%` }}></div>
+                    </div>
+                    <div className="flex justify-between items-center mt-auto pt-4 relative z-10">
+                      <div className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 flex-1 pr-2">{goal.description || "No specific key result description"}</div>
+                      <form action={deleteGoal} className="m-0 flex" onSubmit={(e) => { if (!window.confirm("Are you sure you want to delete this Goal and all its connected Targets?")) e.preventDefault(); }}>
+                        <input type="hidden" name="goalId" value={goal._id.toString()} />
+                        <button type="submit" className="text-gray-400 hover:text-red-500 transition-colors p-1 cursor-pointer" title="Delete Goal">
+                          <i className="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                      </form>
+                    </div>
+                  </>
+                )}
               </div>
             );
           }) : (
@@ -170,8 +201,9 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Finance Rollup */}
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <h3 className="text-md font-semibold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-gray-100">
+          <h3 className="text-md font-semibold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-gray-100 flex items-center gap-2">
             Finance & Revenue (MRR)
+            <i className="fa-solid fa-circle-info text-gray-400 text-sm cursor-help" title="Projected Monthly Recurring Revenue based on Closed Won Deals"></i>
           </h3>
           <div className="h-52">
             <Line data={financeData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
@@ -180,8 +212,9 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
 
         {/* Sales Rollup */}
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <h3 className="text-md font-semibold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-gray-100">
+          <h3 className="text-md font-semibold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-gray-100 flex items-center gap-2">
             Sales Pipeline Conversion
+            <i className="fa-solid fa-circle-info text-gray-400 text-sm cursor-help" title="Aggregate count of deals across the different pipeline stages"></i>
           </h3>
           <div className="h-52">
             <Bar data={salesData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
@@ -190,8 +223,9 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
 
         {/* Dev/Engineering Rollup */}
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <h3 className="text-md font-semibold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-gray-100">
+          <h3 className="text-md font-semibold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-gray-100 flex items-center gap-2">
             Engineering Velocity (Points)
+            <i className="fa-solid fa-circle-info text-gray-400 text-sm cursor-help" title="Current distribution of task statuses across all development projects"></i>
           </h3>
           <div className="h-52">
             <Bar data={devData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
@@ -200,8 +234,9 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
 
         {/* HR/Ops Rollup */}
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <h3 className="text-md font-semibold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-gray-100">
+          <h3 className="text-md font-semibold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-gray-100 flex items-center gap-2">
             Headcount & Capacity
+            <i className="fa-solid fa-circle-info text-gray-400 text-sm cursor-help" title="Total registered users grouped by their assigned roles"></i>
           </h3>
           <div className="h-52">
             <Doughnut data={hrData} options={{ responsive: true, maintainAspectRatio: false, cutout: "70%", plugins: { legend: { position: "right" } } }} />

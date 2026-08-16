@@ -17,11 +17,24 @@ export default async function DevDashboardPage(
 
   try {
     projects = await Project.find({}).lean();
-    pipelines = await Pipeline.find({}).sort({ progress: -1 }).lean();
-    if (selectedProjectId && selectedProjectId !== "all") {
-      tasks = await TaskNode.find({ projectId: selectedProjectId }).lean();
-      cycles = await Cycle.find({ project: selectedProjectId }).lean();
+    
+    if (projects.length > 0) {
+      // If ANY projects exist, NEVER show unlinked dummy data.
+      const projectIds = projects.map(p => p._id);
+      
+      pipelines = await Pipeline.find({ projectId: { $in: projectIds } }).sort({ progress: -1 }).lean();
+      
+      if (selectedProjectId && selectedProjectId !== "all") {
+        tasks = await TaskNode.find({ projectId: selectedProjectId }).lean();
+        cycles = await Cycle.find({ project: selectedProjectId }).lean();
+      } else {
+        // Global View: only aggregate tasks/cycles belonging to real projects
+        tasks = await TaskNode.find({ projectId: { $in: projectIds } }).lean();
+        cycles = await Cycle.find({ project: { $in: projectIds } }).lean();
+      }
     } else {
+      // If NO projects exist, show the dummy records for demonstration
+      pipelines = await Pipeline.find({}).sort({ progress: -1 }).lean();
       tasks = await TaskNode.find({}).lean();
       cycles = await Cycle.find({}).lean();
     }
@@ -61,12 +74,24 @@ export default async function DevDashboardPage(
   let moduleHours: Record<string, { estimated: number, actual: number }> = {};
 
   tasks.forEach((t: any) => {
-    totalHours += (t.actualHours || 0);
+    let computedActual = t.actualHours || 0;
+    // If not directly entered, attempt to calculate from completion time
+    if (computedActual === 0 && t.startDate && t.endDate) {
+      const start = new Date(t.startDate).getTime();
+      const end = new Date(t.endDate).getTime();
+      const diffHours = (end - start) / (1000 * 60 * 60);
+      if (diffHours > 0) {
+        // Simple 8-hour workday heuristic or direct raw hours. We'll use raw rounded hours for now.
+        computedActual = Math.round(diffHours);
+      }
+    }
+
+    totalHours += computedActual;
 
     const mod = t.module || "General";
     if (!moduleHours[mod]) moduleHours[mod] = { estimated: 0, actual: 0 };
     moduleHours[mod].estimated += (t.estimatedHours || 0);
-    moduleHours[mod].actual += (t.actualHours || 0);
+    moduleHours[mod].actual += computedActual;
 
     if (t.severity) {
       // @ts-ignore
@@ -103,6 +128,15 @@ export default async function DevDashboardPage(
   const cleanTasks = tasks.map((t: any) => ({
     _id: t._id.toString(),
     name: t.name,
+    status: t.status,
+    severity: t.severity,
+    estimatedHours: t.estimatedHours || 0,
+    actualHours: t.actualHours || 0,
+    projectId: t.projectId ? t.projectId.toString() : null,
+    pipelineId: t.pipelineId ? t.pipelineId.toString() : null,
+    cycleId: t.cycleId ? t.cycleId.toString() : null,
+    startDate: t.startDate ? new Date(t.startDate).toISOString() : null,
+    endDate: t.endDate ? new Date(t.endDate).toISOString() : null,
   }));
 
   const cleanPipelines = pipelines
@@ -131,11 +165,20 @@ export default async function DevDashboardPage(
         : [],
     }));
 
+  const cleanCycles = cycles.map((c: any) => ({
+    _id: c._id.toString(),
+    name: c.name,
+    project: c.project ? c.project.toString() : null,
+    startDate: c.startDate ? new Date(c.startDate).toISOString() : null,
+    endDate: c.endDate ? new Date(c.endDate).toISOString() : null,
+  }));
+
   return (
     <DevDashboardClient
       projects={cleanProjects}
       tasks={cleanTasks}
       pipelines={cleanPipelines}
+      cycles={cleanCycles}
       avgPipelineProgress={avgPipelineProgress}
       avgCycleTime={avgCycleTime}
       selectedProjectId={selectedProjectId}
