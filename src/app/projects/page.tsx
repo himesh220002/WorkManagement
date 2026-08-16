@@ -1,5 +1,5 @@
 import connectToDatabase from "@/lib/mongodb";
-import { Project, Team, TaskNode } from "@/models";
+import { Project, Team, Pipeline } from "@/models";
 import ProjectHierarchyDiagram from "@/app/projects/ProjectHierarchyDiagram";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -28,8 +28,8 @@ export default async function ProjectsPage() {
 
   const rawProjects = await Promise.all(
     projectsData.map(async (p: any) => {
-      const tasks = await TaskNode.find({ projectId: p._id }).lean();
-      return { ...p, tasks };
+      const pipelines = await Pipeline.find({ projectId: p._id }).lean();
+      return { ...p, pipelines };
     })
   );
 

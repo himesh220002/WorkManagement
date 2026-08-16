@@ -141,7 +141,7 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
       <div className="mt-2 border-t border-gray-200 dark:border-gray-700 pt-4">
         <div className="flex justify-between items-center mb-2.5">
           <h5 className="font-bold text-xs uppercase tracking-wider text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
-            <i className="fa-solid fa-list-check text-blue-600"></i> Checklist
+            <i className="fa-solid fa-list-check text-blue-600"></i> PIPELINE TASKS
           </h5>
           <button
             type="button"

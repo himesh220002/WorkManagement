@@ -291,6 +291,63 @@ export default function DiagramsClient() {
     class DevDash,RevDash,ResDash,CustInsights dash;`}
         </div>
       </div>
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-8 text-center mb-6 overflow-x-auto">
+        <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">Perfect Execution of Project Step (Ecommerce Example)</h3>
+        <p className="text-sm text-gray-500 mb-6 flex justify-center gap-4">
+          Visualizing the flawless end-to-end flow from ideation to revenue generation.
+        </p>
+
+        <div className="mermaid flex justify-center w-full min-w-[800px]">
+          {`flowchart TD
+    %% Ideation & Approval
+    subgraph Ideation ["1. Ideation & Approval (Exec / Strategy)"]
+        M[Company Meetings & Presentations] --> |Decision Made| Appr[Project Approved]
+    end
+
+    %% Project Setup
+    subgraph Setup ["2. Project Setup (Projects Pipeline Page)"]
+        Appr --> PCreate[Create Project Record]
+        PCreate -.-> PDetails>Name, Description, Category: e.g. Ecommerce Product]
+    end
+
+    %% Team Building
+    subgraph Teaming ["3. Team Building (Teams & Units Page)"]
+        PCreate --> TBuild[Assemble Perfect Team]
+        GlobalPool[(Global Member Pool)] --> |Select Members| TBuild
+        TBuild -.-> TDetails>Draft Devs, Sales, HR, Research from Pool]
+    end
+
+    %% Pipeline Initialization
+    subgraph PipelineInit ["4. Pipeline Initialization (Parallel Pipeline Page)"]
+        TBuild --> PInit[Initialize New Pipeline]
+        PInit --> LinkProj[Link to Project]
+        PInit --> LinkTeam[Link Assembled Team]
+        LinkProj --> PipeType[Define Pipeline Type: Dev, Sales, HR...]
+        LinkTeam --> PipeType
+    end
+
+    %% Execution & Flow (Ecommerce Example)
+    subgraph Execution ["5. Omnichannel Execution (Ecommerce Example)"]
+        PipeType --> Dev[Development Pipeline<br/>Build Ecommerce Platform]
+        PipeType --> Rnd[Research Pipeline<br/>Market Analysis]
+        PipeType --> HR[HR Pipeline<br/>Manage Cashflow & Payroll for Team]
+        
+        Dev --> Prod((Product Launch &<br/>Distribution))
+        Rnd --> Prod
+        HR --> Prod
+    end
+
+    %% Sales & Revenue Lifecycle
+    subgraph RevSales ["6. Sales & Revenue Lifecycle (Dashboards)"]
+        Prod --> Sales[Sales Pipeline<br/>Generate Leads & Close Deals]
+        Sales --> Rev[Revenue Dashboard<br/>Track Targets & Incoming Cashflow]
+        Rev -.-> |ROI & Metrics| Ideation
+    end
+    
+    classDef highlight fill:#0284c7,stroke:#fff,stroke-width:2px,color:#fff;
+    class M,PCreate,TBuild,PInit,Dev,Sales,Rev highlight;`}
+        </div>
+      </div>
     </main>
   );
 }

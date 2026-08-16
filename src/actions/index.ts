@@ -22,13 +22,20 @@ export async function addPipeline(formData: FormData) {
   const outcome = formData.get("outcome") as string;
   
   const projectId = formData.get("projectId") as string || undefined;
-  const teamId = formData.get("teamId") as string || undefined;
+  let teamId = formData.get("teamId") as string || undefined;
   const taskId = formData.get("taskId") as string || undefined;
   const memberIds = formData.getAll("memberIds") as string[];
   const createTaskName = formData.get("createTaskName") as string || undefined;
+  const newTeamName = formData.get("newTeamName") as string || undefined;
 
   if (name) {
     let finalTaskId = taskId;
+
+    // Generate Team on the fly if provided
+    if (newTeamName) {
+      const newTeam = await Team.create({ name: newTeamName, members: memberIds });
+      teamId = newTeam._id.toString();
+    }
 
     // If both project and team are linked, assign team to project
     if (projectId && teamId) {
@@ -398,3 +405,27 @@ export async function updateTarget(formData: FormData) {
   }
 }
 
+// --- New Global Member Actions ---
+export async function registerUser(formData: FormData) {
+  await connectToDatabase();
+  const name = formData.get("name") as string;
+  const role = formData.get("role") as string;
+  const position = formData.get("position") as string;
+  const rank = formData.get("rank") as string;
+
+  if (name && role) {
+    await User.create({ name, role, position, rank });
+    revalidatePath("/teams");
+  }
+}
+
+export async function linkUserToTeam(formData: FormData) {
+  await connectToDatabase();
+  const teamId = formData.get("teamId") as string;
+  const userId = formData.get("userId") as string;
+
+  if (teamId && userId) {
+    await Team.findByIdAndUpdate(teamId, { $addToSet: { members: userId } });
+    revalidatePath("/teams");
+  }
+}

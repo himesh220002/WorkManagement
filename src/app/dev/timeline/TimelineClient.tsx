@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 // @ts-ignore
 import Gantt from "frappe-gantt";
+import mermaid from "mermaid";
 import { addPipeline, updatePipelineProgress, updatePipelineDates } from "@/actions";
 
 interface Option { id: string, name: string }
@@ -10,14 +11,16 @@ interface Options { projects: Option[], teams: Option[], tasks: Option[], users:
 import PipelineCard from "@/components/PipelineCard";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 
-export default function TimelineClient({ tasks, options }: { tasks: any[], options?: Options }) {
+export default function TimelineClient({ tasks, options, projectMetrics = [] }: { tasks: any[], options?: Options, projectMetrics?: any[] }) {
   const ganttWrapperRef = useRef<HTMLDivElement>(null);
   const ganttInstance = useRef<any>(null);
+  const mermaidContainerRef = useRef<HTMLDivElement>(null);
   const [activeCategory, setActiveCategory] = useState("All");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [dayZoom, setDayZoom] = useState("Week");
+  const [showExamplesModal, setShowExamplesModal] = useState(false);
 
-  const categories = ["All", "Development", "Sales", "Finance", "HR", "Operations", "Marketing", "General"];
+  const categories = ["Company Pipeline", "All", "Development", "Sales", "Finance", "HR", "Operations", "Marketing", "General"];
 
   const dayZoomOptions = [
     { label: "Q-Day", value: "Quarter Day" },
@@ -30,6 +33,23 @@ export default function TimelineClient({ tasks, options }: { tasks: any[], optio
   const filteredTasks = useMemo(() => {
     return tasks.filter((t: any) => activeCategory === "All" || t.category === activeCategory);
   }, [tasks, activeCategory]);
+
+  useEffect(() => {
+    if (!showExamplesModal || !mermaidContainerRef.current) return;
+
+    const container = mermaidContainerRef.current;
+    // Clear any previous render
+    container.innerHTML = "";
+
+    const id = `pipeline-flow-${Date.now()}`;
+    mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "loose" });
+    mermaid.render(id, pipelineFlowChart).then(({ svg }) => {
+      container.innerHTML = svg;
+    }).catch((err) => {
+      console.error("Mermaid render error:", err);
+      container.innerHTML = `<p class="text-red-400 text-sm">Diagram failed to render.</p>`;
+    });
+  }, [showExamplesModal]);
 
   useEffect(() => {
     // We only want to run this in the browser
@@ -46,7 +66,9 @@ export default function TimelineClient({ tasks, options }: { tasks: any[], optio
     // Keep a map of initial values to prevent Frappe Gantt from firing Server Actions on load
     const initialValues: Record<string, { start: string, end: string, progress: number }> = {};
 
-    let ganttTasks = filteredTasks.map((t) => {
+    let sourceTasks = activeCategory === "Company Pipeline" ? projectMetrics : filteredTasks;
+
+    let ganttTasks = sourceTasks.map((t) => {
       let start = t.startDate ? new Date(t.startDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
       let end = t.endDate
         ? new Date(t.endDate).toISOString().split("T")[0]
@@ -60,7 +82,7 @@ export default function TimelineClient({ tasks, options }: { tasks: any[], optio
         name: t.name,
         start: start,
         end: end,
-        progress: t.progress || 0,
+        progress: progress,
         dependencies: t.dependencies && t.dependencies.length > 0 ? t.dependencies.join(",") : "",
         custom_class: "custom-gantt-bar",
       } as any;
@@ -182,6 +204,32 @@ export default function TimelineClient({ tasks, options }: { tasks: any[], optio
     }
   };
 
+  const pipelineFlowChart = `flowchart LR
+    %% Cross-functional Pipeline Interconnectivity
+    subgraph DevPhase ["Development Phase"]
+        Dev[Development Pipeline]
+    end
+
+    subgraph LaunchPhase ["Launch and Operations Phase"]
+        Mktg[Marketing Pipeline]
+        Ops[Operations Pipeline]
+        HR[HR Pipeline]
+    end
+
+    subgraph RevenuePhase ["Revenue Phase"]
+        Sales[Sales Pipeline]
+        Fin[Finance Pipeline]
+    end
+
+    Dev --> Mktg
+    Dev --> Ops
+    Dev --> HR
+    Mktg --> Sales
+    Ops --> Sales
+    Sales --> Fin
+    classDef highlight fill:#4f46e5,stroke:#fff,stroke-width:2px,color:#fff;
+    class Dev,Sales,Fin highlight;`;
+
   return (
     <main className="flex flex-col min-w-0 p-4 md:p-8 flex-1 min-w-0 max-w-full overflow-hidden">
       {/* Page Header */}
@@ -233,16 +281,23 @@ export default function TimelineClient({ tasks, options }: { tasks: any[], optio
 
         {/* Form to Add Detailed Pipeline */}
         <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-          <button
-            type="button"
-            onClick={() => setIsFormOpen(!isFormOpen)}
-            className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center justify-between w-full py-2 hover:opacity-80 transition-opacity cursor-pointer outline-none"
-          >
-            <span className="flex items-center gap-2">
+          <div className="flex items-center justify-between w-full hover:opacity-80 transition-opacity cursor-pointer border-b border-transparent">
+            <button
+              type="button"
+              onClick={() => setIsFormOpen(!isFormOpen)}
+              className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 outline-none py-2 flex-1 text-left"
+            >
               <i className="fa-solid fa-layer-group text-blue-600"></i> Initialize New Pipeline
-            </span>
-            <i className={`fa-solid fa-chevron-${isFormOpen ? 'up' : 'down'} text-gray-500 dark:text-gray-400 text-sm transition-transform`}></i>
-          </button>
+              <i className={`fa-solid fa-chevron-${isFormOpen ? 'up' : 'down'} text-gray-500 dark:text-gray-400 text-sm transition-transform ml-2`}></i>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowExamplesModal(true)}
+              className="px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors shadow-sm"
+            >
+              <i className="fa-solid fa-lightbulb text-amber-400"></i> View Examples
+            </button>
+          </div>
 
           <div className={`grid transition-all duration-300 ease-in-out ${isFormOpen ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0'}`}>
             <div className="overflow-hidden">
@@ -254,7 +309,7 @@ export default function TimelineClient({ tasks, options }: { tasks: any[], optio
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Category</label>
                   <select name="category" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
-                    {categories.filter(c => c !== "All").map(c => <option key={c} value={c}>{c}</option>)}
+                    {categories.filter(c => c !== "All" && c !== "Company Pipeline").map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
@@ -319,7 +374,11 @@ export default function TimelineClient({ tasks, options }: { tasks: any[], optio
                       <input type="text" name="createTaskName" className="w-full px-4 py-2.5 rounded-lg border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="Generate new execution task..." />
                     </div>
                     <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
-                      <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Assign Member(s)</label>
+                      <label className="mb-2 font-semibold text-violet-600 dark:text-violet-400">Generate Team on the Fly</label>
+                      <input type="text" name="newTeamName" className="w-full px-4 py-2.5 rounded-lg border border-violet-300 dark:border-violet-600 bg-violet-50 dark:bg-violet-900/20 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-all shadow-sm" placeholder="New Team Name..." />
+                    </div>
+                    <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                      <label className="mb-2 font-semibold text-violet-600 dark:text-violet-400">Select Members for New Team</label>
                       <MultiSelectDropdown name="memberIds" options={options.users} placeholder="Select team members..." />
                     </div>
                   </>
@@ -353,21 +412,220 @@ export default function TimelineClient({ tasks, options }: { tasks: any[], optio
       </section>
 
       {/* Detailed Pipeline Cards Grid */}
-      <section className="mt-8">
-        <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6 flex items-center gap-3">
-          <i className="fa-solid fa-layer-group text-blue-600"></i> Pipeline Details
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredTasks.map((pipeline: any) => (
-            <PipelineCard key={pipeline._id} pipeline={pipeline} />
-          ))}
-          {filteredTasks.length === 0 && (
-            <div className="col-span-full py-16 text-center text-base text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
-              No pipelines found for this category. Use the form above to add one.
+      {activeCategory !== "Company Pipeline" && (
+        <section className="mt-8">
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6 flex items-center gap-3">
+            <i className="fa-solid fa-layer-group text-blue-600"></i> Pipeline Details
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredTasks.map((pipeline: any) => (
+              <PipelineCard key={pipeline._id} pipeline={pipeline} />
+            ))}
+            {filteredTasks.length === 0 && (
+              <div className="col-span-full py-16 text-center text-base text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
+                No pipelines found for this category. Use the form above to add one.
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+      {showExamplesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700">
+            <div className="flex justify-between items-center p-6 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <i className="fa-solid fa-book text-indigo-500"></i> Example Pipeline Schemas
+              </h2>
+              <button
+                onClick={() => setShowExamplesModal(false)}
+                className="text-gray-400 hover:text-red-500 transition-colors w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center"
+              >
+                <i className="fa-solid fa-times"></i>
+              </button>
             </div>
-          )}
+
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg p-4 text-sm text-gray-700 dark:text-gray-300">
+                <p className="font-semibold mb-2">🔑 Best Practices for Pipeline Creation:</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Use specific, actionable <strong>Pipeline Names</strong>.</li>
+                  <li>Tailor <strong>Objectives</strong> & <strong>KPIs</strong> to the specific category (e.g., Latency for Dev, Conversion for Sales).</li>
+                  <li>Always <strong>Link to a Project</strong> so metrics roll up to the Executive Dashboard.</li>
+                  <li><strong>Generate or Link a Team</strong> to give ownership to the execution layer.</li>
+                </ul>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                {/* 1. Frontend Sprint Q3 */}
+                <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-4 bg-blue-50/50 dark:bg-blue-900/10">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold text-indigo-600 dark:text-indigo-400 text-sm">Frontend Sprint Q3</h3>
+                    <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 rounded-full font-semibold">Development</span>
+                  </div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1 mb-3">
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Owner:</span> Dev Team Alpha</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Priority:</span> <span className="text-red-500 font-bold">High</span></div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Project:</span> WebApp-AuthModule</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Task Link:</span> Frontend UI Components</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Objectives:</span> Deliver responsive UI and integrate APIs</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">KPIs:</span> Latency &lt; 200ms · Bug count &lt; 5</div>
+                  </div>
+                  <div className="border-t border-blue-100 dark:border-blue-800 pt-2">
+                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Pipeline Tasks:</p>
+                    <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+                      {["UI Design & Wireframes","Frontend Component Development","Backend API Integration","Authentication Module","Unit Testing","CI/CD Pipeline Setup","Bug Fixes & QA"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0"></span>{t}</li>)}
+                    </ul>
+                  </div>
+                </div>
+
+                {/* 2. Sales Campaign Q3 */}
+                <div className="border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 bg-emerald-50/50 dark:bg-emerald-900/10">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">Sales Campaign Q3</h3>
+                    <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 rounded-full font-semibold">Sales</span>
+                  </div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1 mb-3">
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Owner:</span> Sales Team Beta</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Priority:</span> <span className="text-yellow-500 font-bold">Medium</span></div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Project:</span> LeadGen-Platform</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Task Link:</span> Campaign Outreach</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Objectives:</span> Generate 200 qualified leads &amp; close 20 deals</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">KPIs:</span> Conversion Rate &gt; 10% · Revenue &gt; $50,000</div>
+                  </div>
+                  <div className="border-t border-emerald-100 dark:border-emerald-800 pt-2">
+                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Pipeline Tasks:</p>
+                    <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+                      {["Lead List Preparation","Email Campaigns","Cold Calls","Demo Scheduling","Follow-ups","CRM Updates","Deal Closure"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>{t}</li>)}
+                    </ul>
+                  </div>
+                </div>
+
+                {/* 3. Quarterly Finance Audit */}
+                <div className="border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 bg-yellow-50/50 dark:bg-yellow-900/10">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold text-yellow-700 dark:text-yellow-400 text-sm">Quarterly Finance Audit</h3>
+                    <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300 rounded-full font-semibold">Finance</span>
+                  </div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1 mb-3">
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Owner:</span> Finance Team</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Priority:</span> <span className="text-red-500 font-bold">High</span></div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Project:</span> Audit-2026Q3</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Task Link:</span> Expense Verification</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Objectives:</span> Ensure compliance and accurate reporting for Q3</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">KPIs:</span> Audit completion &lt; 20 days · Error rate &lt; 2%</div>
+                  </div>
+                  <div className="border-t border-yellow-100 dark:border-yellow-800 pt-2">
+                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Pipeline Tasks:</p>
+                    <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+                      {["Expense Report Collection","Invoice Verification","Payroll Audit","Tax Compliance Check","Budget Variance Analysis","Financial Statement Preparation","Audit Report Submission"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0"></span>{t}</li>)}
+                    </ul>
+                  </div>
+                </div>
+
+                {/* 4. Supply Chain Optimization */}
+                <div className="border border-amber-200 dark:border-amber-800 rounded-lg p-4 bg-amber-50/50 dark:bg-amber-900/10">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold text-amber-600 dark:text-amber-400 text-sm">Supply Chain Optimization</h3>
+                    <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 rounded-full font-semibold">Operations</span>
+                  </div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1 mb-3">
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Owner:</span> Ops Team Gamma</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Priority:</span> <span className="text-red-500 font-bold">High</span></div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Project:</span> SCM-Revamp</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Task Link:</span> Vendor Performance Review</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Objectives:</span> Reduce delivery delays and optimize warehouse</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">KPIs:</span> Delivery SLA compliance &gt; 95%</div>
+                  </div>
+                  <div className="border-t border-amber-100 dark:border-amber-800 pt-2">
+                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Pipeline Tasks:</p>
+                    <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+                      {["Vendor Evaluation","Contract Review","Logistics Tracking","Warehouse Utilization Analysis","Inventory Reordering","Delivery SLA Monitoring","Process Improvement Implementation"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"></span>{t}</li>)}
+                    </ul>
+                  </div>
+                </div>
+
+                {/* 5. Employee Onboarding Drive */}
+                <div className="border border-pink-200 dark:border-pink-800 rounded-lg p-4 bg-pink-50/50 dark:bg-pink-900/10">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold text-pink-600 dark:text-pink-400 text-sm">Employee Onboarding Drive</h3>
+                    <span className="text-xs px-2 py-0.5 bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300 rounded-full font-semibold">HR</span>
+                  </div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1 mb-3">
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Owner:</span> HR Team</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Priority:</span> <span className="text-yellow-500 font-bold">Medium</span></div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Project:</span> Onboarding-2026</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Task Link:</span> New Hire Orientation</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Objectives:</span> Onboard 15 new employees</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">KPIs:</span> Onboarding completion 100%</div>
+                  </div>
+                  <div className="border-t border-pink-100 dark:border-pink-800 pt-2">
+                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Pipeline Tasks:</p>
+                    <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+                      {["Offer Letter Dispatch","Document Verification","Orientation Session","Training Modules","System Access Provisioning","Mentorship Assignment","Feedback Collection"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-pink-400 shrink-0"></span>{t}</li>)}
+                    </ul>
+                  </div>
+                </div>
+
+                {/* 6. Digital Marketing Push */}
+                <div className="border border-violet-200 dark:border-violet-800 rounded-lg p-4 bg-violet-50/50 dark:bg-violet-900/10">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold text-violet-600 dark:text-violet-400 text-sm">Digital Marketing Push</h3>
+                    <span className="text-xs px-2 py-0.5 bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300 rounded-full font-semibold">Marketing</span>
+                  </div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1 mb-3">
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Owner:</span> Marketing Team Delta</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Priority:</span> <span className="text-red-500 font-bold">High</span></div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Project:</span> Campaign-DigitalReach</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Task Link:</span> Social Media Ads</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Objectives:</span> Boost brand awareness, drive 50,000 new site visits</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">KPIs:</span> CTR &gt; 5% · Engagement &gt; 15%</div>
+                  </div>
+                  <div className="border-t border-violet-100 dark:border-violet-800 pt-2">
+                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Pipeline Tasks:</p>
+                    <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+                      {["Content Creation","Social Media Posting","Ad Campaign Setup","SEO Optimization","Influencer Outreach","Analytics Tracking","Campaign Report"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0"></span>{t}</li>)}
+                    </ul>
+                  </div>
+                </div>
+
+                {/* 7. Performance Review Cycle */}
+                <div className="border border-rose-200 dark:border-rose-800 rounded-lg p-4 bg-rose-50/50 dark:bg-rose-900/10 md:col-span-2">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold text-rose-600 dark:text-rose-400 text-sm">Performance Review Cycle</h3>
+                    <span className="text-xs px-2 py-0.5 bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300 rounded-full font-semibold">HR</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-400 mb-3">
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Owner:</span> HR Team</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Priority:</span> <span className="text-yellow-500 font-bold">Medium</span></div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Project:</span> HR-PerfReview</div>
+                    <div><span className="font-semibold text-gray-700 dark:text-gray-300">Task Link:</span> Employee Evaluation</div>
+                    <div className="col-span-2"><span className="font-semibold text-gray-700 dark:text-gray-300">Objectives:</span> Conduct quarterly performance reviews for all staff</div>
+                    <div className="col-span-2"><span className="font-semibold text-gray-700 dark:text-gray-300">KPIs:</span> Review completion 100% · Feedback turnaround &lt; 7 days</div>
+                  </div>
+                  <div className="border-t border-rose-100 dark:border-rose-800 pt-2">
+                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Pipeline Tasks:</p>
+                    <ul className="grid grid-cols-2 gap-x-4 text-xs text-gray-500 dark:text-gray-400">
+                      {["Self-Assessment Collection","Manager Evaluations","Peer Reviews","Performance Scoring","Feedback Meetings","Promotion/Increment Decisions","HR Report Submission"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0"></span>{t}</li>)}
+                    </ul>
+                  </div>
+                </div>
+
+              </div>
+
+              <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
+                <h4 className="font-bold text-gray-900 dark:text-gray-100 mb-4 text-center">Pipeline Flow Architecture</h4>
+                <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg flex justify-center w-full min-w-full overflow-x-auto border border-gray-200 dark:border-gray-700">
+                  <div ref={mermaidContainerRef} className="flex justify-center w-full min-h-[200px] items-center">
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
         </div>
-      </section>
+      )}
+
     </main>
   );
 }

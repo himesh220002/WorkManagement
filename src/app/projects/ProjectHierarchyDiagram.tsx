@@ -39,19 +39,31 @@ export default function ProjectHierarchyDiagram({ project }: { project: any }) {
         });
       }
 
-      if (project.tasks && project.tasks.length > 0) {
-        chart += `  ${tasksNode}["Tasks"]\n`;
-        chart += `  ${pNode} --> ${tasksNode}\n`;
-        project.tasks.forEach((task: any) => {
-          const taskNodeStr = `T_${task._id}`;
-          chart += `  ${taskNodeStr}["${task.name.replace(/["']/g, '')}"]\n`;
-          chart += `  ${tasksNode} --> ${taskNodeStr}\n`;
+      if (project.pipelines && project.pipelines.length > 0) {
+        project.pipelines.forEach((pipeline: any) => {
+          const pipeNodeStr = `Pipe_${pipeline._id}`;
+          chart += `  ${pipeNodeStr}["Pipeline: ${pipeline.name.replace(/["']/g, '')}"]\n`;
+          chart += `  ${pNode} --> ${pipeNodeStr}\n`;
           
-          if (task.assignee && task.assignee !== "Unassigned") {
-            const member = allMembers.find((m: any) => m.name === task.assignee);
-            if (member) {
-              chart += `  ${taskNodeStr} -. "Assigned to" .-> M_${member._id}\n`;
-            }
+          if (pipeline.todos && pipeline.todos.length > 0) {
+            pipeline.todos.forEach((todo: any) => {
+              const todoId = todo._id || Math.random().toString(36).substring(7);
+              const todoNodeStr = `Todo_${todoId}`;
+              chart += `  ${todoNodeStr}["Task: ${todo.text.replace(/["']/g, '')}"]\n`;
+              chart += `  ${pipeNodeStr} --> ${todoNodeStr}\n`;
+              
+              if (todo.assigneeName) {
+                const member = allMembers.find((m: any) => m.name === todo.assigneeName);
+                if (member) {
+                  chart += `  ${todoNodeStr} -. "Assigned to" .-> M_${member._id}\n`;
+                } else {
+                  // If it's a team/group or not in the member list
+                  const dummyAssignee = `A_${todoId}`;
+                  chart += `  ${dummyAssignee}["${todo.assigneeType}: ${todo.assigneeName.replace(/["']/g, '')}"]\n`;
+                  chart += `  ${todoNodeStr} -. "Assigned to" .-> ${dummyAssignee}\n`;
+                }
+              }
+            });
           }
         });
       }

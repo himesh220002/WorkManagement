@@ -1,15 +1,18 @@
 import connectToDatabase from "@/lib/mongodb";
 import { Team, User } from "@/models";
-import AddMemberForm from "@/app/teams/AddMemberForm";
+import RegisterMemberForm from "@/app/teams/RegisterMemberForm";
+import LinkMemberForm from "@/app/teams/LinkMemberForm";
+import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import { revalidatePath } from "next/cache";
 
 async function addTeam(formData: FormData) {
   "use server";
   await connectToDatabase();
-  const name = formData.get("teamName");
+  const name = formData.get("teamName") as string;
+  const memberIds = formData.getAll("memberIds") as string[];
 
   if (name) {
-    await Team.create({ name });
+    await Team.create({ name, members: memberIds });
     revalidatePath("/teams");
   }
 }
@@ -48,7 +51,7 @@ async function removeTeamMember(formData: FormData) {
 
   if (teamId && userId) {
     await Team.findByIdAndUpdate(teamId, { $pull: { members: userId } });
-    await User.findByIdAndDelete(userId);
+    // We NO LONGER delete the user, just unlink them from the team
     revalidatePath("/teams");
   }
 }
@@ -56,6 +59,21 @@ async function removeTeamMember(formData: FormData) {
 export default async function TeamsPage() {
   await connectToDatabase();
   const teams = await Team.find({}).populate("members").lean();
+  const allUsersData = await User.find({}).lean();
+  
+  // Sanitize for client components
+  const allUsers = allUsersData.map(u => ({
+    _id: u._id.toString(),
+    name: u.name,
+    role: u.role,
+    position: u.position,
+    rank: u.rank
+  }));
+
+  const userOptions = allUsers.map(u => ({
+    id: u._id,
+    name: `${u.name} - ${u.role} ${u.position ? `(${u.position})` : ''} - Rank ${u.rank || 1}`
+  }));
 
   return (
     <main className="flex flex-col min-w-0 p-6 flex-1">
@@ -68,15 +86,21 @@ export default async function TeamsPage() {
         </div>
       </header>
 
-      {/* Upgrade: Added form to create a team natively */}
+      {/* Global Member Registration */}
+      <RegisterMemberForm />
+
+      {/* Upgrade: Added form to create a team natively with multi-select */}
       <form action={addTeam} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 mb-6 flex gap-4 flex-wrap items-center">
         <input
           type="text"
           name="teamName"
-          className="flex-1 min-w-[200px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+          className="flex-1 min-w-[200px] p-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
           placeholder="New Team Name..."
           required
         />
+        <div className="w-72">
+          <MultiSelectDropdown name="memberIds" options={userOptions} placeholder="Select initial members..." />
+        </div>
         <button type="submit" className="px-4 py-2 bg-violet-500 text-white rounded hover:bg-violet-600 transition-colors flex items-center gap-2">
           <i className="fa-solid fa-plus"></i> Create
         </button>
@@ -134,8 +158,8 @@ export default async function TeamsPage() {
                   <div className="text-sm text-gray-500 dark:text-gray-400 italic py-2">No members in this team yet.</div>
                 )}
 
-                {/* Add Member Form Client Component */}
-                <AddMemberForm teamId={t._id.toString()} action={addTeamMember} />
+                {/* Link Member Form Client Component */}
+                <LinkMemberForm teamId={t._id.toString()} availableUsers={allUsers} />
               </div>
             </div>
           ))

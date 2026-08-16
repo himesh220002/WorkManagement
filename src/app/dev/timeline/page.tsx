@@ -16,7 +16,7 @@ export default async function TimelinePage() {
     projects = await Project.find({}, { name: 1 }).lean();
     teams = await Team.find({}, { name: 1 }).lean();
     taskNodes = await TaskNode.find({}, { name: 1 }).lean();
-    users = await User.find({}, { name: 1 }).lean();
+    users = await User.find({}, { name: 1, role: 1, position: 1, rank: 1 }).lean();
   } catch (err) {
     console.error(err);
   }
@@ -58,8 +58,48 @@ export default async function TimelinePage() {
     projects: projects.map(p => ({ id: p._id.toString(), name: p.name })),
     teams: teams.map(t => ({ id: t._id.toString(), name: t.name })),
     tasks: taskNodes.map(t => ({ id: t._id.toString(), name: t.name })),
-    users: users.map(u => ({ id: u._id.toString(), name: u.name })),
+    users: users.map(u => ({ 
+      id: u._id.toString(), 
+      name: `${u.name} - ${u.role} ${u.position ? `(${u.position})` : ''} - Rank ${u.rank || 1}` 
+    })),
   };
 
-  return <TimelineClient tasks={cleanTasks} options={options} />;
+  const projectMetrics = projects.map((p: any) => {
+    const pIdStr = p._id.toString();
+    const pPipelines = cleanTasks.filter(t => t.projectId && t.projectId._id === pIdStr);
+    
+    if (pPipelines.length === 0) {
+      return {
+        _id: pIdStr,
+        name: p.name,
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 86400000).toISOString(),
+        progress: 0,
+      };
+    }
+
+    let minStart = new Date(pPipelines[0].startDate || Date.now());
+    let maxEnd = new Date(pPipelines[0].endDate || Date.now());
+    let totalProgress = 0;
+
+    pPipelines.forEach(pipe => {
+      const pStart = new Date(pipe.startDate || Date.now());
+      const pEnd = new Date(pipe.endDate || Date.now());
+      if (pStart < minStart) minStart = pStart;
+      if (pEnd > maxEnd) maxEnd = pEnd;
+      totalProgress += (pipe.progress || 0);
+    });
+
+    const avgProgress = Math.round(totalProgress / pPipelines.length);
+
+    return {
+      _id: pIdStr,
+      name: p.name,
+      startDate: minStart.toISOString(),
+      endDate: maxEnd.toISOString(),
+      progress: avgProgress,
+    };
+  });
+
+  return <TimelineClient tasks={cleanTasks} options={options} projectMetrics={projectMetrics} />;
 }
