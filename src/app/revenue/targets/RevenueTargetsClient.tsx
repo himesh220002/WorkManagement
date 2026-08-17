@@ -1,6 +1,6 @@
 "use client";
 
-import { addTarget, toggleTargetChecklist, updateTargetChecklist, deleteTarget, updateTarget } from "@/actions";
+import { addTarget, toggleTargetChecklist, updateTargetChecklist, deleteTarget, updateTarget, addGoal } from "@/actions";
 
 import { useState } from "react";
 
@@ -18,6 +18,34 @@ export default function RevenueTargetsClient({ targets, goals = [] }: { targets:
           Active
         </div>
       </header>
+
+      {/* Strategic Goals & OKRs Form */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6">
+        <h2 className="text-xl text-gray-900 dark:text-gray-100 font-semibold mb-4">Strategic Goals & OKRs</h2>
+        <form action={addGoal} className="flex gap-4 flex-wrap items-center">
+          <input
+            type="text"
+            name="title"
+            className="flex-1 min-w-[200px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm"
+            placeholder="New Goal Title (e.g. Q3 Market Expansion)..."
+            required
+          />
+          <input
+            type="text"
+            name="description"
+            className="flex-1 min-w-[200px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm"
+            placeholder="Key Result / Description..."
+          />
+          <select name="category" className="p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm">
+            <option value="Company">Company</option>
+            <option value="Department">Department</option>
+            <option value="Team">Team</option>
+          </select>
+          <button type="submit" className="px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition-colors flex items-center gap-2 text-sm font-medium">
+            <i className="fa-solid fa-bullseye"></i> Set Goal
+          </button>
+        </form>
+      </div>
 
       {/* Create Target Form */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 mb-6">
@@ -48,8 +76,8 @@ export default function RevenueTargetsClient({ targets, goals = [] }: { targets:
           targets.map((target) => (
             <div key={target._id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 flex flex-col h-full relative">
               {target.goalId && (
-                <div className="absolute -top-3 -right-3 bg-blue-500 text-white text-xs px-2 py-1 rounded-full shadow border-2 border-white dark:border-gray-800">
-                  <i className="fa-solid fa-link"></i> Linked
+                <div className="absolute -top-3 -right-3 bg-blue-500 text-white text-xs px-3 py-1.5 rounded-full shadow border-2 border-white dark:border-gray-800 flex items-center gap-1.5 truncate max-w-[200px]" title={goals.find(g => g._id === target.goalId)?.title || "Linked Goal"}>
+                  <i className="fa-solid fa-link"></i> <span className="truncate">{goals.find(g => g._id === target.goalId)?.title || "Linked Goal"}</span>
                 </div>
               )}
               
@@ -68,10 +96,16 @@ export default function RevenueTargetsClient({ targets, goals = [] }: { targets:
                     <input type="text" name="industry" defaultValue={target.industry} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Industry" />
                     <input type="text" name="region" defaultValue={target.region} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Region" />
                   </div>
-                  <select name="status" defaultValue={target.status} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+                  <select name="status" defaultValue={target.status} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 mb-2">
                     <option value="Active">Active</option>
                     <option value="Completed">Completed</option>
                     <option value="Rejected">Rejected</option>
+                  </select>
+                  <select name="goalId" defaultValue={target.goalId || ""} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+                    <option value="">No Linked Goal</option>
+                    {goals.map(g => (
+                      <option key={g._id} value={g._id}>{g.title}</option>
+                    ))}
                   </select>
                   <div className="flex gap-2 justify-end mt-2">
                     <button type="button" onClick={() => setEditingTargetId(null)} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">Cancel</button>

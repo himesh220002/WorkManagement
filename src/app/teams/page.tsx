@@ -60,7 +60,7 @@ export default async function TeamsPage() {
   await connectToDatabase();
   const teams = await Team.find({}).populate("members").lean();
   const allUsersData = await User.find({}).lean();
-  
+
   // Sanitize for client components
   const allUsers = allUsersData.map(u => ({
     _id: u._id.toString(),
@@ -86,27 +86,34 @@ export default async function TeamsPage() {
         </div>
       </header>
 
-      {/* Global Member Registration */}
-      <RegisterMemberForm />
+      <div className="flex gap-4">
 
-      {/* Upgrade: Added form to create a team natively with multi-select */}
-      <form action={addTeam} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 mb-6 flex gap-4 flex-wrap items-center">
-        <input
-          type="text"
-          name="teamName"
-          className="flex-1 min-w-[200px] p-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-          placeholder="New Team Name..."
-          required
-        />
-        <div className="w-72">
-          <MultiSelectDropdown name="memberIds" options={userOptions} placeholder="Select initial members..." />
-        </div>
-        <button type="submit" className="px-4 py-2 bg-violet-500 text-white rounded hover:bg-violet-600 transition-colors flex items-center gap-2">
-          <i className="fa-solid fa-plus"></i> Create
-        </button>
-      </form>
+        {/* Global Member Registration */}
+        <RegisterMemberForm />
 
-      <div className="space-y-4">
+        {/* Upgrade: Added form to create a team natively with multi-select */}
+        <form action={addTeam} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 mb-6 flex flex-col gap-4 items-start">
+          <div className="flex gap-4 items-center">
+            <label className="text-lg text-gray-700 font-black dark:text-gray-100">Team Name:</label>
+            <input
+              type="text"
+              name="teamName"
+              className="flex-1 w-[400px] min-w-[200px] p-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+              placeholder="New Team Name..."
+              required
+            />
+          </div>
+          <div className="min-w-[600px] flex gap-4">
+            <MultiSelectDropdown name="memberIds" options={userOptions} placeholder="Select initial members..." />
+            <button type="submit" className="px-4 py-2 bg-violet-500 text-white rounded hover:bg-violet-600 transition-colors flex items-center gap-2">
+              <i className="fa-solid fa-plus"></i> Create
+            </button>
+          </div>
+
+        </form>
+      </div>
+
+      <div className="space-y-4 grid grid-cols-1 md:grid-cols-2 gap-4">
         {teams && teams.length > 0 ? (
           teams.map((t: any) => (
             <div key={t._id.toString()} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden transition-all">

@@ -1,5 +1,5 @@
 import connectToDatabase from "@/lib/mongodb";
-import { Deal, Target, Pipeline, Project, Team, TaskNode, User } from "@/models";
+import { Deal, Target, Pipeline, Project, Team, TaskNode, User, ResourceAllocation } from "@/models";
 import RevenueDashboardClient from "@/app/revenue/dashboard/RevenueDashboardClient";
 
 export default async function RevenueDashboardPage() {
@@ -12,6 +12,7 @@ export default async function RevenueDashboardPage() {
   let teams: any[] = [];
   let taskNodes: any[] = [];
   let users: any[] = [];
+  let resources: any[] = [];
 
   try {
     // @ts-ignore
@@ -22,6 +23,7 @@ export default async function RevenueDashboardPage() {
     teams = await Team.find({}, { name: 1 }).lean();
     taskNodes = await TaskNode.find({}, { name: 1 }).lean();
     users = await User.find({}, { name: 1 }).lean();
+    resources = await ResourceAllocation.find({}).populate("assignedToProjectId").lean();
   } catch (err) {
     console.error(err);
   }
@@ -32,11 +34,18 @@ export default async function RevenueDashboardPage() {
     name: d.name,
     amount: d.amount,
     stage: d.stage,
+    client: d.client ? { ...d.client } : null,
+    expectedCloseDate: d.expectedCloseDate ? new Date(d.expectedCloseDate).toISOString() : null,
+    status: d.status,
+    metadata: d.metadata ? { ...d.metadata } : null,
   }));
 
   const cleanTargets = targets.map((t: any) => ({
     _id: t._id.toString(),
     name: t.name,
+    achievedRevenueUSD: t.achievedRevenueUSD || 0,
+    conversionRate: t.conversionRate || "0%",
+    targetByRegion: t.targetByRegion || {},
   }));
 
   const cleanPipelines = pipelines.map((p: any) => ({
@@ -55,6 +64,9 @@ export default async function RevenueDashboardPage() {
     projectId: p.projectId ? { _id: p.projectId._id?.toString(), name: p.projectId.name } : null,
     teamId: p.teamId ? { _id: p.teamId._id?.toString(), name: p.teamId.name } : null,
     taskId: p.taskId ? { _id: p.taskId._id?.toString(), name: p.taskId.name } : null,
+    cashFlowProjectionUSD: p.cashFlowProjectionUSD || 0,
+    expensesUSD: p.expensesUSD || 0,
+    roiPercent: p.roiPercent || 0,
     memberIds: Array.isArray(p.memberIds) ? p.memberIds.map((m: any) => m.toString()) : [],
     todos: Array.isArray(p.todos)
       ? p.todos.map((todo: any) => ({
@@ -74,5 +86,16 @@ export default async function RevenueDashboardPage() {
     users: users.map(u => ({ id: u._id.toString(), name: u.name })),
   };
 
-  return <RevenueDashboardClient deals={cleanDeals} targets={cleanTargets} pipelines={cleanPipelines} options={options} />;
+  const cleanResources = resources.map((r: any) => ({
+    _id: r._id.toString(),
+    name: r.name,
+    type: r.type,
+    totalAllocated: r.totalAllocated,
+    totalUsed: r.totalUsed,
+    riskLevel: r.riskLevel,
+    linkedDealId: r.linkedDealId ? r.linkedDealId.toString() : null,
+    assignedToProjectId: r.assignedToProjectId ? { _id: r.assignedToProjectId._id.toString(), name: r.assignedToProjectId.name } : null
+  }));
+
+  return <RevenueDashboardClient deals={cleanDeals} targets={cleanTargets} pipelines={cleanPipelines} resources={cleanResources} options={options} />;
 }

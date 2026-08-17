@@ -38,15 +38,15 @@ export default function Sidebar({
   const activeModule = pathname;
 
   const getIsActive = (path: string) => {
-    return activeModule.startsWith(path) 
-      ? "bg-blue-600 text-white shadow-md" 
+    return activeModule.startsWith(path)
+      ? "bg-blue-600 text-white shadow-md"
       : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white";
   };
 
   const linkBaseClass = "flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all";
 
   return (
-    <aside className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 flex flex-col overflow-y-auto shadow-sm h-full">
+    <aside className="bg-white dark:bg-gray-800 sticky top-0 h-screen border border-gray-200 dark:border-gray-700 rounded-xl p-5 flex flex-col overflow-y-auto shadow-sm h-full">
       <div className="flex items-center gap-3 font-bold text-lg text-blue-600 mb-6 px-1">
         <i className="fa-solid fa-chart-line text-xl"></i>
         <span>TaskFlow PM</span>
@@ -86,43 +86,43 @@ export default function Sidebar({
 
         <div>
           <Link href="/exec/dashboard" className={`${linkBaseClass} ${getIsActive("/exec/dashboard")}`}>
-            <i className="fa-solid fa-chess-knight w-5 text-center"></i> 
+            <i className="fa-solid fa-chess-knight w-5 text-center"></i>
             <span>Exec Rollup</span>
           </Link>
         </div>
         <div>
           <Link href="/dev/dashboard" className={`${linkBaseClass} ${getIsActive("/dev/dashboard")}`}>
-            <i className="fa-solid fa-gauge-high w-5 text-center"></i> 
+            <i className="fa-solid fa-gauge-high w-5 text-center"></i>
             <span>Dev Dashboard</span>
           </Link>
         </div>
         <div>
           <Link href="/dev/timeline" className={`${linkBaseClass} ${getIsActive("/dev/timeline")}`}>
-            <i className="fa-solid fa-bars-staggered w-5 text-center"></i> 
+            <i className="fa-solid fa-bars-staggered w-5 text-center"></i>
             <span>Parallel Pipeline</span>
           </Link>
         </div>
         <div>
           <Link href="/projects" className={`${linkBaseClass} ${getIsActive("/projects")}`}>
-            <i className="fa-solid fa-folder-tree w-5 text-center"></i> 
+            <i className="fa-solid fa-folder-tree w-5 text-center"></i>
             <span>Projects</span>
           </Link>
         </div>
         <div>
           <Link href="/revenue/targets" className={`${linkBaseClass} ${getIsActive("/revenue/targets")}`}>
-            <i className="fa-solid fa-bullseye w-5 text-center"></i> 
+            <i className="fa-solid fa-bullseye w-5 text-center"></i>
             <span>Targets & Goals</span>
           </Link>
         </div>
         <div>
           <Link href="/teams" className={`${linkBaseClass} ${getIsActive("/teams")}`}>
-            <i className="fa-solid fa-users w-5 text-center"></i> 
+            <i className="fa-solid fa-users w-5 text-center"></i>
             <span>Teams & Units</span>
           </Link>
         </div>
         <div>
           <Link href="/diagrams" className={`${linkBaseClass} ${getIsActive("/diagrams")}`}>
-            <i className="fa-solid fa-diagram-project w-5 text-center"></i> 
+            <i className="fa-solid fa-diagram-project w-5 text-center"></i>
             <span>Flow Diagrams</span>
           </Link>
         </div>
@@ -130,7 +130,7 @@ export default function Sidebar({
         <div className="text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-400 font-bold px-3 mb-1 mt-6">Legacy</div>
         <div>
           <Link href="/Today" className={`${linkBaseClass} ${getIsActive("/Today")}`}>
-            <i className="fa-solid fa-list-check w-5 text-center"></i> 
+            <i className="fa-solid fa-list-check w-5 text-center"></i>
             <span>Todo Lists</span>
           </Link>
         </div>
@@ -138,7 +138,7 @@ export default function Sidebar({
 
       <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
         <Link href="/about" className={`${linkBaseClass} ${getIsActive("/about")}`}>
-          <i className="fa-solid fa-circle-info w-5 text-center"></i> 
+          <i className="fa-solid fa-circle-info w-5 text-center"></i>
           <span>About App</span>
         </Link>
       </div>

@@ -22,8 +22,6 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-      </head>
-      <body className={`${inter.variable} ${outfit.variable} antialiased`}>
         <Script id="theme-script" strategy="beforeInteractive">
           {`
             try {
@@ -37,7 +35,10 @@ export default function RootLayout({
             } catch (e) {}
           `}
         </Script>
-        <div className="w-full max-w-full p-4 md:p-6 flex flex-col xl:grid xl:grid-cols-[260px_1fr] gap-6 flex-1 min-h-screen mx-auto">
+      </head>
+      <body className={`${inter.variable} ${outfit.variable} antialiased`}>
+
+        <div className="w-full max-w-full p-2 flex flex-col xl:grid xl:grid-cols-[260px_1fr] gap-6 flex-1 min-h-screen mx-auto">
           <Sidebar />
           {children}
         </div>

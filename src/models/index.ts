@@ -28,7 +28,8 @@ const leadSchema = new mongoose.Schema({
   name: String,
   status: { type: String, enum: ["New", "Working", "Qualified", "Unqualified"], default: "New" },
   owner: String,
-  source: String
+  source: String,
+  campaignId: { type: mongoose.Schema.Types.ObjectId, ref: "Campaign" }
 });
 export const Lead = mongoose.models.Lead || mongoose.model("Lead", leadSchema);
 
@@ -37,7 +38,9 @@ const campaignSchema = new mongoose.Schema({
   name: String,
   type: String,
   leadsGenerated: Number,
-  expectedRevenue: Number
+  expectedRevenue: Number,
+  projectId: { type: mongoose.Schema.Types.ObjectId, ref: "Project" },
+  pipelineId: { type: mongoose.Schema.Types.ObjectId, ref: "Pipeline" }
 });
 export const Campaign = mongoose.models.Campaign || mongoose.model("Campaign", campaignSchema);
 
@@ -47,7 +50,21 @@ const dealSchema = new mongoose.Schema({
   stage: { type: String, enum: ["Prospect", "Initial Analysis", "Due Diligence", "Closing", "Closed", "Signing & Closing", "Integration"], default: "Prospect" },
   revenue: Number,
   amount: Number,
-  owner: String
+  owner: String,
+  client: {
+    name: String,
+    industry: String,
+    region: String
+  },
+  expectedCloseDate: Date,
+  status: { type: String, enum: ["Active", "Won", "Lost", "On Hold"], default: "Active" },
+  metadata: {
+    priority: { type: String, enum: ["High", "Medium", "Low"], default: "Medium" },
+    riskLevel: { type: String, enum: ["High", "Medium", "Low"], default: "Low" },
+    notes: String
+  },
+  projectId: { type: mongoose.Schema.Types.ObjectId, ref: "Project" },
+  pipelineId: { type: mongoose.Schema.Types.ObjectId, ref: "Pipeline" }
 });
 export const Deal = mongoose.models.Deal || mongoose.model("Deal", dealSchema);
 
@@ -69,6 +86,9 @@ const targetSchema = new mongoose.Schema({
   region: String,
   expectedValue: { type: Number, default: 100 },
   actualValue: { type: Number, default: 0 },
+  achievedRevenueUSD: { type: Number, default: 0 },
+  targetByRegion: { type: Map, of: Number },
+  conversionRate: { type: String, default: "0%" },
   status: { type: String, enum: ["Active", "Rejected", "Completed"], default: "Active" },
   rejectionReason: String,
   checklist: [{ name: String, isCompleted: { type: Boolean, default: false } }]
@@ -154,6 +174,9 @@ const pipelineSchema = new mongoose.Schema({
   memberIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   riskLevel: { type: String, enum: ["Low", "Medium", "High"], default: "Low" },
   notes: { type: String, default: "" },
+  cashFlowProjectionUSD: { type: Number, default: 0 },
+  expensesUSD: { type: Number, default: 0 },
+  roiPercent: { type: Number, default: 0 },
   todos: [{
     text: String,
     completed: { type: Boolean, default: false },
@@ -169,13 +192,29 @@ export const Pipeline = mongoose.model("Pipeline", pipelineSchema);
 // --- Resource Allocation Schema ---
 const resourceAllocationSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  type: { type: String, enum: ["Budget", "Headcount", "Infrastructure"], default: "Budget" },
+  type: { type: String, enum: ["Budget", "Headcount", "Infrastructure", "Human"], default: "Budget" },
   totalAllocated: { type: Number, default: 0 },
   totalUsed: { type: Number, default: 0 },
   assignedToProjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },
+  linkedDealId: { type: mongoose.Schema.Types.ObjectId, ref: 'Deal' },
   riskLevel: { type: String, enum: ["Low", "Medium", "High"], default: "Low" }
 });
 if (mongoose.models.ResourceAllocation) {
   delete mongoose.models.ResourceAllocation;
 }
 export const ResourceAllocation = mongoose.model("ResourceAllocation", resourceAllocationSchema);
+
+// --- Customer Feedback Schema ---
+const customerFeedbackSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  type: { type: String, enum: ["Bug", "Feature Request", "Complaint", "Praise"], default: "Feature Request" },
+  priority: { type: String, enum: ["High", "Medium", "Low"], default: "Medium" },
+  status: { type: String, enum: ["New", "Reviewed", "In Progress", "Resolved"], default: "New" },
+  description: String,
+  projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' }
+});
+if (mongoose.models.CustomerFeedback) {
+  delete mongoose.models.CustomerFeedback;
+}
+export const CustomerFeedback = mongoose.model("CustomerFeedback", customerFeedbackSchema);
+

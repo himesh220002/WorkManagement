@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -16,6 +17,7 @@ import PipelineCard from "@/components/PipelineCard";
 import { addTaskNode, addCycle } from "@/actions";
 import WorkflowGuide from "./WorkflowGuide";
 import EditableTaskList from "./EditableTaskList";
+import { PREDEFINED_PIPELINE_TASKS } from "@/utils/taskConstants";
 
 ChartJS.register(
   CategoryScale,
@@ -206,35 +208,41 @@ export default function DevDashboardClient({
           </h3>
           <form action={addTaskNode} className="space-y-3">
             <input type="hidden" name="projectId" value={selectedProjectId} />
-            <input type="text" name="name" placeholder="Task Name" className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none" required />
+            <div className="flex gap-3">
+              <select name="pipelineId" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm cursor-pointer">
+                <option value="none">No Pipeline</option>
+                {pipelines.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+              </select>
+              <select name="predefinedTask" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm cursor-pointer">
+                <option value="">Select Task Category...</option>
+                {PREDEFINED_PIPELINE_TASKS['Development']?.map((task: string) => (
+                  <option key={task} value={task}>{task}</option>
+                ))}
+              </select>
+            </div>
+            <input type="text" name="name" placeholder="Sub Task (Optional)..." className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
             <div className="flex gap-3">
               <input type="number" name="estimatedHours" placeholder="Est. Hours" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm" />
               <input type="number" name="actualHours" placeholder="Actual Hours" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm" />
             </div>
             <div className="flex gap-3">
-              <select name="status" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm">
+              <select name="status" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm cursor-pointer">
                 <option value="open">Open</option>
                 <option value="in_progress">In Progress</option>
                 <option value="review">Code Review</option>
                 <option value="completed">Completed</option>
               </select>
-              <select name="severity" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm">
+              <select name="severity" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm cursor-pointer">
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
                 <option value="critical">Critical</option>
               </select>
             </div>
-            <div className="flex gap-3">
-              <select name="pipelineId" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm">
-                <option value="none">No Pipeline</option>
-                {pipelines.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
-              </select>
-              <select name="cycleId" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm">
-                <option value="none">No Sprint</option>
-                {cycles.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
-              </select>
-            </div>
+            <select name="cycleId" className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm cursor-pointer">
+              <option value="none">No Sprint</option>
+              {cycles.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+            </select>
             <button type="submit" disabled={selectedProjectId === "all"} className="w-full p-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
               {selectedProjectId === "all" ? "Select a Project First" : "Add Task"}
             </button>

@@ -10,6 +10,7 @@ interface Option { id: string, name: string }
 interface Options { projects: Option[], teams: Option[], tasks: Option[], users: Option[] }
 import PipelineCard from "@/components/PipelineCard";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
+import { PREDEFINED_PIPELINE_TASKS } from "@/utils/taskConstants";
 
 export default function TimelineClient({ tasks, options, projectMetrics = [] }: { tasks: any[], options?: Options, projectMetrics?: any[] }) {
   const ganttWrapperRef = useRef<HTMLDivElement>(null);
@@ -17,6 +18,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
   const mermaidContainerRef = useRef<HTMLDivElement>(null);
   const [activeCategory, setActiveCategory] = useState("All");
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [formCategory, setFormCategory] = useState("Development");
   const [dayZoom, setDayZoom] = useState("Week");
   const [showExamplesModal, setShowExamplesModal] = useState(false);
 
@@ -308,7 +310,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
                 </div>
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Category</label>
-                  <select name="category" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
+                  <select name="category" value={formCategory} onChange={(e) => setFormCategory(e.target.value)} className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
                     {categories.filter(c => c !== "All" && c !== "Company Pipeline").map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
@@ -363,15 +365,24 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
                       </select>
                     </div>
                     <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
-                      <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Link Task</label>
+                      <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Link Existing Task</label>
                       <select name="taskId" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
                         <option value="">None (or Auto-Create Below)</option>
                         {options.tasks.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                       </select>
                     </div>
                     <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
-                      <label className="mb-2 font-semibold text-blue-600 dark:text-blue-400">Auto-Create Task Name</label>
-                      <input type="text" name="createTaskName" className="w-full px-4 py-2.5 rounded-lg border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="Generate new execution task..." />
+                      <label className="mb-2 font-semibold text-blue-600 dark:text-blue-400">Auto-Create Category Task</label>
+                      <select name="createTaskName" className="w-full px-4 py-2.5 rounded-lg border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
+                        <option value="">Select Predefined Task...</option>
+                        {PREDEFINED_PIPELINE_TASKS[formCategory]?.map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                      <label className="mb-2 font-semibold text-blue-600 dark:text-blue-400">Or Custom Task Name</label>
+                      <input type="text" name="customTaskName" className="w-full px-4 py-2.5 rounded-lg border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="Generate custom execution task..." />
                     </div>
                     <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
                       <label className="mb-2 font-semibold text-violet-600 dark:text-violet-400">Generate Team on the Fly</label>

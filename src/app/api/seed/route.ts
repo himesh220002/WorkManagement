@@ -22,7 +22,7 @@ export async function GET() {
       const project = await Project.create({
         name: "Project Alpha",
         description: "Initial rollout of the primary platform.",
-        team: teamId,
+        teams: teamId ? [teamId] : [],
         status: "Active"
       });
       projectId = project._id;
@@ -30,7 +30,7 @@ export async function GET() {
       await Project.create({
         name: "Project Beta",
         description: "Mobile app development.",
-        team: teamId,
+        teams: teamId ? [teamId] : [],
         status: "Planning"
       });
     }

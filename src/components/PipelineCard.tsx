@@ -1,16 +1,28 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { addPipelineTodo, togglePipelineTodo, deletePipelineTodo, reorderPipelineTodos, deletePipeline } from "@/actions";
+import { addPipelineTodo, togglePipelineTodo, deletePipelineTodo, reorderPipelineTodos, deletePipeline, getAssigneeOptions } from "@/actions";
+import { PREDEFINED_PIPELINE_TASKS } from "@/utils/taskConstants";
 
 export default function PipelineCard({ pipeline }: { pipeline: any }) {
   const [todos, setTodos] = useState(pipeline.todos || []);
   const [isReorderMode, setIsReorderMode] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  
+  const [users, setUsers] = useState<{id: string, name: string}[]>([]);
+  const [teams, setTeams] = useState<{id: string, name: string}[]>([]);
+  const [selectedAssigneeType, setSelectedAssigneeType] = useState("Individual");
 
   useEffect(() => {
     setTodos(pipeline.todos || []);
   }, [pipeline.todos]);
+  
+  useEffect(() => {
+    getAssigneeOptions().then(res => {
+      setUsers(res.users || []);
+      setTeams(res.teams || []);
+    }).catch(console.error);
+  }, []);
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
@@ -35,7 +47,7 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
   };
 
   return (
-    <div className="p-6 rounded-2xl shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex flex-col justify-between hover:shadow-md transition-all duration-200">
+    <div className="p-6 rounded-2xl shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex flex-col justify-start hover:shadow-md transition-all duration-200">
       <div>
         {/* Header */}
         <div className="p-4 flex justify-between items-start mb-3 gap-2">
@@ -98,6 +110,14 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
               <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1">{pipeline.kpis}</p>
             </div>
           )}
+          {(pipeline.cashFlowProjectionUSD > 0 || pipeline.expensesUSD > 0 || pipeline.roiPercent > 0) && (
+            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30 p-2 rounded">
+              <span className="font-bold text-gray-700 dark:text-gray-200 block mb-1 text-[11px] uppercase tracking-wider">Financial Overview</span>
+              {pipeline.cashFlowProjectionUSD > 0 && <div className="flex justify-between items-center text-[11px]"><span className="text-gray-600 dark:text-gray-300">Proj. Revenue:</span> <span className="font-bold text-emerald-600 dark:text-emerald-400">${pipeline.cashFlowProjectionUSD.toLocaleString()}</span></div>}
+              {pipeline.expensesUSD > 0 && <div className="flex justify-between items-center text-[11px]"><span className="text-gray-600 dark:text-gray-300">Expenses:</span> <span className="font-bold text-red-500 dark:text-red-400">${pipeline.expensesUSD.toLocaleString()}</span></div>}
+              {pipeline.roiPercent > 0 && <div className="flex justify-between items-center text-[11px]"><span className="text-gray-600 dark:text-gray-300">Target ROI:</span> <span className="font-bold text-blue-500">{pipeline.roiPercent}%</span></div>}
+            </div>
+          )}
           {pipeline.dependencies && (
             <div className="mt-1">
               <span className="font-semibold text-gray-600 dark:text-gray-300 block mb-0.5">Dependencies:</span>
@@ -109,9 +129,17 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
           {pipeline.outcome && (
             <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-md">
               <span className="font-semibold text-blue-700 dark:text-blue-400 block mb-0.5 flex items-center gap-1">
-                <i className="fa-solid fa-bullseye text-[10px]"></i> Deliverable
+                <i className="fa-solid fa-bullseye text-[10px]"></i> Deliverable (Outcome)
               </span>
               <p className="text-[11px] text-blue-600 dark:text-blue-300 line-clamp-2">{pipeline.outcome}</p>
+            </div>
+          )}
+          {pipeline.budget && (
+            <div className="mt-2 p-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 rounded-md">
+              <span className="font-semibold text-emerald-700 dark:text-emerald-400 block mb-0.5 flex items-center gap-1">
+                <i className="fa-solid fa-sack-dollar text-[10px]"></i> Budget
+              </span>
+              <p className="text-[11px] text-emerald-600 dark:text-emerald-300 font-bold">${pipeline.budget.toLocaleString()}</p>
             </div>
           )}
         </div>
@@ -236,20 +264,41 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
           <input
             type="text"
             name="text"
+            list={`predefined-tasks-${pipeline._id}`}
             placeholder="Add task..."
             className="flex-1 min-w-[120px] px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
             required
+            autoComplete="off"
           />
-          <select name="assigneeType" className="w-24 px-2 py-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all cursor-pointer">
+          <datalist id={`predefined-tasks-${pipeline._id}`}>
+            {PREDEFINED_PIPELINE_TASKS[pipeline.category || '']?.map(task => (
+              <option key={task} value={task} />
+            ))}
+          </datalist>
+          <select 
+            name="assigneeType" 
+            className="w-24 px-2 py-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all cursor-pointer"
+            value={selectedAssigneeType}
+            onChange={(e) => setSelectedAssigneeType(e.target.value)}
+          >
             <option value="Individual">Individual</option>
             <option value="Group">Group</option>
           </select>
           <input
             type="text"
             name="assigneeName"
+            list={`assignees-${pipeline._id}`}
             placeholder="Assignee Name..."
             className="w-28 px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+            autoComplete="off"
           />
+          <datalist id={`assignees-${pipeline._id}`}>
+            {selectedAssigneeType === 'Individual' ? (
+              users.map(u => <option key={u.id} value={u.name} />)
+            ) : (
+              teams.map(t => <option key={t.id} value={t.name} />)
+            )}
+          </datalist>
           <button
             type="submit"
             className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-all flex items-center justify-center cursor-pointer shrink-0"
