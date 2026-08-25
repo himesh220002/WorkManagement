@@ -118,7 +118,7 @@ export default function GlobalMemberDirectory({ users }: { users: any[] }) {
             </button>
           </div>
           {isOpenWorking && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="flex flex-wrap gap-4">
               {working.map(renderUser)}
             </div>
           )}
@@ -136,7 +136,7 @@ export default function GlobalMemberDirectory({ users }: { users: any[] }) {
             </button>
           </div>
           {isOpenQuit && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="flex flex-wrap gap-4">
               {quit.map(renderUser)}
             </div>
           )}
@@ -154,7 +154,7 @@ export default function GlobalMemberDirectory({ users }: { users: any[] }) {
             </button>
           </div>
           {isOpenDropped && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="flex flex-wrap gap-4">
               {dropped.map(renderUser)}
             </div>
           )}
