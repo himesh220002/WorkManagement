@@ -106,11 +106,11 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
       </header>
 
       {/* Company OKRs / Goals */}
-      <div className="mb-8">
+      {/* <div className="mb-8">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl text-gray-900 dark:text-gray-100 font-semibold">Strategic Goals & OKRs</h2>
         </div>
-        
+
         <form action={addGoal} className="glass-card p-6 mb-6 flex gap-4 flex-wrap items-center">
           <input
             type="text"
@@ -141,12 +141,12 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
             if (goal.progress < 50) color = "blue-500";
             if (goal.progress < 25) color = "rose-500";
             if (goal.status === "Behind") color = "rose-500";
-            
+
             return (
               <div key={goal._id} className="glass-card p-5 relative overflow-hidden flex flex-col h-full group hover:neon-border-emerald">
                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
                 <div className="absolute top-0 right-0 p-2 text-xs font-semibold text-gray-400 z-10">{goal.category}</div>
-                
+
                 {editingGoalId === goal._id ? (
                   <form action={async (formData) => {
                     await updateGoal(formData);
@@ -196,7 +196,7 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
             </div>
           )}
         </div>
-      </div>
+      </div> */}
 
       {/* Cross-Department Rollup Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -3,6 +3,7 @@ import { Team, User } from "@/models";
 import RegisterMemberForm from "@/app/teams/RegisterMemberForm";
 import LinkMemberForm from "@/app/teams/LinkMemberForm";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
+import GlobalMemberDirectory from "@/app/teams/GlobalMemberDirectory";
 import { revalidatePath } from "next/cache";
 
 async function addTeam(formData: FormData) {
@@ -67,7 +68,11 @@ export default async function TeamsPage() {
     name: u.name,
     role: u.role,
     position: u.position,
-    rank: u.rank
+    rank: u.rank,
+    status: u.status,
+    joinedDate: u.joinedDate ? new Date(u.joinedDate).toISOString() : null,
+    leftDate: u.leftDate ? new Date(u.leftDate).toISOString() : null,
+    details: u.details
   }));
 
   const userOptions = allUsers.map(u => ({
@@ -112,6 +117,10 @@ export default async function TeamsPage() {
             </button>
           </div>
         </form>
+      </div>
+
+      <div className="mb-6">
+        <GlobalMemberDirectory users={allUsers} />
       </div>
 
       <div className="space-y-4 grid grid-cols-1 md:grid-cols-2 gap-4">

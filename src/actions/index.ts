@@ -575,6 +575,25 @@ export async function registerUser(formData: FormData) {
   }
 }
 
+export async function updateUserProfile(formData: FormData) {
+  await connectToDatabase();
+  const userId = formData.get("userId") as string;
+  const status = formData.get("status") as string;
+  const joinedDateStr = formData.get("joinedDate") as string;
+  const leftDateStr = formData.get("leftDate") as string;
+  const details = formData.get("details") as string;
+
+  if (userId) {
+    const updateData: any = { status, details };
+    if (joinedDateStr) updateData.joinedDate = new Date(joinedDateStr);
+    if (leftDateStr) updateData.leftDate = new Date(leftDateStr);
+    else updateData.leftDate = null;
+
+    await User.findByIdAndUpdate(userId, updateData);
+    revalidatePath("/teams");
+  }
+}
+
 export async function linkUserToTeam(formData: FormData) {
   await connectToDatabase();
   const teamId = formData.get("teamId") as string;

@@ -26,10 +26,10 @@ export async function GET() {
     await Cycle.deleteMany({});
 
     // 1. Users & Teams
-    const ceo = await User.create({ name: "David Kim", role: "CEO - Executive", rank: "Exec" }) as any;
-    const cto = await User.create({ name: "Alice Chen", role: "Lead Engineer", position: "Technical", rank: "Senior" }) as any;
-    const pm = await User.create({ name: "Carol Davis", role: "Product Manager", position: "Product", rank: "Senior" }) as any;
-    const sales = await User.create({ name: "Bob Smith", role: "Sales Executive", position: "Sales", rank: "Mid" }) as any;
+    const ceo = await User.create({ name: "David Kim", role: "CEO - Executive", rank: "Exec", status: "Working", details: "Company Founder" }) as any;
+    const cto = await User.create({ name: "Alice Chen", role: "Lead Engineer", position: "Technical", rank: "Senior", status: "Working", details: "Joined early 2022" }) as any;
+    const pm = await User.create({ name: "Carol Davis", role: "Product Manager", position: "Product", rank: "Senior", status: "Quit", leftDate: new Date(), details: "Left for another opportunity" }) as any;
+    const sales = await User.create({ name: "Bob Smith", role: "Sales Executive", position: "Sales", rank: "Mid", status: "Dropped", leftDate: new Date(), details: "Contract terminated" }) as any;
 
     const execTeam = await Team.create({ name: "Executive Team", members: [ceo._id] }) as any;
     const engTeam = await Team.create({ name: "Engineering Core", members: [cto._id, pm._id] }) as any;

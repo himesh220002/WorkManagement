@@ -117,7 +117,11 @@ const userSchema = new mongoose.Schema({
   name: String,
   role: { type: String, default: "Member" },
   position: String,
-  rank: String
+  rank: String,
+  status: { type: String, enum: ["Working", "Quit", "Dropped"], default: "Working" },
+  joinedDate: { type: Date, default: Date.now },
+  leftDate: { type: Date },
+  details: { type: String }
 });
 if (mongoose.models.User) {
   delete mongoose.models.User;
