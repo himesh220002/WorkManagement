@@ -9,7 +9,7 @@ export default function LinkMemberForm({ teamId, availableUsers }: { teamId: str
 
       <select
         name="userId"
-        className="flex-1 p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+        className="tech-input flex-1 cursor-pointer"
         required
       >
         <option value="">Select a member to add...</option>
@@ -20,7 +20,7 @@ export default function LinkMemberForm({ teamId, availableUsers }: { teamId: str
         ))}
       </select>
 
-      <button type="submit" className="px-3 py-2 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 transition-colors shrink-0 font-semibold">
+      <button type="submit" className="px-3 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors shrink-0 font-semibold shadow-sm">
         <i className="fa-solid fa-link"></i> Link
       </button>
     </form>

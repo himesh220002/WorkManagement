@@ -117,9 +117,9 @@ export default function SalesDashboardClient({
 
   return (
     <main className="flex flex-col min-w-0 p-6 flex-1">
-      <header className=" bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6 border-l-4 border-emerald-500 flex justify-between items-center">
+      <header className="glass-card p-6 mb-6 border-l-4 border-emerald-500 flex justify-between items-center neon-border-emerald">
         <div>
-          <h1 className=" text-3xl font-bold text-gray-900 dark:text-gray-100">Sales Pipeline Management</h1>
+          <h1 className="text-3xl font-bold glow-text-emerald">Sales Pipeline Management</h1>
           <div className="date-badge mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
             <i className="fa-solid fa-chart-line"></i> Active Campaigns Overview
           </div>
@@ -132,67 +132,67 @@ export default function SalesDashboardClient({
 
       {/* Data Entry Forms */}
       <div className="flex flex-wrap lg:flex-nowrap gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 flex-1">
+        <div className="glass-card p-5 flex-1">
           <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Add New Lead</h4>
           <form action={addLead} className="flex gap-2 flex-wrap items-center">
-            <input type="text" name="name" className="flex-1 min-w-[120px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Lead Name" required />
-            <input type="text" name="owner" className="w-28 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Owner" required />
-            <select name="status" className="w-28 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+            <input type="text" name="name" className="tech-input flex-1 min-w-[120px]" placeholder="Lead Name" required />
+            <input type="text" name="owner" className="tech-input w-28" placeholder="Owner" required />
+            <select name="status" className="tech-input w-28 cursor-pointer">
               <option value="New">New</option>
               <option value="Working">Working</option>
               <option value="Qualified">Qualified</option>
               <option value="Unqualified">Unqualified</option>
             </select>
-            <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">Add</button>
+            <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded-lg shadow-sm hover:bg-blue-600 transition-colors font-semibold">Add</button>
           </form>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 flex-1">
+        <div className="glass-card p-5 flex-1">
           <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Add New Campaign</h4>
           <form action={addCampaign} className="flex gap-2 flex-wrap items-center">
-            <input type="text" name="name" className="flex-1 min-w-[120px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Campaign Name" required />
-            <input type="number" name="leadsGenerated" className="w-20 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Leads" required />
-            <input type="number" name="expectedRevenue" className="w-28 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Est. Rev ($)" required />
-            <button type="submit" className="px-4 py-2 bg-emerald-500 text-white rounded hover:bg-emerald-600 transition-colors">Add</button>
+            <input type="text" name="name" className="tech-input flex-1 min-w-[120px]" placeholder="Campaign Name" required />
+            <input type="number" name="leadsGenerated" className="tech-input w-20" placeholder="Leads" required />
+            <input type="number" name="expectedRevenue" className="tech-input w-28" placeholder="Est. Rev ($)" required />
+            <button type="submit" className="px-4 py-2 bg-emerald-500 text-white rounded-lg shadow-sm hover:bg-emerald-600 transition-colors font-semibold">Add</button>
           </form>
         </div>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
+        <div className="glass-card p-5 text-center hover:neon-border-blue transition-all group">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Total Leads</h4>
-          <h2 className="text-3xl font-bold text-blue-500">{totalLeads}</h2>
+          <h2 className="text-3xl font-bold text-blue-500 group-hover:scale-110 transition-transform">{totalLeads}</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
+        <div className="glass-card p-5 text-center hover:neon-border-emerald transition-all group">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Active Campaigns</h4>
-          <h2 className="text-3xl font-bold text-emerald-500">{activeCampaigns}</h2>
+          <h2 className="text-3xl font-bold text-emerald-500 group-hover:scale-110 transition-transform">{activeCampaigns}</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+        <div className="glass-card p-5 text-center relative group hover:neon-border-amber transition-all">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm flex justify-center items-center gap-1">
             Expected Revenue
             <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Sum of expected revenue from all active campaigns"></i>
           </h4>
-          <h2 className="text-3xl font-bold text-amber-500">${expectedRevenue.toLocaleString()}</h2>
+          <h2 className="text-3xl font-bold text-amber-500 group-hover:scale-110 transition-transform">${expectedRevenue.toLocaleString()}</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+        <div className="glass-card p-5 text-center relative group hover:neon-border-purple transition-all">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm flex justify-center items-center gap-1">
             Conversion Rate
             <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Percentage of total leads that are currently marked as 'Qualified'"></i>
           </h4>
-          <h2 className="text-3xl font-bold text-violet-500">{conversionRate}%</h2>
+          <h2 className="text-3xl font-bold text-violet-500 group-hover:scale-110 transition-transform">{conversionRate}%</h2>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 md:col-span-2">
+        <div className="glass-card p-5 md:col-span-2 hover:neon-border-blue transition-all group">
           <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Top Campaigns by Leads Generated</h3>
           <div className="h-72">
             <Bar data={campaignsData} options={{ indexAxis: "y", responsive: true, maintainAspectRatio: false }} />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5">
+        <div className="glass-card p-5 hover:neon-border-emerald transition-all group">
           <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Expected Revenue by Campaign</h3>
           <div className="h-72">
             <Doughnut data={revenueData} options={{ responsive: true, maintainAspectRatio: false }} />
@@ -201,7 +201,7 @@ export default function SalesDashboardClient({
       </div>
 
       {/* Leads Kanban Board */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6">
+      <div className="glass-card p-6 mb-6">
         <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100 flex items-center gap-2">
           <i className="fa-solid fa-users text-blue-600"></i> Leads Kanban Board
         </h3>
@@ -209,7 +209,7 @@ export default function SalesDashboardClient({
           {leadStages.map(stage => (
             <div 
               key={stage} 
-              className="flex-1 min-w-[250px] bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+              className="flex-1 min-w-[250px] bg-white/5 dark:bg-gray-900/50 rounded-lg p-3 border border-gray-200/50 dark:border-gray-700/50"
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, stage)}
             >
@@ -225,7 +225,7 @@ export default function SalesDashboardClient({
                     key={lead._id} 
                     draggable 
                     onDragStart={(e) => handleDragStart(e, lead._id)}
-                    className="bg-white dark:bg-gray-800 p-3 rounded shadow-sm border border-gray-200 dark:border-gray-700 cursor-grab hover:shadow-md transition-shadow"
+                    className="bg-white/10 dark:bg-gray-800/80 p-3 rounded shadow-sm border border-gray-200/50 dark:border-gray-700/50 cursor-grab hover:bg-white/20 dark:hover:bg-gray-700 transition-colors mb-3"
                   >
                     {editingLeadId === lead._id ? (
                       <form action={async (formData) => { await updateLead(formData); setEditingLeadId(null); }} className="flex flex-col gap-2">
@@ -273,13 +273,13 @@ export default function SalesDashboardClient({
       </div>
 
       {/* Active Campaigns List */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6">
+      <div className="glass-card p-6 mb-6">
         <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100 flex items-center gap-2">
           <i className="fa-solid fa-bullhorn text-emerald-600"></i> Active Campaigns
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {campaigns?.map(campaign => (
-            <div key={campaign._id} className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div key={campaign._id} className="bg-white/5 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200/50 dark:border-gray-700/50 hover:bg-white/10 transition-colors">
               {editingCampaignId === campaign._id ? (
                 <form action={async (formData) => { await updateCampaign(formData); setEditingCampaignId(null); }} className="flex flex-col gap-2">
                   <input type="hidden" name="campaignId" value={campaign._id} />
@@ -334,7 +334,7 @@ export default function SalesDashboardClient({
       </div>
 
       {/* Active Sales Pipelines */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6">
+      <div className="glass-card p-6 mb-6">
         <h3 className="text-lg font-bold mb-6 text-gray-900 dark:text-gray-100 flex items-center gap-2">
           <i className="fa-solid fa-layer-group text-blue-600"></i> Active Sales Pipelines
         </h3>

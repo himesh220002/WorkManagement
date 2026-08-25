@@ -77,9 +77,9 @@ export default async function TeamsPage() {
 
   return (
     <main className="flex flex-col min-w-0 p-6 flex-1">
-      <header className=" bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg mb-6 border-l-4 border-violet-500">
+      <header className="glass-card p-6 mb-6 border-l-4 border-violet-500 neon-border-purple">
         <div>
-          <h1 className=" text-3xl font-bold text-gray-900 dark:text-gray-100">Teams & Units</h1>
+          <h1 className="text-3xl font-bold glow-text-purple">Teams & Units</h1>
           <div className="date-badge mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
             <i className="fa-solid fa-users"></i> Organizational Structure
           </div>
@@ -92,33 +92,34 @@ export default async function TeamsPage() {
         <RegisterMemberForm />
 
         {/* Upgrade: Added form to create a team natively with multi-select */}
-        <form action={addTeam} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 mb-6 flex flex-col gap-4 items-start">
-          <div className="flex gap-4 items-center">
-            <label className="text-lg text-gray-700 font-black dark:text-gray-100">Team Name:</label>
+        <form action={addTeam} className="glass-card overflow-visible relative z-50 p-6 mb-6 flex flex-col gap-4 flex-1">
+          <div className="flex gap-4 items-center w-full">
+            <label className="text-lg text-gray-700 font-black dark:text-gray-100 whitespace-nowrap">Team Name:</label>
             <input
               type="text"
               name="teamName"
-              className="flex-1 w-[400px] min-w-[200px] p-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+              className="tech-input flex-1"
               placeholder="New Team Name..."
               required
             />
           </div>
-          <div className="min-w-[600px] flex gap-4">
-            <MultiSelectDropdown name="memberIds" options={userOptions} placeholder="Select initial members..." />
-            <button type="submit" className="px-4 py-2 bg-violet-500 text-white rounded hover:bg-violet-600 transition-colors flex items-center gap-2">
+          <div className="w-full flex gap-4 items-start">
+            <div className="flex-1">
+              <MultiSelectDropdown name="memberIds" options={userOptions} placeholder="Select initial members..." />
+            </div>
+            <button type="submit" className="px-6 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600 transition-colors flex items-center gap-2 h-[42px] font-semibold shadow-md hover:shadow-lg">
               <i className="fa-solid fa-plus"></i> Create
             </button>
           </div>
-
         </form>
       </div>
 
       <div className="space-y-4 grid grid-cols-1 md:grid-cols-2 gap-4">
         {teams && teams.length > 0 ? (
           teams.map((t: any) => (
-            <div key={t._id.toString()} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden transition-all">
+            <div key={t._id.toString()} className="glass-card overflow-hidden transition-all group">
               {/* Team Header */}
-              <div className="p-4 bg-gray-50 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+              <div className="p-4 bg-white/5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center group-hover:bg-violet-500/5 transition-colors">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center text-violet-500">
                     <i className="fa-solid fa-user-group"></i>
@@ -140,7 +141,7 @@ export default async function TeamsPage() {
               <div className="p-4 space-y-3">
                 {t.members && t.members.length > 0 ? (
                   t.members.map((member: any) => (
-                    <div key={member._id.toString()} className="flex justify-between items-center bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-100 dark:border-gray-600">
+                    <div key={member._id.toString()} className="flex justify-between items-center bg-white/10 p-2 rounded border border-gray-200/50 dark:border-gray-600/50 hover:bg-white/20 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400 text-xs font-bold uppercase">
                           {member.name.substring(0, 2)}
@@ -171,7 +172,7 @@ export default async function TeamsPage() {
             </div>
           ))
         ) : (
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-10 text-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="glass-card p-10 text-center">
             <i className="fa-solid fa-users-slash text-4xl text-gray-500 dark:text-gray-400 mb-4"></i>
             <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">No teams configured</h3>
             <p className="text-gray-500 dark:text-gray-400 mt-2">Create a new organizational team above!</p>

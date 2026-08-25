@@ -39,7 +39,7 @@ export default function MultiSelectDropdown({
       ))}
       
       <div 
-        className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none cursor-pointer flex justify-between items-center min-h-[42px] transition-all shadow-sm hover:border-blue-400"
+        className="tech-input outline-none cursor-pointer flex justify-between items-center min-h-[42px] transition-all"
         onClick={() => setIsOpen(!isOpen)}
       >
         <span className={`truncate pr-2 ${selected.length === 0 ? "text-gray-500 dark:text-gray-400" : ""}`}>
@@ -49,14 +49,14 @@ export default function MultiSelectDropdown({
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl p-2 flex flex-col gap-1">
+        <div className="absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded-lg border border-blue-500/30 bg-gray-900/90 backdrop-blur-md shadow-[0_0_15px_rgba(59,130,246,0.3)] p-2 flex flex-col gap-1">
           {options.map(u => (
-            <label key={u.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-2 rounded transition-colors text-gray-900 dark:text-gray-100 text-sm">
+            <label key={u.id} className="flex items-center gap-2 cursor-pointer hover:bg-white/10 p-2 rounded transition-colors text-gray-100 text-sm">
               <input 
                 type="checkbox" 
                 checked={selected.includes(u.id)}
                 onChange={() => toggleSelection(u.id)}
-                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-900 w-4 h-4" 
+                className="rounded border-gray-600 text-blue-500 focus:ring-blue-500 bg-gray-800 w-4 h-4 cursor-pointer" 
               />
               <span className="truncate">{u.name}</span>
             </label>

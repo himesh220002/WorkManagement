@@ -30,12 +30,18 @@ export default async function SalesDashboardPage() {
     _id: l._id.toString(),
     name: l.name,
     status: l.status,
+    owner: l.owner,
     source: l.source,
+    campaignId: l.campaignId ? l.campaignId.toString() : null,
   }));
 
   const cleanCampaigns = campaigns.map((c: any) => ({
     _id: c._id.toString(),
     name: c.name,
+    leadsGenerated: c.leadsGenerated || 0,
+    expectedRevenue: c.expectedRevenue || 0,
+    projectId: c.projectId ? c.projectId.toString() : null,
+    pipelineId: c.pipelineId ? c.pipelineId.toString() : null,
   }));
 
   const cleanPipelines = pipelines.map((p: any) => ({

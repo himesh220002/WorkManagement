@@ -9,9 +9,9 @@ export default function RevenueTargetsClient({ targets, goals = [] }: { targets:
 
   return (
     <main className="flex flex-col min-w-0 p-6 flex-1">
-      <header className=" bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg mb-6 flex justify-between items-center">
+      <header className="glass-card p-6 mb-6 border-l-4 border-amber-500 flex justify-between items-center neon-border-amber">
         <div>
-          <h1 className=" text-3xl font-bold text-gray-900 dark:text-gray-100">Target Customization & Goals</h1>
+          <h1 className="text-3xl font-bold glow-text-amber">Target Customization & Goals</h1>
         </div>
         <div className="storage-tag px-3 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full text-sm font-medium text-gray-600 dark:text-gray-300">
           <span className="w-2 h-2 rounded-full bg-green-500 inline-block mr-2"></span>
@@ -20,51 +20,51 @@ export default function RevenueTargetsClient({ targets, goals = [] }: { targets:
       </header>
 
       {/* Strategic Goals & OKRs Form */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6">
+      <div className="glass-card p-6 mb-6">
         <h2 className="text-xl text-gray-900 dark:text-gray-100 font-semibold mb-4">Strategic Goals & OKRs</h2>
         <form action={addGoal} className="flex gap-4 flex-wrap items-center">
           <input
             type="text"
             name="title"
-            className="flex-1 min-w-[200px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm"
+            className="tech-input flex-1 min-w-[200px]"
             placeholder="New Goal Title (e.g. Q3 Market Expansion)..."
             required
           />
           <input
             type="text"
             name="description"
-            className="flex-1 min-w-[200px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm"
+            className="tech-input flex-1 min-w-[200px]"
             placeholder="Key Result / Description..."
           />
-          <select name="category" className="p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm">
+          <select name="category" className="tech-input cursor-pointer">
             <option value="Company">Company</option>
             <option value="Department">Department</option>
             <option value="Team">Team</option>
           </select>
-          <button type="submit" className="px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition-colors flex items-center gap-2 text-sm font-medium">
+          <button type="submit" className="px-4 py-2 bg-indigo-500 text-white rounded-lg shadow-sm hover:bg-indigo-600 transition-colors flex items-center gap-2 font-semibold">
             <i className="fa-solid fa-bullseye"></i> Set Goal
           </button>
         </form>
       </div>
 
       {/* Create Target Form */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 mb-6">
+      <div className="glass-card p-6 mb-6">
         <h4 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">Create New Target</h4>
         <form action={addTarget} className="flex gap-4 flex-wrap items-center">
-          <input type="text" name="name" className="flex-1 min-w-[150px] p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Target Name" required />
-          <input type="number" name="expectedValue" className="w-32 p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Expected Val" required />
-          <input type="number" name="actualValue" className="w-32 p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Actual Val" />
+          <input type="text" name="name" className="tech-input flex-1 min-w-[150px]" placeholder="Target Name" required />
+          <input type="number" name="expectedValue" className="tech-input w-32" placeholder="Expected Val" required />
+          <input type="number" name="actualValue" className="tech-input w-32" placeholder="Actual Val" />
           
-          <select name="goalId" className="w-48 p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+          <select name="goalId" className="tech-input w-48 cursor-pointer">
             <option value="">No Linked Goal</option>
             {goals.map(g => (
               <option key={g._id} value={g._id}>{g.title}</option>
             ))}
           </select>
           
-          <input type="text" name="industry" className="w-32 p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Industry" />
-          <input type="text" name="region" className="w-32 p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Region" />
-          <button type="submit" className="px-4 py-2 bg-emerald-500 text-white text-sm rounded hover:bg-emerald-600 transition-colors flex items-center gap-2">
+          <input type="text" name="industry" className="tech-input w-32" placeholder="Industry" />
+          <input type="text" name="region" className="tech-input w-32" placeholder="Region" />
+          <button type="submit" className="px-4 py-2 bg-emerald-500 text-white rounded-lg shadow-sm hover:bg-emerald-600 transition-colors flex items-center gap-2 font-semibold">
             <i className="fa-solid fa-plus"></i> Create Target
           </button>
         </form>
@@ -74,7 +74,7 @@ export default function RevenueTargetsClient({ targets, goals = [] }: { targets:
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {targets && targets.length > 0 ? (
           targets.map((target) => (
-            <div key={target._id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 flex flex-col h-full relative">
+            <div key={target._id} className="glass-card p-6 flex flex-col h-full relative hover:neon-border-blue transition-all group">
               {target.goalId && (
                 <div className="absolute -top-3 -right-3 bg-blue-500 text-white text-xs px-3 py-1.5 rounded-full shadow border-2 border-white dark:border-gray-800 flex items-center gap-1.5 truncate max-w-[200px]" title={goals.find(g => g._id === target.goalId)?.title || "Linked Goal"}>
                   <i className="fa-solid fa-link"></i> <span className="truncate">{goals.find(g => g._id === target.goalId)?.title || "Linked Goal"}</span>
@@ -149,7 +149,7 @@ export default function RevenueTargetsClient({ targets, goals = [] }: { targets:
               )}
 
               {/* Checklist */}
-              <div className="flex-1 mb-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-md border border-gray-300 dark:border-gray-600">
+              <div className="flex-1 mb-4 bg-white/5 dark:bg-gray-700/30 p-3 rounded-md border border-gray-200/50 dark:border-gray-600/50">
                 <h5 className="text-sm font-semibold mb-3 text-gray-600 dark:text-gray-300">Completion Checklist</h5>
                 <div className="space-y-3 mb-4">
                   {target.checklist && target.checklist.map((task: any, index: number) => (
@@ -171,15 +171,15 @@ export default function RevenueTargetsClient({ targets, goals = [] }: { targets:
               </div>
 
               {/* Add New Checklist Item Form */}
-              <form action={updateTargetChecklist} className="flex gap-2 m-0 border-t border-gray-200 dark:border-gray-700 pt-4 mt-auto">
+              <form action={updateTargetChecklist} className="flex gap-2 m-0 border-t border-gray-200/50 dark:border-gray-700/50 pt-4 mt-auto">
                 <input type="hidden" name="targetId" value={target._id.toString()} />
-                <input type="text" name="taskName" className="flex-1 p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Add actionable step..." required />
-                <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 transition-colors">Add</button>
+                <input type="text" name="taskName" className="tech-input flex-1" placeholder="Add actionable step..." required />
+                <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold">Add</button>
               </form>
             </div>
           ))
         ) : (
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-10 text-center col-span-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="glass-card p-10 text-center col-span-full">
             <i className="fa-solid fa-bullseye text-4xl text-gray-500 dark:text-gray-400 mb-4"></i>
             <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">No Targets Found</h3>
             <p className="text-gray-500 dark:text-gray-400 mt-2">Create your first revenue or performance target above.</p>

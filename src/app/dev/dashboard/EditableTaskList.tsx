@@ -43,18 +43,18 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                 <td className="p-2">
                   <form action={updateTaskNode} className="m-0">
                     <input type="hidden" name="taskId" value={task._id} />
-                    <select 
+                      <select 
                       name="status" 
-                      defaultValue={task.status?.toLowerCase() || "open"} 
+                      defaultValue={task.status || "Todo"} 
                       className="w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 cursor-pointer"
                       onChange={(e) => e.target.form?.requestSubmit()}
                     >
-                      <option value="open">Open</option>
-                      <option value="todo">Todo</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="review">Code Review</option>
-                      <option value="completed">Completed</option>
-                      <option value="done">Done</option>
+                      <option value="Todo">Todo</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Code Review">Code Review</option>
+                      <option value="Blocked">Blocked</option>
+                      <option value="Done">Done</option>
+                      <option value="Archived">Archived</option>
                     </select>
                   </form>
                 </td>

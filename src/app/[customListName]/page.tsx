@@ -112,9 +112,9 @@ export default async function TodoListPage({ params }: { params: Promise<{ custo
 
   return (
     <main className="flex flex-col min-w-0 p-6 flex-1">
-      <header className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6 flex justify-between items-center">
+      <header className="glass-card p-6 mb-6 flex justify-between items-center neon-border-blue">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{customListName}</h1>
+          <h1 className="text-3xl font-bold glow-text">{customListName}</h1>
           <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
             <i className="fa-regular fa-calendar-alt"></i>
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
@@ -131,21 +131,21 @@ export default async function TodoListPage({ params }: { params: Promise<{ custo
       </header>
 
       {/* Add New Task Form */}
-      <form action={addItem} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6 flex gap-4 flex-wrap items-center">
+      <form action={addItem} className="glass-card p-6 mb-6 flex gap-4 flex-wrap items-center">
         <input type="hidden" name="listName" value={customListName} />
         <input
           type="text"
           name="newItem"
-          className="flex-1 min-w-[200px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+          className="tech-input flex-1 min-w-[200px]"
           placeholder={`Add a new task to ${customListName}...`}
           required
         />
-        <select name="priority" className="p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+        <select name="priority" className="tech-input cursor-pointer">
           <option value="high">🔥 High</option>
           <option value="medium" defaultValue="medium">⚡ Medium</option>
           <option value="low">🌱 Low</option>
         </select>
-        <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors flex items-center gap-2">
+        <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded-lg shadow-sm hover:bg-blue-600 transition-colors flex items-center gap-2 font-semibold">
           <i className="fa-solid fa-plus"></i> Add Task
         </button>
       </form>
@@ -153,7 +153,7 @@ export default async function TodoListPage({ params }: { params: Promise<{ custo
       <div className="space-y-4">
         {listItems && listItems.length > 0 ? (
           listItems.map((item: any) => (
-            <div key={item._id.toString()} className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-4 flex justify-between items-center transition-all hover:bg-gray-50 dark:hover:bg-gray-700/50 ${item.completed ? 'opacity-50' : ''}`}>
+            <div key={item._id.toString()} className={`glass-card p-4 flex justify-between items-center transition-all hover:bg-white/5 hover:neon-border-blue ${item.completed ? 'opacity-50' : ''}`}>
               <div className="flex items-center gap-4">
                 <form action={toggleItem} className="m-0 flex items-center">
                   <input type="hidden" name="itemId" value={item._id.toString()} />
@@ -185,7 +185,7 @@ export default async function TodoListPage({ params }: { params: Promise<{ custo
             </div>
           ))
         ) : (
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-10 text-center">
+          <div className="glass-card p-10 text-center">
             <i className="fa-solid fa-clipboard-check text-4xl text-gray-500 dark:text-gray-400 mb-4"></i>
             <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">No tasks found</h3>
             <p className="text-gray-500 dark:text-gray-400 mt-2">Add a task above to get started!</p>

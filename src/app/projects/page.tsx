@@ -41,9 +41,9 @@ export default async function ProjectsPage() {
 
   return (
     <main className="flex flex-col min-w-0 p-6 flex-1">
-      <header className=" bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg mb-6 border-l-4 border-blue-500">
+      <header className="glass-card p-6 mb-6 border-l-4 border-blue-500 neon-border-blue">
         <div>
-          <h1 className=" text-3xl font-bold text-gray-900 dark:text-gray-100">Projects Pipeline</h1>
+          <h1 className="text-3xl font-bold glow-text">Projects Blueprint</h1>
           <div className="date-badge mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
             <i className="fa-solid fa-folder-tree"></i> Project Management
           </div>
@@ -51,21 +51,21 @@ export default async function ProjectsPage() {
       </header>
 
       {/* Create Project Form */}
-      <form action={addProject} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6 flex gap-4 flex-wrap items-center">
+      <form action={addProject} className="glass-card p-6 mb-6 flex gap-4 flex-wrap items-center">
         <input
           type="text"
           name="name"
-          className="flex-1 min-w-[200px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+          className="tech-input flex-1 min-w-[200px]"
           placeholder="New Project Name..."
           required
         />
         <input
           type="text"
           name="description"
-          className="flex-1 min-w-[200px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+          className="tech-input flex-1 min-w-[200px]"
           placeholder="Description..."
         />
-        <select name="category" className="p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+        <select name="category" className="tech-input min-w-[150px] cursor-pointer">
           <option value="Internal">Internal</option>
           <option value="Client">Client</option>
           <option value="Product">Product</option>
@@ -80,10 +80,10 @@ export default async function ProjectsPage() {
       <div className="space-y-4">
         {projects && projects.length > 0 ? (
           projects.map((p: any) => (
-            <div key={p._id.toString()} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-4 transition-all hover:bg-gray-50 dark:bg-gray-700/50 flex flex-col gap-4">
+            <div key={p._id.toString()} className="glass-card p-4 flex flex-col gap-4">
               <div className="flex justify-between items-center w-full">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-500 shrink-0 neon-border-blue">
                     <i className="fa-solid fa-rocket"></i>
                   </div>
                   <div>
@@ -108,7 +108,7 @@ export default async function ProjectsPage() {
             </div>
           ))
         ) : (
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-10 text-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="glass-card p-10 text-center">
             <i className="fa-solid fa-folder-open text-4xl text-gray-500 dark:text-gray-400 mb-4"></i>
             <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">No projects found</h3>
             <p className="text-gray-500 dark:text-gray-400 mt-2">Create a new project pipeline above!</p>

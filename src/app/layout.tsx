@@ -4,6 +4,7 @@ import "./globals.css";
 import "./frappe-gantt.css";
 import Sidebar from "@/components/Sidebar";
 import Script from "next/script";
+import NextTopLoader from "nextjs-toploader";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-body" });
 const outfit = Outfit({ subsets: ["latin"], variable: "--font-heading" });
@@ -22,8 +23,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-        <Script id="theme-script" strategy="beforeInteractive">
-          {`
+        <script id="theme-script" dangerouslySetInnerHTML={{
+          __html: `
             try {
               const savedTheme = localStorage.getItem('taskflow_theme') || 'light';
               document.documentElement.setAttribute('data-theme', savedTheme);
@@ -33,14 +34,16 @@ export default function RootLayout({
                 document.documentElement.classList.remove('dark');
               }
             } catch (e) {}
-          `}
-        </Script>
+          `
+        }} />
       </head>
       <body className={`${inter.variable} ${outfit.variable} antialiased`}>
-
-        <div className="w-full max-w-full p-2 flex flex-col xl:grid xl:grid-cols-[260px_1fr] gap-6 flex-1 min-h-screen mx-auto">
+        <NextTopLoader color="#3b82f6" height={3} showSpinner={false} />
+        <div className="w-full max-w-[1920px] mx-auto flex flex-col xl:grid xl:grid-cols-[280px_1fr] gap-4 min-h-screen relative z-10">
           <Sidebar />
-          {children}
+          <div className="pt-4 pr-6 pb-4 w-full overflow-x-hidden">
+            {children}
+          </div>
         </div>
       </body>
     </html>

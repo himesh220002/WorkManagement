@@ -44,9 +44,9 @@ export default function DiagramsClient() {
 
   return (
     <main className="flex flex-col min-w-0 p-6 flex-1">
-      <header className=" bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg mb-6 border-l-4 border-cyan-500 flex justify-between items-center">
+      <header className="glass-card p-6 mb-6 border-l-4 border-cyan-500 dark:border-cyan-400 neon-border-blue flex justify-between items-center">
         <div>
-          <h1 className=" text-3xl font-bold text-gray-900 dark:text-gray-100">Logic Flow Diagrams</h1>
+          <h1 className="text-3xl font-bold glow-text">Logic Flow Diagrams</h1>
           <div className="date-badge mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
             <i className="fa-solid fa-project-diagram"></i> Architecture Visualization
           </div>
@@ -61,7 +61,8 @@ export default function DiagramsClient() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {pipelineCards.map(card => (
-            <div key={card.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 relative overflow-hidden">
+            <div key={card.id} className="glass-card p-5 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <div className="text-xs font-bold text-cyan-600 dark:text-cyan-400 mb-1 uppercase tracking-wider">{card.layer}</div>
@@ -105,7 +106,7 @@ export default function DiagramsClient() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-8 text-center mb-6 overflow-x-auto">
+      <div className="glass-card p-8 text-center mb-6 overflow-x-auto">
         <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">Work Management Lifecycle Workflow</h3>
         <p className="text-sm text-gray-500 mb-6 flex justify-center gap-4">
           <span><span className="mr-1">✅</span> Fully Implemented</span>
@@ -145,7 +146,7 @@ export default function DiagramsClient() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-8 text-center mb-6 overflow-x-auto">
+      <div className="glass-card p-8 text-center mb-6 overflow-x-auto">
         <h3 className="text-xl font-semibold mb-6 text-gray-900 dark:text-gray-100">Work Management Entity Data Model</h3>
         
         <div className="mermaid flex justify-center w-full min-w-[800px]">
@@ -214,7 +215,7 @@ export default function DiagramsClient() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-8 text-center mb-6 overflow-x-auto">
+      <div className="glass-card p-8 text-center mb-6 overflow-x-auto">
         <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">Full Dashboard Ecosystem Map (360° Lifecycle)</h3>
         <p className="text-sm text-gray-500 mb-6 flex justify-center gap-4">
           <span><span className="mr-1">✅</span> Fully Implemented</span>
@@ -291,7 +292,7 @@ export default function DiagramsClient() {
     class DevDash,RevDash,ResDash,CustInsights dash;`}
         </div>
       </div>
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-8 text-center mb-6 overflow-x-auto">
+      <div className="glass-card p-8 text-center mb-6 overflow-x-auto">
         <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">Perfect Execution of Project Step (Ecommerce Example)</h3>
         <p className="text-sm text-gray-500 mb-6 flex justify-center gap-4">
           Visualizing the flawless end-to-end flow from ideation to revenue generation.

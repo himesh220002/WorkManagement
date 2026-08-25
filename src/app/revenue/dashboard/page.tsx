@@ -38,6 +38,8 @@ export default async function RevenueDashboardPage() {
     expectedCloseDate: d.expectedCloseDate ? new Date(d.expectedCloseDate).toISOString() : null,
     status: d.status,
     metadata: d.metadata ? { ...d.metadata } : null,
+    projectId: d.projectId ? d.projectId.toString() : null,
+    pipelineId: d.pipelineId ? d.pipelineId.toString() : null,
   }));
 
   const cleanTargets = targets.map((t: any) => ({
@@ -46,6 +48,11 @@ export default async function RevenueDashboardPage() {
     achievedRevenueUSD: t.achievedRevenueUSD || 0,
     conversionRate: t.conversionRate || "0%",
     targetByRegion: t.targetByRegion || {},
+    industry: t.industry || null,
+    region: t.region || null,
+    expectedValue: t.expectedValue || 0,
+    actualValue: t.actualValue || 0,
+    goalId: t.goalId ? t.goalId.toString() : null,
   }));
 
   const cleanPipelines = pipelines.map((p: any) => ({

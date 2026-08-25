@@ -117,7 +117,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
         return `
           <div class="details-container">
             <h5 class="text-md font-bold mb-2">${task.name}</h5>
-            <p>Started on ${task._start.toLocaleDateString()}</p>
+            <p>Started on ${task._start.toLocaleDateString('en-US')}</p>
             <p>Progress: ${task.progress}%</p>
           </div>
         `;
@@ -235,9 +235,9 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
   return (
     <main className="flex flex-col min-w-0 p-4 md:p-8 flex-1 min-w-0 max-w-full overflow-hidden">
       {/* Page Header */}
-      <header className=" bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-xl shadow-xs mb-6 flex justify-between items-center border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <header className="glass-card p-6 mb-6 flex justify-between items-center neon-border-blue">
         <div>
-          <h1 className=" text-2xl font-bold text-gray-900 dark:text-gray-100">Parallel Pipeline Timeline</h1>
+          <h1 className="text-2xl font-bold glow-text">Parallel Pipeline Timeline</h1>
         </div>
         <div className="storage-tag px-3 py-1 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded-full text-xs font-semibold text-gray-600 dark:text-gray-300 flex items-center">
           <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block mr-2"></span>
@@ -246,7 +246,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
       </header>
 
       {/* Controls & Form Section */}
-      <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-xl shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 mb-8">
+      <section className="glass-card p-6 mb-8">
         {/* Controls Bar */}
         <div className="mb-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 pb-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex flex-wrap items-center gap-2">
@@ -256,8 +256,8 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
                 key={cat}
                 type="button"
                 className={`px-2 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${activeCategory === cat
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-slate-800'
+                  ? 'bg-blue-600/90 text-white shadow-lg shadow-blue-500/30 neon-border-blue'
+                  : 'bg-white/50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200/50 dark:border-gray-700/50 hover:bg-white/80 dark:hover:bg-gray-700/80'
                   }`}
                 onClick={() => setActiveCategory(cat)}
               >
@@ -272,7 +272,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
               <button
                 key={zoom.value}
                 type="button"
-                className={`px-2 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${dayZoom === zoom.value ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-blue-600 hover:text-white'}`}
+                className={`px-2 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${dayZoom === zoom.value ? 'bg-blue-600/90 text-white shadow-lg shadow-blue-500/30 neon-border-blue' : 'bg-white/50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200/50 dark:border-gray-700/50 hover:bg-white/80 dark:hover:bg-gray-700/80'}`}
                 onClick={() => changeViewMode(zoom.value)}
               >
                 {zoom.label}
@@ -306,21 +306,21 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
               <form action={addPipeline} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-inner">
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Pipeline Name *</label>
-                  <input type="text" name="name" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="e.g. Frontend Sprint Q3" required />
+                  <input type="text" name="name" className="tech-input" placeholder="e.g. Frontend Sprint Q3" required />
                 </div>
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Category</label>
-                  <select name="category" value={formCategory} onChange={(e) => setFormCategory(e.target.value)} className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
+                  <select name="category" value={formCategory} onChange={(e) => setFormCategory(e.target.value)} className="tech-input">
                     {categories.filter(c => c !== "All" && c !== "Company Pipeline").map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Owner (Text fallback)</label>
-                  <input type="text" name="owner" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="Person or Team" />
+                  <input type="text" name="owner" className="tech-input" placeholder="Person or Team" />
                 </div>
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Priority</label>
-                  <select name="priority" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
+                  <select name="priority" className="tech-input">
                     <option value="High">High</option>
                     <option value="Medium">Medium</option>
                     <option value="Low">Low</option>
@@ -329,19 +329,19 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
 
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Start Date *</label>
-                  <input type="date" name="startDate" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" required />
+                  <input type="date" name="startDate" className="tech-input" required />
                 </div>
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">End Date *</label>
-                  <input type="date" name="endDate" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" required />
+                  <input type="date" name="endDate" className="tech-input" required />
                 </div>
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Initial Progress (%)</label>
-                  <input type="number" name="progress" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" min="0" max="100" defaultValue="0" />
+                  <input type="number" name="progress" className="tech-input" min="0" max="100" defaultValue="0" />
                 </div>
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Risk Level</label>
-                  <select name="riskLevel" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
+                  <select name="riskLevel" className="tech-input">
                     <option value="Low">Low</option>
                     <option value="Medium">Medium</option>
                     <option value="High">High</option>
@@ -397,11 +397,11 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
 
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400 lg:col-span-2">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Objectives / Goals</label>
-                  <input type="text" name="objectives" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="What does this pipeline achieve?" />
+                  <input type="text" name="objectives" className="tech-input" placeholder="What does this pipeline achieve?" />
                 </div>
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400 lg:col-span-2">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">KPIs / Metrics</label>
-                  <input type="text" name="kpis" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="e.g. Latency < 200ms" />
+                  <input type="text" name="kpis" className="tech-input" placeholder="e.g. Latency < 200ms" />
                 </div>
 
                 <div className="lg:col-span-4 flex justify-end mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -416,7 +416,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
       </section>
 
       {/* Frappe Gantt Chart Section */}
-      <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-2 md:p-6 mb-8 overflow-hidden">
+      <section className="glass-card p-2 md:p-6 mb-8 overflow-hidden">
         <div className="w-full overflow-x-auto">
           <div ref={ganttWrapperRef} className="min-w-[800px]"></div>
         </div>

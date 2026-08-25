@@ -370,7 +370,7 @@ export default function RevenueDashboardClient({
                         {(deal.projectId || deal.pipelineId || deal.client?.name || deal.expectedCloseDate) && (
                           <div className="text-[10px] space-y-1 mt-2 pt-1.5 border-t border-gray-100 dark:border-gray-700">
                             {deal.client?.name && <div className="text-gray-600 dark:text-gray-400"><i className="fa-solid fa-building mr-1"></i> {deal.client.name}</div>}
-                            {deal.expectedCloseDate && <div className="text-emerald-600 dark:text-emerald-400"><i className="fa-regular fa-calendar mr-1"></i> {new Date(deal.expectedCloseDate).toLocaleDateString()}</div>}
+                            {deal.expectedCloseDate && <div className="text-emerald-600 dark:text-emerald-400"><i className="fa-regular fa-calendar mr-1"></i> {new Date(deal.expectedCloseDate).toLocaleDateString('en-US')}</div>}
                             {deal.projectId && <div className="text-blue-600 dark:text-blue-400"><i className="fa-solid fa-folder-tree mr-1"></i> {options?.projects.find(p => p.id === deal.projectId)?.name || 'Project'}</div>}
                             {deal.pipelineId && <div className="text-indigo-600 dark:text-indigo-400"><i className="fa-solid fa-layer-group mr-1"></i> {pipelines?.find(p => p._id === deal.pipelineId)?.name || 'Pipeline'}</div>}
                           </div>

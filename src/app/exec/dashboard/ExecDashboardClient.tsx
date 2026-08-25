@@ -92,9 +92,9 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
 
   return (
     <main className="flex flex-col min-w-0 p-6 flex-1">
-      <header className=" flex justify-between items-center mb-8">
+      <header className="glass-card p-6 mb-8 flex justify-between items-center neon-border-blue">
         <div>
-          <h1 className=" text-3xl font-bold text-gray-900 dark:text-gray-100">Strategic & Executive Dashboard</h1>
+          <h1 className="text-3xl font-bold glow-text">Strategic & Executive Dashboard</h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
             Consolidated view of finance, sales, HR, and operations KPIs.
           </p>
@@ -111,21 +111,21 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
           <h2 className="text-xl text-gray-900 dark:text-gray-100 font-semibold">Strategic Goals & OKRs</h2>
         </div>
         
-        <form action={addGoal} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-4 mb-6 flex gap-4 flex-wrap items-center">
+        <form action={addGoal} className="glass-card p-6 mb-6 flex gap-4 flex-wrap items-center">
           <input
             type="text"
             name="title"
-            className="flex-1 min-w-[200px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm"
+            className="tech-input flex-1 min-w-[200px]"
             placeholder="New Goal Title (e.g. Q3 Market Expansion)..."
             required
           />
           <input
             type="text"
             name="description"
-            className="flex-1 min-w-[200px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm"
+            className="tech-input flex-1 min-w-[200px]"
             placeholder="Key Result / Description..."
           />
-          <select name="category" className="p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm">
+          <select name="category" className="tech-input cursor-pointer min-w-[150px]">
             <option value="Company">Company</option>
             <option value="Department">Department</option>
             <option value="Team">Team</option>
@@ -143,18 +143,19 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
             if (goal.status === "Behind") color = "rose-500";
             
             return (
-              <div key={goal._id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm kpi-card p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 relative overflow-hidden flex flex-col h-full">
-                <div className="absolute top-0 right-0 p-2 text-xs font-semibold text-gray-400">{goal.category}</div>
+              <div key={goal._id} className="glass-card p-5 relative overflow-hidden flex flex-col h-full group hover:neon-border-emerald">
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+                <div className="absolute top-0 right-0 p-2 text-xs font-semibold text-gray-400 z-10">{goal.category}</div>
                 
                 {editingGoalId === goal._id ? (
                   <form action={async (formData) => {
                     await updateGoal(formData);
                     setEditingGoalId(null);
-                  }} className="flex flex-col gap-2 mt-4 z-10 relative bg-white dark:bg-gray-800">
+                  }} className="flex flex-col gap-2 mt-4 z-10 relative bg-white/50 dark:bg-gray-900/50 backdrop-blur-md p-3 rounded-lg border border-gray-200/50 dark:border-gray-700/50 shadow-inner">
                     <input type="hidden" name="goalId" value={goal._id} />
-                    <input type="text" name="title" defaultValue={goal.title} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-semibold" required />
-                    <input type="text" name="description" defaultValue={goal.description} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" />
-                    <select name="category" defaultValue={goal.category} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+                    <input type="text" name="title" defaultValue={goal.title} className="tech-input font-semibold" required />
+                    <input type="text" name="description" defaultValue={goal.description} className="tech-input" />
+                    <select name="category" defaultValue={goal.category} className="tech-input cursor-pointer">
                       <option value="Company">Company</option>
                       <option value="Department">Department</option>
                       <option value="Team">Team</option>
@@ -200,7 +201,7 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
       {/* Cross-Department Rollup Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Finance Rollup */}
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="glass-card p-5 group hover:neon-border-blue">
           <h3 className="text-md font-semibold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-gray-100 flex items-center gap-2">
             Finance & Revenue (MRR)
             <i className="fa-solid fa-circle-info text-gray-400 text-sm cursor-help" title="Projected Monthly Recurring Revenue based on Closed Won Deals"></i>
@@ -211,7 +212,7 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
         </div>
 
         {/* Sales Rollup */}
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="glass-card p-5 group hover:neon-border-emerald">
           <h3 className="text-md font-semibold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-gray-100 flex items-center gap-2">
             Sales Pipeline Conversion
             <i className="fa-solid fa-circle-info text-gray-400 text-sm cursor-help" title="Aggregate count of deals across the different pipeline stages"></i>
@@ -222,7 +223,7 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
         </div>
 
         {/* Dev/Engineering Rollup */}
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="glass-card p-5 group hover:neon-border-purple">
           <h3 className="text-md font-semibold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-gray-100 flex items-center gap-2">
             Engineering Velocity (Points)
             <i className="fa-solid fa-circle-info text-gray-400 text-sm cursor-help" title="Current distribution of task statuses across all development projects"></i>
@@ -233,7 +234,7 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
         </div>
 
         {/* HR/Ops Rollup */}
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="glass-card p-5 group hover:neon-border-blue">
           <h3 className="text-md font-semibold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-gray-100 flex items-center gap-2">
             Headcount & Capacity
             <i className="fa-solid fa-circle-info text-gray-400 text-sm cursor-help" title="Total registered users grouped by their assigned roles"></i>
@@ -243,7 +244,7 @@ export default function ExecDashboardClient({ cleanPipelines, goals = [], chartD
           </div>
         </div>
       </div>
-      <div className="mt-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6">
+      <div className="glass-card p-6 mb-6 mt-8">
         <h3 className="text-lg font-bold mb-6 text-gray-900 dark:text-gray-100 flex items-center gap-2">
           <i className="fa-solid fa-layer-group text-blue-600"></i> Global Strategic Pipelines
         </h3>

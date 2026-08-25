@@ -74,9 +74,9 @@ export default function ResourceDashboardClient({
 
   return (
     <main className="flex flex-col min-w-0 p-6 flex-1">
-      <header className=" bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 rounded-lg mb-6 border-l-4 border-indigo-500 flex justify-between items-center">
+      <header className="glass-card p-6 mb-6 border-l-4 border-indigo-500 flex justify-between items-center neon-border-purple">
         <div>
-          <h1 className=" text-3xl font-bold text-gray-900 dark:text-gray-100">Resource Management</h1>
+          <h1 className="text-3xl font-bold glow-text-purple">Resource Management</h1>
           <div className="date-badge mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
             <i className="fa-solid fa-scale-balanced"></i> Allocations, Budgets & Risks
           </div>
@@ -88,62 +88,62 @@ export default function ResourceDashboardClient({
       </header>
 
       {/* Data Entry Form */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 mb-6">
+      <div className="glass-card p-5 mb-6">
         <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Allocate Resource</h4>
         <form action={addResourceAllocation} className="flex gap-3 flex-wrap items-center">
-          <input type="text" name="name" className="flex-1 min-w-[150px] p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Resource Name (e.g. Q4 Cloud Budget)" required />
-          <select name="type" className="w-32 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+          <input type="text" name="name" className="tech-input flex-1 min-w-[150px]" placeholder="Resource Name (e.g. Q4 Cloud Budget)" required />
+          <select name="type" className="tech-input w-32 cursor-pointer">
             <option value="Budget">Budget</option>
             <option value="Headcount">Headcount</option>
             <option value="Infrastructure">Infrastructure</option>
           </select>
-          <input type="number" name="totalAllocated" className="w-28 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Allocated" required />
-          <input type="number" name="totalUsed" className="w-28 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Used" required />
+          <input type="number" name="totalAllocated" className="tech-input w-28" placeholder="Allocated" required />
+          <input type="number" name="totalUsed" className="tech-input w-28" placeholder="Used" required />
           
-          <select name="riskLevel" className="w-32 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+          <select name="riskLevel" className="tech-input w-32 cursor-pointer">
             <option value="Low">Risk: Low</option>
             <option value="Medium">Risk: Medium</option>
             <option value="High">Risk: High</option>
           </select>
-          <select name="assignedToProjectId" className="w-40 p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+          <select name="assignedToProjectId" className="tech-input w-40 cursor-pointer">
             <option value="">Unassigned</option>
             {projects.map((p) => (
               <option key={p._id} value={p._id}>{p.name}</option>
             ))}
           </select>
-          <button type="submit" className="px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition-colors">Allocate</button>
+          <button type="submit" className="px-4 py-2 bg-indigo-500 text-white rounded-lg shadow-sm hover:bg-indigo-600 transition-colors font-semibold">Allocate</button>
         </form>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Total Budget Allocated</h4>
-          <h2 className="text-3xl font-bold text-blue-500">${totalBudgetAllocated.toLocaleString()}</h2>
+        <div className="glass-card p-5 text-center transition-all hover:neon-border-blue group">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-semibold">Total Budget Allocated</h4>
+          <h2 className="text-3xl font-bold text-blue-500 group-hover:scale-110 transition-transform">${totalBudgetAllocated.toLocaleString()}</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Total Budget Used</h4>
-          <h2 className="text-3xl font-bold text-amber-500">${totalBudgetUsed.toLocaleString()}</h2>
+        <div className="glass-card p-5 text-center transition-all hover:neon-border-amber group">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-semibold">Total Budget Used</h4>
+          <h2 className="text-3xl font-bold text-amber-500 group-hover:scale-110 transition-transform">${totalBudgetUsed.toLocaleString()}</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Headcount Allocated</h4>
-          <h2 className="text-3xl font-bold text-indigo-500">{totalHeadcountAllocated}</h2>
+        <div className="glass-card p-5 text-center transition-all hover:neon-border-indigo group">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-semibold">Headcount Allocated</h4>
+          <h2 className="text-3xl font-bold text-indigo-500 group-hover:scale-110 transition-transform">{totalHeadcountAllocated}</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm">Headcount Active</h4>
-          <h2 className="text-3xl font-bold text-emerald-500">{totalHeadcountUsed}</h2>
+        <div className="glass-card p-5 text-center transition-all hover:neon-border-emerald group">
+          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-semibold">Headcount Active</h4>
+          <h2 className="text-3xl font-bold text-emerald-500 group-hover:scale-110 transition-transform">{totalHeadcountUsed}</h2>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 md:col-span-2">
+        <div className="glass-card p-5 md:col-span-2 hover:neon-border-blue transition-all">
           <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Budget Utilization Tracking ($)</h3>
           <div className="h-72">
             <Bar data={budgetChartData} options={{ responsive: true, maintainAspectRatio: false }} />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5">
+        <div className="glass-card p-5 hover:neon-border-purple transition-all">
           <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Headcount Deployment</h3>
           <div className="h-72">
             <Doughnut data={headcountChartData} options={{ responsive: true, maintainAspectRatio: false }} />
@@ -151,7 +151,7 @@ export default function ResourceDashboardClient({
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5">
+      <div className="glass-card p-5 hover:neon-border-emerald transition-all">
         <h3 className="text-md font-semibold mb-4 text-gray-900 dark:text-gray-100">Resource Allocation Matrix</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -170,7 +170,7 @@ export default function ResourceDashboardClient({
               {resources.length > 0 ? resources.map((r, i) => {
                 const burnRate = r.totalAllocated > 0 ? Math.round((r.totalUsed / r.totalAllocated) * 100) : 0;
                 return (
-                  <tr key={i} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:bg-gray-700/50">
+                  <tr key={i} className="border-b border-gray-200/50 dark:border-gray-700/50 hover:bg-white/5 transition-colors">
                     <td className="p-3 text-sm font-medium text-gray-900 dark:text-gray-100">{r.name}</td>
                     <td className="p-3 text-sm text-gray-600 dark:text-gray-400">
                       <span className={`px-2 py-1 rounded text-xs font-semibold ${

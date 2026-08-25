@@ -192,7 +192,7 @@ export const Pipeline = mongoose.model("Pipeline", pipelineSchema);
 // --- Resource Allocation Schema ---
 const resourceAllocationSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  type: { type: String, enum: ["Budget", "Headcount", "Infrastructure", "Human"], default: "Budget" },
+  type: { type: String, enum: ["Budget", "Headcount", "Infrastructure", "Human", "Manpower", "Tools"], default: "Budget" },
   totalAllocated: { type: Number, default: 0 },
   totalUsed: { type: Number, default: 0 },
   assignedToProjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },

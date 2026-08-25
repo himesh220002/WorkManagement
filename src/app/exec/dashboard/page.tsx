@@ -108,9 +108,9 @@ export default async function ExecDashboard() {
     // 1. Sales Pipeline
     const salesMetrics = {
       leads: leads.length,
-      qualified: leads.filter((l: any) => l.status === "Qualified" || l.status === "Converted").length,
-      proposal: deals.filter((d: any) => d.stage === "Proposal" || d.stage === "Negotiation").length,
-      closedWon: deals.filter((d: any) => d.stage === "Closed Won").length,
+      qualified: leads.filter((l: any) => l.status === "Qualified" || l.status === "Working").length,
+      proposal: deals.filter((d: any) => ["Initial Analysis", "Due Diligence", "Closing", "Signing & Closing"].includes(d.stage)).length,
+      closedWon: deals.filter((d: any) => d.stage === "Closed" || d.stage === "Integration").length,
     };
 
     // 2. Engineering Tasks
@@ -123,14 +123,14 @@ export default async function ExecDashboard() {
 
     // 3. Headcount
     const hrMetrics = {
-      engineering: users.filter((u: any) => u.role === "Developer" || u.role === "Engineer").length,
-      sales: users.filter((u: any) => u.role === "Sales").length,
-      operations: users.filter((u: any) => u.role === "Manager" || u.role === "Operations").length,
-      other: users.filter((u: any) => u.role !== "Developer" && u.role !== "Engineer" && u.role !== "Sales" && u.role !== "Manager" && u.role !== "Operations").length,
+      engineering: users.filter((u: any) => ["Developer", "Engineer", "Lead Engineer"].includes(u.role)).length,
+      sales: users.filter((u: any) => ["Sales", "Sales Executive"].includes(u.role)).length,
+      operations: users.filter((u: any) => ["Manager", "Operations", "Product Manager"].includes(u.role)).length,
+      other: users.filter((u: any) => !["Developer", "Engineer", "Lead Engineer", "Sales", "Sales Executive", "Manager", "Operations", "Product Manager"].includes(u.role)).length,
     };
 
     // 4. Finance MRR Projection
-    const closedWonRevenue = deals.filter((d: any) => d.stage === "Closed Won").reduce((sum, d) => sum + (d.amount || 0), 0);
+    const closedWonRevenue = deals.filter((d: any) => d.stage === "Closed" || d.stage === "Integration").reduce((sum, d) => sum + (d.amount || 0), 0);
     const mrrMetrics = [
       closedWonRevenue * 0.4,
       closedWonRevenue * 0.55,

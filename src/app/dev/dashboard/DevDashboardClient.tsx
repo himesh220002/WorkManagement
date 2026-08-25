@@ -85,18 +85,18 @@ export default function DevDashboardClient({
   const statusData = {
     labels: ["Tasks"],
     datasets: [
-      { label: "Open", data: [chartData.status[0]], backgroundColor: "#94a3b8" },
+      { label: "Todo", data: [chartData.status[0]], backgroundColor: "#94a3b8" },
       { label: "In Progress", data: [chartData.status[1]], backgroundColor: "#3b82f6" },
       { label: "Code Review", data: [chartData.status[2]], backgroundColor: "#8b5cf6" },
-      { label: "Validated", data: [chartData.status[3]], backgroundColor: "#10b981" },
+      { label: "Done", data: [chartData.status[3]], backgroundColor: "#10b981" },
     ],
   };
 
   return (
     <main className="p-4 md:p-6 flex-1 flex flex-col min-w-0">
-      <header className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6 flex justify-between items-center">
+      <header className="glass-card p-6 mb-6 flex justify-between items-center neon-border-blue">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Development Workflow</h1>
+          <h1 className="text-2xl font-bold glow-text">Development Workflow</h1>
           <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
             <i className="fa-regular fa-calendar-alt"></i>
             {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
@@ -114,7 +114,7 @@ export default function DevDashboardClient({
         </label>
         <select
           id="projectFilter"
-          className="w-72 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-xs"
+          className="tech-input w-72 cursor-pointer"
           value={selectedProjectId}
           onChange={handleProjectFilter}
         >
@@ -128,28 +128,28 @@ export default function DevDashboardClient({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+        <div className="glass-card p-5 text-center relative group">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium flex justify-center items-center gap-1">
             Total Tasks
             <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Total number of tasks associated with the selected project context"></i>
           </h4>
           <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 m-0">{tasks.length}</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+        <div className="glass-card p-5 text-center relative group">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium flex justify-center items-center gap-1">
             Avg Cycle Time
             <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Average duration of all sprints/cycles in days based on start and end dates"></i>
           </h4>
           <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 m-0">{avgCycleTime} Days</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+        <div className="glass-card p-5 text-center relative group">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium flex justify-center items-center gap-1">
             Global Pipeline Progress
             <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Average progress percentage across all active development pipelines"></i>
           </h4>
           <h2 className="text-3xl font-bold text-blue-600 m-0">{avgPipelineProgress}%</h2>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 text-center relative group">
+        <div className="glass-card p-5 text-center relative group">
           <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium flex justify-center items-center gap-1">
             Billable Hours
             <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Sum of actual hours logged (or calculated from task completion dates)"></i>
@@ -159,7 +159,7 @@ export default function DevDashboardClient({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 md:col-span-2">
+        <div className="glass-card p-5 md:col-span-2">
           <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100 flex items-center gap-2">
             Estimated vs Actual Work Hours
             <i className="fa-solid fa-circle-info text-gray-400 text-sm cursor-help" title="Actual hours are directly entered or fall back to calculating the difference between task completion and start dates"></i>
@@ -169,7 +169,7 @@ export default function DevDashboardClient({
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5">
+        <div className="glass-card p-5">
           <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100">Task Distribution by Severity</h3>
           <div className="h-64">
             <Doughnut
@@ -185,7 +185,7 @@ export default function DevDashboardClient({
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 mb-6">
+      <div className="glass-card p-5 mb-6">
         <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100">Incomplete Tasks by Status</h3>
         <div className="h-40">
           <Bar
@@ -202,7 +202,7 @@ export default function DevDashboardClient({
 
       {/* Data Entry Forms */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6">
+        <div className="glass-card p-6">
           <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <i className="fa-solid fa-list-check text-blue-600"></i> Add Task
           </h3>
@@ -227,10 +227,10 @@ export default function DevDashboardClient({
             </div>
             <div className="flex gap-3">
               <select name="status" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm cursor-pointer">
-                <option value="open">Open</option>
-                <option value="in_progress">In Progress</option>
-                <option value="review">Code Review</option>
-                <option value="completed">Completed</option>
+                <option value="Todo">Todo</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Code Review">Code Review</option>
+                <option value="Done">Done</option>
               </select>
               <select name="severity" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm cursor-pointer">
                 <option value="low">Low</option>
@@ -249,7 +249,7 @@ export default function DevDashboardClient({
           </form>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6">
+        <div className="glass-card p-6">
           <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <i className="fa-solid fa-rotate text-emerald-600"></i> Add Sprint/Cycle
           </h3>
@@ -275,7 +275,7 @@ export default function DevDashboardClient({
 
       <EditableTaskList tasks={tasks} pipelines={pipelines} cycles={cycles} />
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6">
+      <div className="glass-card p-6 mb-6">
         <h3 className="text-lg font-bold mb-6 text-gray-900 dark:text-gray-100 flex items-center gap-2">
           <i className="fa-solid fa-layer-group text-blue-600"></i> Active Development Pipelines
         </h3>

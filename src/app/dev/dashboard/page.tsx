@@ -70,7 +70,7 @@ export default async function DevDashboardPage(
   // Calculate dynamic metrics
   let totalHours = 0;
   let severityCounts = { critical: 0, high: 0, medium: 0, low: 0 };
-  let statusCounts = { open: 0, in_progress: 0, review: 0, completed: 0 };
+  let statusCounts = { todo: 0, inProgress: 0, codeReview: 0, done: 0 };
   let moduleHours: Record<string, { estimated: number, actual: number }> = {};
 
   tasks.forEach((t: any) => {
@@ -100,10 +100,10 @@ export default async function DevDashboardPage(
       severityCounts.medium += 1;
     }
 
-    if (t.status === 'completed') statusCounts.completed += 1;
-    else if (t.status === 'review') statusCounts.review += 1;
-    else if (t.status === 'in_progress') statusCounts.in_progress += 1;
-    else statusCounts.open += 1;
+    if (t.status === 'Done' || t.status === 'Archived') statusCounts.done += 1;
+    else if (t.status === 'Code Review') statusCounts.codeReview += 1;
+    else if (t.status === 'In Progress' || t.status === 'Blocked') statusCounts.inProgress += 1;
+    else statusCounts.todo += 1;
   });
 
   const modules = Object.keys(moduleHours);
@@ -112,7 +112,7 @@ export default async function DevDashboardPage(
 
   const chartData = {
     severity: [severityCounts.critical, severityCounts.high, severityCounts.medium, severityCounts.low],
-    status: [statusCounts.open, statusCounts.in_progress, statusCounts.review, statusCounts.completed],
+    status: [statusCounts.todo, statusCounts.inProgress, statusCounts.codeReview, statusCounts.done],
     totalHours,
     modules,
     estimatedHoursData,
