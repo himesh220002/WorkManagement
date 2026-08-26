@@ -42,8 +42,8 @@ export default function GlobalMemberDirectory({ users }: { users: any[] }) {
             </div>
             {(u.joinedDate || u.leftDate) && (
               <div className="text-xs text-gray-500 flex flex-col mt-2">
-                {u.joinedDate && <span>Joined: {new Date(u.joinedDate).toLocaleDateString()}</span>}
-                {u.leftDate && <span>Left: {new Date(u.leftDate).toLocaleDateString()}</span>}
+                {u.joinedDate && <span>Joined: {new Date(u.joinedDate).toLocaleDateString('en-US')}</span>}
+                {u.leftDate && <span>Left: {new Date(u.leftDate).toLocaleDateString('en-US')}</span>}
               </div>
             )}
             {u.details && <div className="text-sm text-gray-600 dark:text-gray-300 italic mt-1 line-clamp-2">{u.details}</div>}
