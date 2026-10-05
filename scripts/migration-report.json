@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-10-05T17:43:59.960Z",
+  "isDryRun": false,
+  "companyCreated": true,
+  "companyId": "6ac3e1e0eca9dd0b973d23ca",
+  "projectsUpdated": 0,
+  "teamsUpdated": 0,
+  "usersUpdated": 0,
+  "tasksUpdated": 3,
+  "pipelinesUpdated": 2,
+  "dealsUpdated": 2,
+  "leadsUpdated": 6,
+  "goalsUpdated": 0,
+  "targetsUpdated": 0,
+  "createdUnverifiedUsers": [],
+  "normalizedTaskStatuses": 0,
+  "errors": []
+}

@@ -336,6 +336,7 @@ export async function updateTargetChecklist(formData: FormData) {
   if (targetId && taskName) {
     const target = await Target.findById(targetId);
     if (target) {
+      if (!target.checklist) target.checklist = [];
       target.checklist.push({ name: taskName, isCompleted: false });
       await target.save();
     }

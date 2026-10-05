@@ -38,8 +38,8 @@ async function addTeamMember(formData: FormData) {
   const rank = formData.get("rank") as string;
 
   if (teamId && name && role) {
-    const newUser = await User.create({ name, role, position, rank });
-    await Team.findByIdAndUpdate(teamId, { $push: { members: newUser._id } });
+    const newUser = (await User.create({ name, role, position, rank })) as any;
+    await Team.findByIdAndUpdate(teamId, { $push: { members: newUser._id } } as any);
     revalidatePath("/teams");
   }
 }
@@ -51,7 +51,7 @@ async function removeTeamMember(formData: FormData) {
   const userId = formData.get("userId") as string;
 
   if (teamId && userId) {
-    await Team.findByIdAndUpdate(teamId, { $pull: { members: userId } });
+    await Team.findByIdAndUpdate(teamId, { $pull: { members: userId } } as any);
     // We NO LONGER delete the user, just unlink them from the team
     revalidatePath("/teams");
   }

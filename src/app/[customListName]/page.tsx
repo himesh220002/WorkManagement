@@ -88,7 +88,7 @@ export default async function TodoListPage({ params }: { params: Promise<{ custo
   const customListName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
   await connectToDatabase();
 
-  let listItems = [];
+  let listItems: any[] = [];
 
   try {
     if (customListName === "Today") {

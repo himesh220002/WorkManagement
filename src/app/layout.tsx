@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
-import { Inter, Outfit } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import "./frappe-gantt.css";
 import Sidebar from "@/components/Sidebar";
-import Script from "next/script";
+import { TopBar, Breadcrumbs } from "@/components/shell";
+import { ToastProvider } from "@/components/ui/Toast";
 import NextTopLoader from "nextjs-toploader";
+import Script from "next/script";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-body" });
-const outfit = Outfit({ subsets: ["latin"], variable: "--font-heading" });
 
 export const metadata: Metadata = {
   title: "TaskFlow PM - Enterprise Dashboard",
-  description: "Advanced Task & Resource Management Suite",
+  description: "Advanced Enterprise Task, Project & Resource Management Suite",
 };
 
 export default function RootLayout({
@@ -22,9 +23,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-        <script id="theme-script" dangerouslySetInnerHTML={{
-          __html: `
+        <Script
+          id="theme-script"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
             try {
               const savedTheme = localStorage.getItem('taskflow_theme') || 'light';
               document.documentElement.setAttribute('data-theme', savedTheme);
@@ -34,17 +37,22 @@ export default function RootLayout({
                 document.documentElement.classList.remove('dark');
               }
             } catch (e) {}
-          `
-        }} />
+          `,
+          }}
+        />
       </head>
-      <body className={`${inter.variable} ${outfit.variable} antialiased`}>
-        <NextTopLoader color="#3b82f6" height={3} showSpinner={false} />
-        <div className="w-full max-w-[1920px] mx-auto flex flex-col xl:grid xl:grid-cols-[280px_1fr] gap-4 min-h-screen relative z-10">
-          <Sidebar />
-          <div className="pt-4 pr-6 pb-4 w-full overflow-x-hidden">
-            {children}
+      <body className={`${inter.variable} antialiased min-h-screen flex flex-col bg-[#FAF9F8] dark:bg-[#1B1A19]`}>
+        <NextTopLoader color="#0078D4" height={2} showSpinner={false} />
+        <ToastProvider>
+          <TopBar />
+          <div className="flex-1 flex flex-col xl:flex-row w-full max-w-[1920px] mx-auto min-h-[calc(100vh-48px)]">
+            <Sidebar />
+            <main className="flex-1 min-w-0 p-6 overflow-x-hidden">
+              <Breadcrumbs />
+              {children}
+            </main>
           </div>
-        </div>
+        </ToastProvider>
       </body>
     </html>
   );

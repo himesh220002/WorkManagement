@@ -1,0 +1,69 @@
+:root {
+  /* Fluent 2 Brand Tokens */
+  --color-brand-primary: #0078D4;
+  --color-brand-hover: #106EBE;
+  --color-brand-pressed: #005A9E;
+  --color-brand-subtle: #EBF3FC;
+
+  /* Fluent 2 Neutral Light Tokens */
+  --color-neutral-bg: #FFFFFF;
+  --color-neutral-bg-alt: #FAF9F8;
+  --color-neutral-bg-subtle: #F3F2F1;
+  --color-neutral-border: #E1DFDD;
+  --color-neutral-text-primary: #242424;
+  --color-neutral-text-secondary: #605E5C;
+  --color-neutral-text-disabled: #A19F9D;
+
+  /* Fluent 2 Semantic Tokens */
+  --color-status-success: #107C10;
+  --color-status-success-bg: #DFF6DD;
+  --color-status-warning: #F7630C;
+  --color-status-warning-bg: #FDE7D9;
+  --color-status-caution: #FFB900;
+  --color-status-caution-bg: #FFF4CE;
+  --color-status-danger: #D13438;
+  --color-status-danger-bg: #FDE7E9;
+  --color-status-info: #0078D4;
+  --color-status-info-bg: #EBF3FC;
+
+  /* Fluent 2 Radii */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+
+  /* Fluent 2 Elevations */
+  --elevation-2: 0 1px 2px rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.12);
+  --elevation-4: 0 2px 4px rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.12);
+  --elevation-8: 0 4px 8px rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.12);
+  --elevation-16: 0 8px 16px rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.12);
+
+  /* Typography Ramp */
+  --font-family-fluent: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
+}
+
+[data-theme="dark"],
+.dark {
+  --color-brand-primary: #2886DE;
+  --color-brand-hover: #479EF5;
+  --color-brand-pressed: #1B6CC7;
+  --color-brand-subtle: #1C2B3D;
+
+  --color-neutral-bg: #1B1A19;
+  --color-neutral-bg-alt: #201F1E;
+  --color-neutral-bg-subtle: #292827;
+  --color-neutral-border: #3B3A39;
+  --color-neutral-text-primary: #FFFFFF;
+  --color-neutral-text-secondary: #C8C6C4;
+  --color-neutral-text-disabled: #797775;
+
+  --color-status-success-bg: #0F3818;
+  --color-status-warning-bg: #4A2209;
+  --color-status-caution-bg: #4A3E09;
+  --color-status-danger-bg: #44171A;
+  --color-status-info-bg: #1C2B3D;
+
+  --elevation-2: 0 1px 2px rgba(0, 0, 0, 0.28), 0 0 2px rgba(0, 0, 0, 0.24);
+  --elevation-4: 0 2px 4px rgba(0, 0, 0, 0.28), 0 0 2px rgba(0, 0, 0, 0.24);
+  --elevation-8: 0 4px 8px rgba(0, 0, 0, 0.28), 0 0 2px rgba(0, 0, 0, 0.24);
+  --elevation-16: 0 8px 16px rgba(0, 0, 0, 0.28), 0 0 2px rgba(0, 0, 0, 0.24);
+}

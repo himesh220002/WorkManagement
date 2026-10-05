@@ -70,6 +70,15 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
 
     let sourceTasks = activeCategory === "Company Pipeline" ? projectMetrics : filteredTasks;
 
+    const validIdMap = new Map<string, string>();
+    sourceTasks.forEach((st: any) => {
+      const idStr = String(st._id);
+      validIdMap.set(idStr, idStr);
+      if (st.name) {
+        validIdMap.set(st.name.trim().toLowerCase(), idStr);
+      }
+    });
+
     let ganttTasks = sourceTasks.map((t) => {
       let start = t.startDate ? new Date(t.startDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
       let end = t.endDate
@@ -79,13 +88,27 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
       const progress = t.progress || 0;
       initialValues[t._id] = { start, end, progress };
 
+      let rawDeps: string[] = [];
+      if (Array.isArray(t.dependencies)) {
+        rawDeps = t.dependencies.filter(Boolean).map(String);
+      } else if (typeof t.dependencies === "string" && t.dependencies.trim()) {
+        rawDeps = t.dependencies.split(",").map((d: string) => d.trim()).filter(Boolean);
+      }
+
+      // Map dependencies to valid task IDs present in sourceTasks to ensure Frappe Gantt renders correctly
+      const validDeps = rawDeps
+        .map((dep) => validIdMap.get(dep) || validIdMap.get(dep.toLowerCase()))
+        .filter((depId): depId is string => Boolean(depId && depId !== String(t._id)));
+
+      const dependenciesStr = Array.from(new Set(validDeps)).join(",");
+
       return {
-        id: t._id,
+        id: String(t._id),
         name: t.name,
         start: start,
         end: end,
         progress: progress,
-        dependencies: t.dependencies && t.dependencies.length > 0 ? t.dependencies.join(",") : "",
+        dependencies: dependenciesStr,
         custom_class: "custom-gantt-bar",
       } as any;
     });
@@ -197,7 +220,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
         ganttWrapperRef.current.innerHTML = "";
       }
     };
-  }, [filteredTasks]);
+  }, [filteredTasks, activeCategory, projectMetrics]);
 
   const changeViewMode = (mode: string) => {
     if (ganttInstance.current) {
@@ -233,20 +256,21 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
     class Dev,Sales,Fin highlight;`;
 
   return (
-    <main className="flex flex-col min-w-0 p-4 md:p-8 flex-1 min-w-0 max-w-full overflow-hidden">
+    <main className="flex flex-col min-w-0 p-4 md:p-8 flex-1 max-w-7xl mx-auto w-full">
       {/* Page Header */}
-      <header className="glass-card p-6 mb-6 flex justify-between items-center neon-border-blue">
+      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold glow-text">Parallel Pipeline Timeline</h1>
+          <h1 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">Parallel Pipeline Timeline</h1>
+          <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">Interactive Gantt chart, dependency tracking, and modular pipeline cards.</p>
         </div>
-        <div className="storage-tag px-3 py-1 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded-full text-xs font-semibold text-gray-600 dark:text-gray-300 flex items-center">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block mr-2"></span>
-          Active
+        <div className="px-3 py-1 bg-[#DFF6DD] text-[#107C10] dark:bg-[#0F3818] dark:text-[#54B054] rounded-full text-xs font-semibold flex items-center">
+          <span className="w-2 h-2 rounded-full bg-[#107C10] inline-block mr-2"></span>
+          Active Telemetry
         </div>
       </header>
 
       {/* Controls & Form Section */}
-      <section className="glass-card p-6 mb-8">
+      <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
         {/* Controls Bar */}
         <div className="mb-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 pb-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex flex-wrap items-center gap-2">
@@ -416,7 +440,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
       </section>
 
       {/* Frappe Gantt Chart Section */}
-      <section className="glass-card p-2 md:p-6 mb-8 overflow-hidden">
+      <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 md:p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)] overflow-hidden">
         <div className="w-full overflow-x-auto">
           <div ref={ganttWrapperRef} className="min-w-[800px]"></div>
         </div>

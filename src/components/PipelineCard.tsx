@@ -1,32 +1,73 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { addPipelineTodo, togglePipelineTodo, deletePipelineTodo, reorderPipelineTodos, deletePipeline, getAssigneeOptions } from "@/actions";
+import {
+  addPipelineTodo,
+  togglePipelineTodo,
+  deletePipelineTodo,
+  reorderPipelineTodos,
+  deletePipeline,
+  getAssigneeOptions,
+} from "@/actions";
 import { PREDEFINED_PIPELINE_TASKS } from "@/utils/taskConstants";
+import { StatusBadge, Badge } from "@/components/ui/Badge";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import {
+  Maximize2,
+  X,
+  CheckSquare,
+  Clock,
+  User,
+  FolderKanban,
+  Users,
+  Target,
+  DollarSign,
+  TrendingUp,
+  Link as LinkIcon,
+  Trash2,
+  Plus,
+  ArrowUpDown,
+  Calendar,
+  AlertTriangle,
+} from "lucide-react";
 
 export default function PipelineCard({ pipeline }: { pipeline: any }) {
   const [todos, setTodos] = useState(pipeline.todos || []);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isReorderMode, setIsReorderMode] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  
-  const [users, setUsers] = useState<{id: string, name: string}[]>([]);
-  const [teams, setTeams] = useState<{id: string, name: string}[]>([]);
+
+  const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
+  const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
   const [selectedAssigneeType, setSelectedAssigneeType] = useState("Individual");
 
   useEffect(() => {
     setTodos(pipeline.todos || []);
   }, [pipeline.todos]);
-  
+
   useEffect(() => {
-    getAssigneeOptions().then(res => {
-      setUsers(res.users || []);
-      setTeams(res.teams || []);
-    }).catch(console.error);
+    getAssigneeOptions()
+      .then((res) => {
+        setUsers(res.users || []);
+        setTeams(res.teams || []);
+      })
+      .catch(console.error);
   }, []);
+
+  // Keyboard shortcut to close modal on Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isModalOpen) {
+        setIsModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isModalOpen]);
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
-    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.effectAllowed = "move";
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
@@ -46,267 +87,498 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
     await reorderPipelineTodos(pipeline._id, todos);
   };
 
+  const completedTodos = todos.filter((t: any) => t.completed).length;
+  const totalTodos = todos.length;
+
   return (
-    <div className="p-6 rounded-2xl shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex flex-col justify-start hover:shadow-md transition-all duration-200">
-      <div>
-        {/* Header */}
-        <div className="p-4 flex justify-between items-start mb-3 gap-2">
-          <h4 className="text-base font-bold text-gray-900 dark:text-gray-100 leading-snug">{pipeline.name}</h4>
-          <div className="flex items-center gap-2">
-            <span className={`px-2.5 py-0.5 text-[11px] rounded-full font-bold whitespace-nowrap ${pipeline.priority === 'High' ? 'bg-red-500/10 text-red-600 border border-red-500/20' :
-              pipeline.priority === 'Medium' ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' :
-                'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-              }`}>
-              {pipeline.priority}
-            </span>
-            <form action={deletePipeline} className="m-0 flex" onSubmit={(e) => { if (!window.confirm("Are you sure you want to delete this pipeline?")) e.preventDefault(); }}>
-              <input type="hidden" name="pipelineId" value={pipeline._id.toString()} />
-              <button type="submit" className="text-gray-400 hover:text-red-500 transition-colors p-1 cursor-pointer" title="Delete Pipeline">
-                <i className="fa-solid fa-trash-can"></i>
-              </button>
-            </form>
-          </div>
-        </div>
-
-        {/* Tags */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          <span className="px-2.5 py-0.5 text-[10px] rounded-md font-semibold uppercase tracking-wider bg-blue-500/10 text-blue-600 border border-blue-500/20">
-            {pipeline.category}
-          </span>
-          <span className="px-2.5 py-0.5 text-[10px] rounded-md font-semibold uppercase tracking-wider bg-gray-500/10 text-gray-600 dark:text-gray-300 border border-gray-500/20">
-            {pipeline.status}
-          </span>
-        </div>
-
-        {/* Metadata */}
-        <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1.5 mb-4">
-          {(pipeline.projectId || pipeline.teamId) && (
-            <div className="flex flex-col gap-1.5 mb-3 bg-gray-50 dark:bg-gray-700/30 p-2.5 rounded-md border border-gray-100 dark:border-gray-700">
-              {pipeline.projectId && (
-                <div className="flex items-center gap-2" title={`Project: ${pipeline.projectId.name}`}>
-                  <i className="fa-solid fa-folder-tree text-blue-500 w-3"></i>
-                  <span className="font-bold text-gray-700 dark:text-gray-300 truncate">{pipeline.projectId.name}</span>
-                </div>
-              )}
-              {pipeline.teamId && (
-                <div className="flex items-center gap-2" title={`Team: ${pipeline.teamId.name}`}>
-                  <i className="fa-solid fa-users-gear text-indigo-500 w-3"></i>
-                  <span className="font-medium text-gray-600 dark:text-gray-400 truncate">{pipeline.teamId.name}</span>
-                </div>
-              )}
-            </div>
-          )}
-          <div className="flex justify-between items-center"><span className="font-semibold text-gray-600 dark:text-gray-300">Owner:</span> <span>{pipeline.owner || 'Unassigned'}</span></div>
-          <div className="flex justify-between items-center"><span className="font-semibold text-gray-600 dark:text-gray-300">Timeline:</span> <span>{pipeline.startDate ? pipeline.startDate.split('T')[0] : 'TBD'} to {pipeline.endDate ? pipeline.endDate.split('T')[0] : 'TBD'}</span></div>
-          {pipeline.objectives && (
-            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-              <span className="font-semibold text-gray-600 dark:text-gray-300 block mb-0.5">Objectives:</span>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2">{pipeline.objectives}</p>
-            </div>
-          )}
-          {pipeline.kpis && (
-            <div className="mt-1">
-              <span className="font-semibold text-gray-600 dark:text-gray-300 block mb-0.5">KPIs:</span>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1">{pipeline.kpis}</p>
-            </div>
-          )}
-          {(pipeline.cashFlowProjectionUSD > 0 || pipeline.expensesUSD > 0 || pipeline.roiPercent > 0) && (
-            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30 p-2 rounded">
-              <span className="font-bold text-gray-700 dark:text-gray-200 block mb-1 text-[11px] uppercase tracking-wider">Financial Overview</span>
-              {pipeline.cashFlowProjectionUSD > 0 && <div className="flex justify-between items-center text-[11px]"><span className="text-gray-600 dark:text-gray-300">Proj. Revenue:</span> <span className="font-bold text-emerald-600 dark:text-emerald-400">${pipeline.cashFlowProjectionUSD.toLocaleString()}</span></div>}
-              {pipeline.expensesUSD > 0 && <div className="flex justify-between items-center text-[11px]"><span className="text-gray-600 dark:text-gray-300">Expenses:</span> <span className="font-bold text-red-500 dark:text-red-400">${pipeline.expensesUSD.toLocaleString()}</span></div>}
-              {pipeline.roiPercent > 0 && <div className="flex justify-between items-center text-[11px]"><span className="text-gray-600 dark:text-gray-300">Target ROI:</span> <span className="font-bold text-blue-500">{pipeline.roiPercent}%</span></div>}
-            </div>
-          )}
-          {pipeline.dependencies && (
-            <div className="mt-1">
-              <span className="font-semibold text-gray-600 dark:text-gray-300 block mb-0.5">Dependencies:</span>
-              <p className="text-[11px] text-orange-500 dark:text-orange-400 line-clamp-1 flex items-center gap-1">
-                <i className="fa-solid fa-link text-[10px]"></i> {pipeline.dependencies}
-              </p>
-            </div>
-          )}
-          {pipeline.outcome && (
-            <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-md">
-              <span className="font-semibold text-blue-700 dark:text-blue-400 block mb-0.5 flex items-center gap-1">
-                <i className="fa-solid fa-bullseye text-[10px]"></i> Deliverable (Outcome)
-              </span>
-              <p className="text-[11px] text-blue-600 dark:text-blue-300 line-clamp-2">{pipeline.outcome}</p>
-            </div>
-          )}
-          {pipeline.budget && (
-            <div className="mt-2 p-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 rounded-md">
-              <span className="font-semibold text-emerald-700 dark:text-emerald-400 block mb-0.5 flex items-center gap-1">
-                <i className="fa-solid fa-sack-dollar text-[10px]"></i> Budget
-              </span>
-              <p className="text-[11px] text-emerald-600 dark:text-emerald-300 font-bold">${pipeline.budget.toLocaleString()}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Progress & Risk */}
-        <div className="my-4 pt-3 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex justify-between items-center mb-1 text-xs">
-            <span className="text-gray-500 dark:text-gray-400 font-medium">Progress</span>
-            <span className="font-bold text-gray-900 dark:text-gray-100">{pipeline.progress}%</span>
-          </div>
-          <div className="w-full h-2 bg-gray-50 dark:bg-gray-700/50 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700">
-            <div className="h-full bg-blue-600 rounded-full transition-all duration-300" style={{ width: `${pipeline.progress}%` }}></div>
-          </div>
-          <div className="flex justify-between items-center mt-2.5 text-xs">
-            <span className="text-gray-500 dark:text-gray-400 font-medium">Risk Level:</span>
-            <span className={`font-semibold text-[11px] px-2 py-0.5 rounded ${pipeline.riskLevel === 'High' ? 'bg-red-500/10 text-red-600' :
-              pipeline.riskLevel === 'Medium' ? 'bg-amber-500/10 text-amber-600' :
-                'bg-emerald-500/10 text-emerald-600'
-              }`}>
-              {pipeline.riskLevel}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Todo List Section */}
-      <div className="mt-2 border-t border-gray-200 dark:border-gray-700 pt-4">
-        <div className="flex justify-between items-center mb-2.5">
-          <h5 className="font-bold text-xs uppercase tracking-wider text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
-            <i className="fa-solid fa-list-check text-blue-600"></i> PIPELINE TASKS
-          </h5>
-          <button
-            type="button"
-            onClick={() => setIsReorderMode(!isReorderMode)}
-            className={`text-[11px] px-2.5 py-1 rounded-md font-medium transition-all ${isReorderMode
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-blue-50 hover:text-blue-600'
-              }`}
-          >
-            <i className="fa-solid fa-arrows-up-down mr-1"></i> {isReorderMode ? 'Done' : 'Reorder'}
-          </button>
-        </div>
-
-        <div className="space-y-1.5 mb-3 max-h-48 overflow-y-auto pr-0.5">
-          {todos.map((todo: any, index: number) => (
-            <div
-              key={todo._id || index}
-              draggable={isReorderMode}
-              onDragStart={(e) => handleDragStart(e, index)}
-              onDragOver={(e) => handleDragOver(e, index)}
-              onDrop={handleDrop}
-              className={`flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 text-xs transition-all ${isReorderMode ? 'cursor-move hover:bg-blue-500/10 border-blue-400' : ''
-                } ${draggedIndex === index ? 'opacity-40 border-dashed border-blue-500' : ''}`}
+    <>
+      {/* Compact Pipeline Card */}
+      <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.14)] hover:shadow-md hover:border-[#0078D4] transition-all flex flex-col justify-between group relative">
+        <div>
+          {/* Header row */}
+          <div className="flex justify-between items-start gap-2 mb-2">
+            <h4
+              onClick={() => setIsModalOpen(true)}
+              className="text-sm font-bold text-[#242424] dark:text-[#FFFFFF] leading-snug cursor-pointer group-hover:text-[#0078D4] transition-colors truncate"
+              title={pipeline.name}
             >
-              {isReorderMode && <i className="fa-solid fa-grip-vertical text-gray-500 dark:text-gray-400 cursor-move"></i>}
-              {!isReorderMode && (
-                <input
-                  type="checkbox"
-                  className="rounded cursor-pointer accent-blue-600 w-3.5 h-3.5"
-                  checked={todo.completed}
-                  onChange={(e) => {
-                    const newCompleted = e.target.checked;
-                    const newTodos = [...todos];
-                    newTodos[index].completed = newCompleted;
-                    setTodos(newTodos);
-                    togglePipelineTodo(pipeline._id, todo._id, newCompleted);
-                  }}
-                />
-              )}
-              <span className={`flex-1 break-words ${todo.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100 font-medium'}`}>
-                {todo.text}
+              {pipeline.name}
+            </h4>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span
+                className={`px-2 py-0.5 text-[11px] rounded font-semibold ${
+                  pipeline.priority === "High"
+                    ? "bg-[#FDE7E9] text-[#D13438]"
+                    : pipeline.priority === "Low"
+                    ? "bg-[#DFF6DD] text-[#107C10]"
+                    : "bg-[#FFF4CE] text-[#8F6B00]"
+                }`}
+              >
+                {pipeline.priority || "Medium"}
               </span>
-              {todo.assigneeName && !isReorderMode && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 font-semibold whitespace-nowrap inline-flex items-center shrink-0">
-                  {todo.assigneeType === 'Group' ? <i className="fa-solid fa-users mr-1"></i> : <i className="fa-solid fa-user mr-1"></i>}
-                  {todo.assigneeName}
+            </div>
+          </div>
+
+          {/* Project & Team badges */}
+          {(pipeline.projectId || pipeline.teamId) && (
+            <div className="flex items-center gap-1.5 flex-wrap mb-3">
+              {pipeline.projectId && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#0078D4] bg-[#EBF3FC] dark:bg-[#1C2B3D] px-2 py-0.5 rounded truncate max-w-[140px]">
+                  <FolderKanban className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{pipeline.projectId.name}</span>
                 </span>
               )}
-              {!isReorderMode && (
-                <button
-                  type="button"
-                  className="text-red-400 hover:text-red-600 transition-colors p-1 cursor-pointer"
-                  onClick={() => {
-                    const newTodos = [...todos];
-                    newTodos.splice(index, 1);
-                    setTodos(newTodos);
-                    deletePipelineTodo(pipeline._id, todo._id);
-                  }}
-                >
-                  <i className="fa-solid fa-trash-can text-[11px]"></i>
-                </button>
+              {pipeline.teamId && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#605E5C] dark:text-[#C8C6C4] bg-[#F3F2F1] dark:bg-[#292827] px-2 py-0.5 rounded truncate max-w-[130px]">
+                  <Users className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{pipeline.teamId.name}</span>
+                </span>
               )}
             </div>
-          ))}
-          {todos.length === 0 && (
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 italic text-center py-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-dashed border-gray-200 dark:border-gray-700">
-              No tasks added yet
-            </p>
           )}
+
+          {/* Meta summary: Category, Owner, Dates */}
+          <div className="text-xs text-[#605E5C] dark:text-[#C8C6C4] space-y-1 mb-3">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <User className="w-3 h-3 text-[#A19F9D]" />
+                <span className="truncate max-w-[120px]">{pipeline.owner || "Unassigned"}</span>
+              </span>
+              <span className="text-[11px] text-[#A19F9D] uppercase tracking-wider font-medium">
+                {pipeline.category || "General"}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-[11px] text-[#605E5C] dark:text-[#A19F9D]">
+              <Clock className="w-3 h-3 shrink-0" />
+              <span>
+                {pipeline.startDate ? pipeline.startDate.split("T")[0] : "TBD"} →{" "}
+                {pipeline.endDate ? pipeline.endDate.split("T")[0] : "TBD"}
+              </span>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="mb-3">
+            <div className="flex justify-between items-center text-xs mb-1">
+              <span className="text-[#605E5C] dark:text-[#C8C6C4] font-medium">Progress</span>
+              <span className="font-bold text-[#242424] dark:text-[#FFFFFF]">{pipeline.progress}%</span>
+            </div>
+            <ProgressBar value={pipeline.progress} size="sm" tone={pipeline.progress >= 70 ? "success" : "brand"} />
+          </div>
+
+          {/* Checklist preview & Risk */}
+          <div className="flex justify-between items-center text-xs pt-2.5 border-t border-[#EDEBE9] dark:border-[#292827]">
+            <span className="inline-flex items-center gap-1 text-[11px] text-[#605E5C] dark:text-[#C8C6C4]">
+              <CheckSquare className="w-3.5 h-3.5 text-[#0078D4]" />
+              <span>
+                {totalTodos > 0 ? `${completedTodos}/${totalTodos} tasks` : "No tasks"}
+              </span>
+            </span>
+
+            <span
+              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                pipeline.riskLevel === "High"
+                  ? "bg-[#FDE7E9] text-[#D13438]"
+                  : pipeline.riskLevel === "Medium"
+                  ? "bg-[#FFF4CE] text-[#8F6B00]"
+                  : "bg-[#DFF6DD] text-[#107C10]"
+              }`}
+            >
+              Risk: {pipeline.riskLevel || "Low"}
+            </span>
+          </div>
         </div>
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const form = e.currentTarget;
-            const formData = new FormData(form);
-            const text = formData.get("text") as string;
-            const assigneeType = formData.get("assigneeType") as string || "Individual";
-            const assigneeName = formData.get("assigneeName") as string || "";
-            if (!text || !text.trim()) return;
-
-            const newTodo = { _id: Date.now().toString(), text: text.trim(), completed: false, assigneeType, assigneeName };
-            setTodos((prev: any) => [...prev, newTodo]);
-            form.reset();
-
-            // Background async save without blocking UI thread
-            addPipelineTodo(pipeline._id, formData);
-          }}
-          id={`todo-form-${pipeline._id}`}
-          className="flex gap-1.5 flex-wrap  items-center"
-        >
-          <input
-            type="text"
-            name="text"
-            list={`predefined-tasks-${pipeline._id}`}
-            placeholder="Add task..."
-            className="flex-1 min-w-[120px] px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
-            required
-            autoComplete="off"
-          />
-          <datalist id={`predefined-tasks-${pipeline._id}`}>
-            {PREDEFINED_PIPELINE_TASKS[pipeline.category || '']?.map(task => (
-              <option key={task} value={task} />
-            ))}
-          </datalist>
-          <select 
-            name="assigneeType" 
-            className="w-24 px-2 py-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all cursor-pointer"
-            value={selectedAssigneeType}
-            onChange={(e) => setSelectedAssigneeType(e.target.value)}
-          >
-            <option value="Individual">Individual</option>
-            <option value="Group">Group</option>
-          </select>
-          <input
-            type="text"
-            name="assigneeName"
-            list={`assignees-${pipeline._id}`}
-            placeholder="Assignee Name..."
-            className="w-28 px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
-            autoComplete="off"
-          />
-          <datalist id={`assignees-${pipeline._id}`}>
-            {selectedAssigneeType === 'Individual' ? (
-              users.map(u => <option key={u.id} value={u.name} />)
-            ) : (
-              teams.map(t => <option key={t.id} value={t.name} />)
-            )}
-          </datalist>
+        {/* Footer: Expand button */}
+        <div className="mt-3 pt-2">
           <button
-            type="submit"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-all flex items-center justify-center cursor-pointer shrink-0"
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="w-full py-1.5 px-3 rounded-[4px] bg-[#F3F2F1] dark:bg-[#292827] hover:bg-[#EBF3FC] dark:hover:bg-[#1C2B3D] text-[#0078D4] dark:text-[#479EF5] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
           >
-            <i className="fa-solid fa-plus"></i>
+            <Maximize2 className="w-3.5 h-3.5" />
+            <span>Open Details</span>
           </button>
-        </form>
+        </div>
       </div>
-    </div>
+
+      {/* BIG LOOK MODAL POPUP */}
+      {isModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsModalOpen(false);
+          }}
+        >
+          <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[12px] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col p-6 md:p-8 relative animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex justify-between items-start gap-4 pb-4 border-b border-[#E1DFDD] dark:border-[#3B3A39] mb-6">
+              <div>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-xs font-bold text-[#0078D4] uppercase tracking-wider bg-[#EBF3FC] dark:bg-[#1C2B3D] px-2.5 py-0.5 rounded">
+                    {pipeline.category || "General Pipeline"}
+                  </span>
+                  <StatusBadge status={pipeline.status || "Active"} />
+                  <span
+                    className={`px-2 py-0.5 text-xs rounded font-semibold ${
+                      pipeline.priority === "High"
+                        ? "bg-[#FDE7E9] text-[#D13438]"
+                        : pipeline.priority === "Low"
+                        ? "bg-[#DFF6DD] text-[#107C10]"
+                        : "bg-[#FFF4CE] text-[#8F6B00]"
+                    }`}
+                  >
+                    Priority: {pipeline.priority || "Medium"}
+                  </span>
+                </div>
+                <h2 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+                  {pipeline.name}
+                </h2>
+              </div>
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="p-2 rounded-full hover:bg-[#F3F2F1] dark:hover:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] transition-colors"
+                title="Close (Esc)"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body: 2 Columns */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Left Column (Metadata & Details) */}
+              <div className="lg:col-span-1 space-y-5 text-sm">
+                {/* Project & Team */}
+                <div className="bg-[#FAF9F8] dark:bg-[#292827] p-4 rounded-[8px] border border-[#E1DFDD] dark:border-[#3B3A39] space-y-2">
+                  <span className="text-xs font-semibold text-[#605E5C] dark:text-[#C8C6C4] uppercase tracking-wider block mb-1">
+                    Organizational Hierarchy
+                  </span>
+                  {pipeline.projectId && (
+                    <div className="flex items-center gap-2 text-xs font-semibold text-[#0078D4]">
+                      <FolderKanban className="w-4 h-4" />
+                      <span>{pipeline.projectId.name}</span>
+                    </div>
+                  )}
+                  {pipeline.teamId && (
+                    <div className="flex items-center gap-2 text-xs font-medium text-[#242424] dark:text-[#FFFFFF]">
+                      <Users className="w-4 h-4 text-[#605E5C]" />
+                      <span>{pipeline.teamId.name}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 text-xs text-[#605E5C] dark:text-[#C8C6C4] pt-1">
+                    <User className="w-4 h-4 text-[#A19F9D]" />
+                    <span>Owner: <strong>{pipeline.owner || "Unassigned"}</strong></span>
+                  </div>
+                </div>
+
+                {/* Timeline & Progress */}
+                <div className="bg-[#FAF9F8] dark:bg-[#292827] p-4 rounded-[8px] border border-[#E1DFDD] dark:border-[#3B3A39]">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs font-semibold text-[#605E5C] dark:text-[#C8C6C4] uppercase">Progress</span>
+                    <span className="font-bold text-[#0078D4] text-base">{pipeline.progress}%</span>
+                  </div>
+                  <ProgressBar value={pipeline.progress} size="md" tone={pipeline.progress >= 70 ? "success" : "brand"} />
+
+                  <div className="mt-3 pt-3 border-t border-[#E1DFDD] dark:border-[#3B3A39] text-xs space-y-1.5 text-[#605E5C] dark:text-[#C8C6C4]">
+                    <div className="flex justify-between">
+                      <span>Start Date:</span>
+                      <strong className="text-[#242424] dark:text-[#FFFFFF]">
+                        {pipeline.startDate ? pipeline.startDate.split("T")[0] : "TBD"}
+                      </strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>End Date:</span>
+                      <strong className="text-[#242424] dark:text-[#FFFFFF]">
+                        {pipeline.endDate ? pipeline.endDate.split("T")[0] : "TBD"}
+                      </strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Risk Level:</span>
+                      <strong
+                        className={
+                          pipeline.riskLevel === "High"
+                            ? "text-[#D13438]"
+                            : pipeline.riskLevel === "Medium"
+                            ? "text-[#8F6B00]"
+                            : "text-[#107C10]"
+                        }
+                      >
+                        {pipeline.riskLevel || "Low"}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Financial Summary */}
+                {(pipeline.cashFlowProjectionUSD > 0 || pipeline.expensesUSD > 0 || pipeline.budget) && (
+                  <div className="bg-[#FAF9F8] dark:bg-[#292827] p-4 rounded-[8px] border border-[#E1DFDD] dark:border-[#3B3A39] space-y-2">
+                    <span className="text-xs font-semibold text-[#605E5C] dark:text-[#C8C6C4] uppercase tracking-wider block mb-1">
+                      Financial Overview
+                    </span>
+                    {pipeline.budget && (
+                      <div className="flex justify-between text-xs">
+                        <span>Budget Allocated:</span>
+                        <strong className="text-[#107C10]">${Number(pipeline.budget).toLocaleString()}</strong>
+                      </div>
+                    )}
+                    {pipeline.cashFlowProjectionUSD > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span>Projected Revenue:</span>
+                        <strong className="text-[#107C10]">${pipeline.cashFlowProjectionUSD.toLocaleString()}</strong>
+                      </div>
+                    )}
+                    {pipeline.expensesUSD > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span>Expenses:</span>
+                        <strong className="text-[#D13438]">${pipeline.expensesUSD.toLocaleString()}</strong>
+                      </div>
+                    )}
+                    {pipeline.roiPercent > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span>Target ROI:</span>
+                        <strong className="text-[#0078D4]">{pipeline.roiPercent}%</strong>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Objectives & Deliverable */}
+                {pipeline.objectives && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-[#605E5C] dark:text-[#C8C6C4] uppercase mb-1">Objectives</h4>
+                    <p className="text-xs text-[#242424] dark:text-[#C8C6C4] leading-relaxed bg-[#FAF9F8] dark:bg-[#292827] p-3 rounded border border-[#E1DFDD] dark:border-[#3B3A39]">
+                      {pipeline.objectives}
+                    </p>
+                  </div>
+                )}
+
+                {pipeline.outcome && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-[#0078D4] uppercase mb-1">Deliverable Outcome</h4>
+                    <p className="text-xs text-[#0078D4] bg-[#EBF3FC] dark:bg-[#1C2B3D] p-3 rounded border border-[#0078D4]/20 leading-relaxed font-medium">
+                      {pipeline.outcome}
+                    </p>
+                  </div>
+                )}
+
+                {pipeline.dependencies && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-[#605E5C] dark:text-[#C8C6C4] uppercase mb-1">Dependencies</h4>
+                    <p className="text-xs text-[#F7630C] bg-[#FDE7D9]/40 dark:bg-[#4A2209]/40 p-2.5 rounded border border-[#F7630C]/20 flex items-center gap-1.5 font-medium">
+                      <LinkIcon className="w-3.5 h-3.5" />
+                      <span>{pipeline.dependencies}</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column: Interactive Checklist & Todos */}
+              <div className="lg:col-span-2 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-bold text-base text-[#242424] dark:text-[#FFFFFF] flex items-center gap-2">
+                      <CheckSquare className="w-4 h-4 text-[#0078D4]" />
+                      <span>Execution Checklist ({completedTodos}/{totalTodos})</span>
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setIsReorderMode(!isReorderMode)}
+                      className={`text-xs px-2.5 py-1 rounded font-semibold transition-colors flex items-center gap-1 ${
+                        isReorderMode
+                          ? "bg-[#0078D4] text-white"
+                          : "bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#EDEBE9]"
+                      }`}
+                    >
+                      <ArrowUpDown className="w-3.5 h-3.5" />
+                      <span>{isReorderMode ? "Done Reordering" : "Reorder"}</span>
+                    </button>
+                  </div>
+
+                  {/* Todo List Items */}
+                  <div className="space-y-2 mb-4 max-h-[360px] overflow-y-auto pr-1">
+                    {todos.map((todo: any, index: number) => (
+                      <div
+                        key={todo._id}
+                        draggable={isReorderMode}
+                        onDragStart={(e) => handleDragStart(e, index)}
+                        onDragOver={(e) => handleDragOver(e, index)}
+                        onDrop={handleDrop}
+                        className={`flex items-center gap-2.5 p-3 rounded-[6px] border transition-all text-xs ${
+                          isReorderMode
+                            ? "cursor-grab border-dashed border-[#0078D4] bg-[#EBF3FC]/40 dark:bg-[#1C2B3D]/40"
+                            : "border-[#E1DFDD] dark:border-[#3B3A39] bg-white dark:bg-[#201F1E] hover:border-[#0078D4]"
+                        }`}
+                      >
+                        {!isReorderMode && (
+                          <input
+                            type="checkbox"
+                            className="rounded cursor-pointer accent-[#0078D4] w-4 h-4 shrink-0"
+                            checked={Boolean(todo.completed)}
+                            onChange={(e) => {
+                              const newCompleted = e.target.checked;
+                              const newTodos = [...todos];
+                              newTodos[index].completed = newCompleted;
+                              setTodos(newTodos);
+                              togglePipelineTodo(pipeline._id, todo._id, newCompleted);
+                            }}
+                          />
+                        )}
+                        <span
+                          className={`flex-1 break-words ${
+                            todo.completed
+                              ? "line-through text-[#A19F9D]"
+                              : "text-[#242424] dark:text-[#FFFFFF] font-medium"
+                          }`}
+                        >
+                          {todo.text}
+                        </span>
+
+                        {todo.assigneeName && !isReorderMode && (
+                          <span className="text-[11px] px-2 py-0.5 rounded bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] font-medium shrink-0 flex items-center gap-1">
+                            {todo.assigneeType === "Group" ? (
+                              <Users className="w-3 h-3 text-[#0078D4]" />
+                            ) : (
+                              <User className="w-3 h-3 text-[#0078D4]" />
+                            )}
+                            <span>{todo.assigneeName}</span>
+                          </span>
+                        )}
+
+                        {!isReorderMode && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newTodos = [...todos];
+                              newTodos.splice(index, 1);
+                              setTodos(newTodos);
+                              deletePipelineTodo(pipeline._id, todo._id);
+                            }}
+                            className="text-[#A19F9D] hover:text-[#D13438] p-1 transition-colors"
+                            title="Delete task"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+
+                    {todos.length === 0 && (
+                      <div className="py-6 text-center text-xs text-[#A19F9D] border border-dashed border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px]">
+                        No checklist items yet. Add one below!
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Add Todo Form */}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const form = e.currentTarget;
+                      const formData = new FormData(form);
+                      const text = formData.get("text") as string;
+                      const assigneeType = (formData.get("assigneeType") as string) || "Individual";
+                      const assigneeName = (formData.get("assigneeName") as string) || "";
+                      if (!text || !text.trim()) return;
+
+                      const newTodo = {
+                        _id: Date.now().toString(),
+                        text: text.trim(),
+                        completed: false,
+                        assigneeType,
+                        assigneeName,
+                      };
+                      setTodos((prev: any) => [...prev, newTodo]);
+                      form.reset();
+                      addPipelineTodo(pipeline._id, formData);
+                    }}
+                    className="flex gap-2 flex-wrap items-center bg-[#FAF9F8] dark:bg-[#292827] p-3 rounded-[6px] border border-[#E1DFDD] dark:border-[#3B3A39]"
+                  >
+                    <input
+                      type="text"
+                      name="text"
+                      list={`predefined-tasks-${pipeline._id}`}
+                      placeholder="Add new checklist task..."
+                      className="flex-1 min-w-[140px] px-3 py-1.5 text-xs rounded bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                      required
+                    />
+                    <datalist id={`predefined-tasks-${pipeline._id}`}>
+                      {PREDEFINED_PIPELINE_TASKS[pipeline.category || ""]?.map((task) => (
+                        <option key={task} value={task} />
+                      ))}
+                    </datalist>
+
+                    <select
+                      name="assigneeType"
+                      value={selectedAssigneeType}
+                      onChange={(e) => setSelectedAssigneeType(e.target.value)}
+                      className="px-2 py-1.5 text-xs rounded bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
+                    >
+                      <option value="Individual">Person</option>
+                      <option value="Group">Team</option>
+                    </select>
+
+                    <input
+                      type="text"
+                      name="assigneeName"
+                      list={`assignees-${pipeline._id}`}
+                      placeholder="Assignee..."
+                      className="w-28 px-3 py-1.5 text-xs rounded bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] text-[#242424] dark:text-[#FFFFFF] outline-none"
+                    />
+                    <datalist id={`assignees-${pipeline._id}`}>
+                      {selectedAssigneeType === "Individual"
+                        ? users.map((u) => <option key={u.id} value={u.name} />)
+                        : teams.map((t) => <option key={t.id} value={t.name} />)}
+                    </datalist>
+
+                    <button
+                      type="submit"
+                      className="px-3 py-1.5 bg-[#0078D4] hover:bg-[#006CBE] text-white rounded text-xs font-semibold flex items-center gap-1 transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add</span>
+                    </button>
+                  </form>
+                </div>
+
+                {/* Modal Footer Actions */}
+                <div className="flex justify-between items-center mt-6 pt-4 border-t border-[#E1DFDD] dark:border-[#3B3A39]">
+                  <form
+                    action={deletePipeline}
+                    onSubmit={(e) => {
+                      if (!window.confirm(`Are you sure you want to delete pipeline "${pipeline.name}"?`)) {
+                        e.preventDefault();
+                      }
+                    }}
+                  >
+                    <input type="hidden" name="pipelineId" value={pipeline._id.toString()} />
+                    <button
+                      type="submit"
+                      className="text-xs text-[#D13438] hover:underline flex items-center gap-1 font-medium"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Pipeline</span>
+                    </button>
+                  </form>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 bg-[#F3F2F1] dark:bg-[#292827] hover:bg-[#EDEBE9] text-[#242424] dark:text-[#FFFFFF] text-xs font-semibold rounded transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

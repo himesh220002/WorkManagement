@@ -2,6 +2,16 @@
 
 import { useEffect, useState, useRef } from "react";
 import mermaid from "mermaid";
+import {
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  X,
+  Maximize2,
+  FolderKanban,
+  Users,
+  Layers,
+} from "lucide-react";
 
 export default function ProjectHierarchyDiagram({ project }: { project: any }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -9,8 +19,6 @@ export default function ProjectHierarchyDiagram({ project }: { project: any }) {
   const panZoomRef = useRef<any>(null);
   const diagramId = `mermaid-${project._id.toString()}`;
 
-
-  // Helper to destroy existing pan-zoom instance safely
   const destroyPanZoom = () => {
     if (panZoomRef.current) {
       panZoomRef.current.destroy();
@@ -19,115 +27,123 @@ export default function ProjectHierarchyDiagram({ project }: { project: any }) {
   };
 
   useEffect(() => {
-
-    // Only run if the modal is open and the container exists
     if (!isOpen || !containerRef.current) {
       destroyPanZoom();
       return;
     }
 
-    mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: 'loose' });
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: "neutral",
+      securityLevel: "loose",
+      fontFamily: "Segoe UI, Inter, sans-serif",
+    });
 
-    // Generate Mermaid Code
-    // 
-
-    // Generate Mermaid Code
+    const sanitize = (str: string) => (str || "").replace(/["'\[\]\(\)]/g, " ").trim();
     const pNode = `P_${project._id}`;
-    // Switch top level layout to LR or TD depending on your preference. 
-    // TD works best with the nested subgraph strategy below.
+    const pName = sanitize(project.name);
+
     let chart = `flowchart TD\n`;
-    chart += ` ${pNode}["Project: ${project.name.replace(/["']/g, '')}"]\n`;
+    chart += `  classDef proj fill:#EBF3FC,stroke:#0078D4,stroke-width:2px,color:#0078D4,font-weight:bold;\n`;
+    chart += `  classDef team fill:#F3F2F1,stroke:#605E5C,stroke-width:1.5px,color:#242424;\n`;
+    chart += `  classDef pipe fill:#DFF6DD,stroke:#107C10,stroke-width:1.5px,color:#107C10;\n`;
+    chart += `  classDef task fill:#FFFFFF,stroke:#E1DFDD,stroke-width:1px,color:#242424;\n`;
 
-    const allMembers: any[] = [];
+    chart += `  ${pNode}["📁 Project: ${pName}"]:::proj\n`;
 
-    // [Your Teams & Members mapping loop stays here...]
+    // 1. Teams Section
+    const teams = Array.isArray(project.teams) ? project.teams : [];
+    if (teams.length > 0) {
+      chart += `  subgraph SG_Teams ["👥 Project Teams"]\n`;
+      chart += `    direction LR\n`;
+      teams.forEach((t: any) => {
+        const tId = t._id ? t._id.toString() : String(Math.random()).slice(2, 7);
+        const tName = sanitize(t.name || "Team");
+        const tNode = `T_${tId}`;
+        chart += `    ${tNode}["👥 ${tName}"]:::team\n`;
+        chart += `    ${pNode} --> ${tNode}\n`;
 
-    // --- REVISED PIPELINES AND TASKS MAPPING LOGIC ---
-    if (project.pipelines && project.pipelines.length > 0) {
-      project.pipelines.forEach((pipeline: any) => {
-        const pipeNodeStr = `Pipe_${pipeline._id}`;
-
-        // 1. Keep the subgraph panel for visual grouping
-        chart += `  subgraph SG_${pipeline._id} ["Pipeline: ${pipeline.name.replace(/["']/g, '')}"]\n`;
-
-        // 2. CHANGE DIRECTION TO LR: This forces tasks and their assignee chips 
-        // to flow horizontally next to each other, keeping individual task chains compact!
-        chart += `    direction LR\n`;
-
-        // 3. Define the main Pipeline starting node
-        chart += `    ${pipeNodeStr}["Start: ${pipeline.name.replace(/["']/g, '')}"]\n`;
-
-        if (pipeline.todos && pipeline.todos.length > 0) {
-          pipeline.todos.forEach((todo: any) => {
-            const todoId = todo._id || Math.random().toString(36).substring(7);
-            const todoNodeStr = `Todo_${todoId}`;
-
-            // Render task node
-            chart += `    ${todoNodeStr}["Task: ${todo.text.replace(/["']/g, '')}"]\n`;
-
-            // FIXED: Every task now connects directly to the Pipeline Head, NOT the previous task!
-            chart += `    ${pipeNodeStr} --> ${todoNodeStr}\n`;
-
-            // Handle assignments
-            if (todo.assigneeName) {
-              const member = allMembers.find((m: any) => m.name === todo.assigneeName);
-              if (member) {
-                chart += `    ${todoNodeStr} -. "Assigned to" .-> M_${member._id}\n`;
-              } else {
-                const dummyAssignee = `A_${todoId}`;
-                chart += `    ${dummyAssignee}["${todo.assigneeType || 'User'}: ${todo.assigneeName.replace(/["']/g, '')}"]\n`;
-                chart += `    ${todoNodeStr} -. "Assigned to" .-> ${dummyAssignee}\n`;
-              }
-            }
-          });
-        }
-
-        chart += `  end\n`; // Close subgraph
-
-        // Link Project root to this pipeline box
-        chart += `  ${pNode} --> ${pipeNodeStr}\n`;
+        // Team members
+        const members = Array.isArray(t.members) ? t.members : [];
+        members.slice(0, 4).forEach((m: any) => {
+          const mId = m._id ? m._id.toString() : String(Math.random()).slice(2, 7);
+          const mName = sanitize(m.name || "Member");
+          const mNode = `M_${mId}`;
+          chart += `    ${mNode}["👤 ${mName}"]:::task\n`;
+          chart += `    ${tNode} -.-> ${mNode}\n`;
+        });
       });
+      chart += `  end\n`;
     }
 
+    // 2. Pipelines & Tasks Section
+    const pipelines = Array.isArray(project.pipelines) ? project.pipelines : [];
+    if (pipelines.length > 0) {
+      chart += `  subgraph SG_Pipelines ["⚡ Execution Pipelines"]\n`;
+      chart += `    direction TB\n`;
+      pipelines.forEach((pipeline: any) => {
+        const pipeId = pipeline._id ? pipeline._id.toString() : String(Math.random()).slice(2, 7);
+        const pipeName = sanitize(pipeline.name || "Pipeline");
+        const pipeNode = `Pipe_${pipeId}`;
 
+        chart += `    subgraph SG_Pipe_${pipeId} ["${pipeName} (${pipeline.progress || 0}%)"]\n`;
+        chart += `      direction LR\n`;
+        chart += `      ${pipeNode}["🚀 Start: ${pipeName}"]:::pipe\n`;
 
-    // Clean up old instance before rendering a new one
+        const todos = Array.isArray(pipeline.todos) ? pipeline.todos : [];
+        todos.forEach((todo: any, idx: number) => {
+          const todoId = todo._id ? todo._id.toString() : `${pipeId}_${idx}`;
+          const todoText = sanitize(todo.text || "Task item");
+          const todoNode = `Todo_${todoId}`;
+          const statusIcon = todo.completed ? "✓" : "○";
+          chart += `      ${todoNode}["${statusIcon} ${todoText}"]:::task\n`;
+          chart += `      ${pipeNode} --> ${todoNode}\n`;
+        });
+        chart += `    end\n`;
+
+        chart += `    ${pNode} ==> ${pipeNode}\n`;
+      });
+      chart += `  end\n`;
+    }
+
+    // Render diagram
     destroyPanZoom();
 
-    // Render the diagram
-    mermaid.render(diagramId, chart).then(async (result) => {
-      if (containerRef.current) {
-        containerRef.current.innerHTML = result.svg;
+    mermaid
+      .render(diagramId, chart)
+      .then(async (result) => {
+        if (containerRef.current) {
+          containerRef.current.innerHTML = result.svg;
 
-        // Initialize pan/zoom
-        const svgElement = containerRef.current.querySelector("svg");
-        if (svgElement) {
+          const svgElement = containerRef.current.querySelector("svg");
+          if (svgElement) {
+            svgElement.style.width = "100%";
+            svgElement.style.height = "100%";
+            svgElement.style.maxWidth = "100%";
 
-          // CRITICAL: Make the SVG stretch to its wrapper container boundaries
-          svgElement.style.width = "100%";
-          svgElement.style.height = "100%";
-          svgElement.style.maxWidth = "100%";
+            const { default: svgPanZoom } = await import("svg-pan-zoom");
+            panZoomRef.current = svgPanZoom(svgElement, {
+              zoomEnabled: true,
+              controlIconsEnabled: false,
+              fit: true,
+              center: true,
+              panEnabled: true,
+              minZoom: 0.2,
+              maxZoom: 8,
+            });
 
-          const { default: svgPanZoom } = await import("svg-pan-zoom");
-
-          panZoomRef.current = svgPanZoom(svgElement, {
-            zoomEnabled: true,
-            controlIconsEnabled: false,
-            fit: true,
-            center: true,
-            panEnabled: true,
-            minZoom: 0.1,
-            maxZoom: 10
-          });
-
-          panZoomRef.current.zoom(0.8);
-          panZoomRef.current.center();
+            panZoomRef.current.zoom(0.85);
+            panZoomRef.current.center();
+          }
         }
-      }
-    }).catch((e) => {
-      console.error("Mermaid rendering failed:", e);
-    });
-    // Cleanup hook memory on unmount
+      })
+      .catch((e) => {
+        console.error("Mermaid blueprint rendering failed:", e);
+        if (containerRef.current) {
+          containerRef.current.innerHTML = `<div class="p-8 text-center text-sm text-[#D13438]">Failed to render architecture diagram. Check console for details.</div>`;
+        }
+      });
+
     return () => {
       destroyPanZoom();
     };
@@ -139,39 +155,70 @@ export default function ProjectHierarchyDiagram({ project }: { project: any }) {
 
   if (!isOpen) {
     return (
-      <div className="mt-4 border-t border-gray-100 dark:border-gray-700 pt-4 flex justify-center">
-        <button onClick={() => setIsOpen(true)} className="text-sm text-blue-500 hover:text-blue-600 font-medium flex items-center gap-2">
-          <i className="fa-solid fa-sitemap"></i> View Project Hierarchy
+      <div className="pt-3 border-t border-[#EDEBE9] dark:border-[#292827] flex justify-end">
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="text-xs font-semibold text-[#0078D4] dark:text-[#479EF5] hover:underline flex items-center gap-1.5 p-1 transition-colors"
+        >
+          <Layers className="w-3.5 h-3.5" />
+          <span>View Blueprint Architecture Flow</span>
         </button>
       </div>
     );
   }
 
   return (
-    <div className="mt-4 border-t border-gray-100 dark:border-gray-700 pt-4">
-      <div className="flex justify-between items-center mb-4">
-        <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Project Hierarchy</h4>
-        <button
-          onClick={() => setIsOpen(false)}
-          className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-        >
-          <i className="fa-solid fa-times mr-1"></i> Close
-        </button>
+    <div className="pt-4 border-t border-[#EDEBE9] dark:border-[#292827] mt-3">
+      {/* Blueprint Header */}
+      <div className="flex justify-between items-center mb-3">
+        <div className="flex items-center gap-2">
+          <FolderKanban className="w-4 h-4 text-[#0078D4]" />
+          <h4 className="text-xs font-bold uppercase tracking-wider text-[#242424] dark:text-[#FFFFFF]">
+            System Blueprint: {project.name}
+          </h4>
+        </div>
+
+        {/* Controls */}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={handleZoomIn}
+            className="p-1.5 rounded bg-[#F3F2F1] dark:bg-[#292827] hover:bg-[#E1DFDD] text-[#242424] dark:text-[#FFFFFF] transition-colors"
+            title="Zoom In"
+          >
+            <ZoomIn className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleZoomOut}
+            className="p-1.5 rounded bg-[#F3F2F1] dark:bg-[#292827] hover:bg-[#E1DFDD] text-[#242424] dark:text-[#FFFFFF] transition-colors"
+            title="Zoom Out"
+          >
+            <ZoomOut className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleReset}
+            className="p-1.5 rounded bg-[#F3F2F1] dark:bg-[#292827] hover:bg-[#E1DFDD] text-[#242424] dark:text-[#FFFFFF] transition-colors text-xs font-semibold px-2"
+            title="Reset Zoom"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="p-1.5 rounded bg-[#FDE7E9] dark:bg-[#44171A] text-[#D13438] hover:bg-[#FCD2D6] transition-colors ml-2"
+            title="Close Diagram"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
-      {/* Zoom Controls */}
-      <div className="flex items-center justify-center gap-2 mb-2">
-        <button onClick={handleZoomIn} className="px-2 py-1 bg-gray-200 dark:bg-gray-700 dark:text-white rounded text-xs font-bold hover:bg-gray-300">+</button>
-        <button onClick={handleZoomOut} className="px-2 py-1 bg-gray-200 dark:bg-gray-700 dark:text-white rounded text-xs font-bold hover:bg-gray-300">−</button>
-        <button onClick={handleReset} className="px-2 py-1 bg-gray-200 dark:bg-gray-700 dark:text-white rounded text-xs hover:bg-gray-300">Reset</button>
-      </div>
-
-      {/* Diagram Canvas Container */}
-      <div className="bg-gray-200 dark:bg-gray-900 rounded-lg p-4 mx-auto w-[95%] h-[900px] border border-gray-300 dark:border-gray-800 overflow-hidden">
-        <div
-          ref={containerRef}
-          className="w-full h-full"
-        />
+      {/* Diagram Canvas */}
+      <div className="bg-[#FAF9F8] dark:bg-[#1B1A19] rounded-[8px] border border-[#E1DFDD] dark:border-[#3B3A39] w-full h-[480px] overflow-hidden relative shadow-inner">
+        <div ref={containerRef} className="w-full h-full" />
       </div>
     </div>
   );

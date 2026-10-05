@@ -3,6 +3,13 @@ import connectToDatabase from "@/lib/mongodb";
 import { Project, TaskNode, Lead, Campaign, Deal, Target, Team, User, Pipeline, ResourceAllocation, Goal } from "@/models";
 
 export async function GET() {
+  if (process.env.NODE_ENV !== "development") {
+    return NextResponse.json(
+      { error: "Demo seeding is only available in development environment." },
+      { status: 403 }
+    );
+  }
+
   try {
     await connectToDatabase();
 

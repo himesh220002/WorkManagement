@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TaskFlow PM (WorkManagement)
 
-## Getting Started
+Enterprise-grade Work, Project, and Team Management Operating System built with Next.js 16 (App Router), React 19, TypeScript, and MongoDB (Mongoose 9). Designed according to the Microsoft Fluent 2 design language principles.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 🏗 System Architecture & Entity Hierarchy
+
+```
+Company (Root organization)
+ ├── Projects
+ │    ├── Teams (Lead, Members, Capacity, Workload)
+ │    ├── Pipelines (Milestones, Progress, Owners, Todos)
+ │    ├── Tasks (Kanban / Table / Gantt, Assignees, Estimates)
+ │    ├── Cycles (Sprints & Delivery phases)
+ │    ├── Deals & Campaigns (Sales pipeline, MRR, Revenue)
+ │    └── Customer Feedback & Resource Allocations
+ ├── Goals (Company, Project, and Team scopes)
+ │    ├── Targets (Measurable key metrics)
+ │    └── Daily Goals (Daily standup rollup into Team Goals)
+ └── People / Users (Assignments across Tasks, Pipelines, and Deals)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🚀 Getting Started
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Prerequisites
 
-## Learn More
+- **Node.js**: >= 20.x
+- **MongoDB**: MongoDB Atlas or a local instance
 
-To learn more about Next.js, take a look at the following resources:
+### Environment Setup
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Create or verify `.env` in the root directory:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```env
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.ckkeqng.mongodb.net/projectManageDB?retryWrites=true&w=majority
+NODE_ENV=development
+```
 
-## Deploy on Vercel
+### Installation
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm install --legacy-peer-deps
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Available Scripts
+
+- `npm run dev`: Starts the Next.js development server
+- `npm run build`: Compiles production build
+- `npm run start`: Starts production server
+- `npm run lint`: Runs ESLint checks
+- `npm run typecheck`: Validates TypeScript without emitting code
+- `npm test`: Runs unit tests with Vitest
+- `npx tsx scripts/check-db.ts`: Verifies MongoDB connectivity and lists collections
+- `npx tsx scripts/migrate-v2.ts`: Runs the data migration and schema normalization pipeline
+
+---
+
+## 🎨 Design System
+
+Styled with Microsoft Fluent 2 design tokens:
+- Calm, clean neutral surfaces (`#FFFFFF`, `#FAF9F8`, `#F3F2F1`)
+- Single high-contrast blue brand accent (`#0078D4`)
+- Semantic status tokens: On Track (Success), At Risk (Caution), Behind / Blocked (Danger)
+- Accessible type ramp using Segoe UI and modern typography
+- Consistent component primitives: Buttons, Cards, Badges, Tables, Drawers, Empty States, Skeletons
+
+---
+
+## 📐 Upgrade & Change Context
+
+All architectural refactors, schema migrations, and feature upgrades are tracked in [`upgradechangecontext.json`](./upgradechangecontext.json).

@@ -18,6 +18,19 @@ import { addTaskNode, addCycle } from "@/actions";
 import WorkflowGuide from "./WorkflowGuide";
 import EditableTaskList from "./EditableTaskList";
 import { PREDEFINED_PIPELINE_TASKS } from "@/utils/taskConstants";
+import { Stat } from "@/components/ui/Stat";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
+import {
+  CheckSquare,
+  Clock,
+  TrendingUp,
+  Briefcase,
+  Filter,
+  Plus,
+  Layers,
+  FolderKanban,
+  RotateCcw,
+} from "lucide-react";
 
 ChartJS.register(
   CategoryScale,
@@ -55,19 +68,21 @@ export default function DevDashboardClient({
   };
 
   const hoursData = {
-    labels: chartData.modules && chartData.modules.length > 0 ? chartData.modules : ["No Data"],
+    labels: chartData.modules && chartData.modules.length > 0 ? chartData.modules : ["General"],
     datasets: [
       {
         label: "Estimated Hours",
         data: chartData.estimatedHoursData && chartData.estimatedHoursData.length > 0 ? chartData.estimatedHoursData : [0],
-        backgroundColor: "#e2e8f0",
-        hoverBackgroundColor: "#cbd5e1",
+        backgroundColor: "#E1DFDD",
+        hoverBackgroundColor: "#C8C6C4",
+        borderRadius: 4,
       },
       {
         label: "Actual Hours",
         data: chartData.actualHoursData && chartData.actualHoursData.length > 0 ? chartData.actualHoursData : [0],
-        backgroundColor: "#3b82f6",
-        hoverBackgroundColor: "#2563eb",
+        backgroundColor: "#0078D4",
+        hoverBackgroundColor: "#006CBE",
+        borderRadius: 4,
       },
     ],
   };
@@ -76,219 +91,333 @@ export default function DevDashboardClient({
     labels: ["Critical", "High", "Medium", "Low"],
     datasets: [
       {
-        data: chartData.severity,
-        backgroundColor: ["#ef4444", "#f97316", "#eab308", "#22c55e"],
+        data: chartData.severity || [0, 0, 0, 0],
+        backgroundColor: ["#D13438", "#F7630C", "#0078D4", "#107C10"],
       },
     ],
   };
 
   const statusData = {
-    labels: ["Tasks"],
+    labels: ["Status Flow"],
     datasets: [
-      { label: "Todo", data: [chartData.status[0]], backgroundColor: "#94a3b8" },
-      { label: "In Progress", data: [chartData.status[1]], backgroundColor: "#3b82f6" },
-      { label: "Code Review", data: [chartData.status[2]], backgroundColor: "#8b5cf6" },
-      { label: "Done", data: [chartData.status[3]], backgroundColor: "#10b981" },
+      { label: "Todo", data: [chartData.status[0]], backgroundColor: "#605E5C", borderRadius: 4 },
+      { label: "In Progress", data: [chartData.status[1]], backgroundColor: "#0078D4", borderRadius: 4 },
+      { label: "Code Review", data: [chartData.status[2]], backgroundColor: "#8764B8", borderRadius: 4 },
+      { label: "Done", data: [chartData.status[3]], backgroundColor: "#107C10", borderRadius: 4 },
     ],
   };
 
+  const activeProject = projects.find((p) => p._id === selectedProjectId);
+
   return (
-    <main className="p-4 md:p-6 flex-1 flex flex-col min-w-0">
-      <header className="glass-card p-6 mb-6 flex justify-between items-center neon-border-blue">
+    <main className="flex flex-col min-w-0 p-4 md:p-8 flex-1 max-w-7xl mx-auto w-full">
+      {/* Header */}
+      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold glow-text">Development Workflow</h1>
-          <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
-            <i className="fa-regular fa-calendar-alt"></i>
-            {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+              Engineering & Development Hub
+            </h1>
+            <Badge tone="brand" size="sm">
+              Dev Telemetry
+            </Badge>
           </div>
+          <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">
+            Task execution tracking, estimated vs. actual velocity, and sprint cycle analysis.
+          </p>
         </div>
-        <div className="px-3 py-1 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded-full text-xs font-semibold text-gray-600 dark:text-gray-300 flex items-center">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block mr-2"></span>
-          Active
+
+        {/* Project Selector */}
+        <div className="flex items-center gap-2 bg-[#F3F2F1] dark:bg-[#292827] px-3 py-1.5 rounded-[6px] border border-[#E1DFDD] dark:border-[#3B3A39] text-xs font-medium">
+          <Filter className="w-4 h-4 text-[#0078D4]" />
+          <span className="text-[#605E5C] dark:text-[#C8C6C4]">Context:</span>
+          <select
+            id="projectFilter"
+            className="bg-transparent font-semibold cursor-pointer outline-none text-[#242424] dark:text-[#FFFFFF]"
+            value={selectedProjectId}
+            onChange={handleProjectFilter}
+          >
+            <option value="all">All Projects (Global View)</option>
+            {projects.map((p) => (
+              <option key={p._id} value={p._id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
         </div>
       </header>
 
-      <div className="mb-6">
-        <label htmlFor="projectFilter" className="text-gray-500 dark:text-gray-400 text-sm font-bold block mb-2">
-          Active Project Context:
-        </label>
-        <select
-          id="projectFilter"
-          className="tech-input w-72 cursor-pointer"
-          value={selectedProjectId}
-          onChange={handleProjectFilter}
-        >
-          <option value="all">🌍 All Projects (Global View)</option>
-          {projects.map((p) => (
-            <option key={p._id} value={p._id}>
-              🚀 {p.name}
-            </option>
-          ))}
-        </select>
+      {/* Engineering Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <Stat
+          label="Total Tasks"
+          value={`${tasks.length} Tasks`}
+          subtext={activeProject ? `Scoped to ${activeProject.name}` : "Across all projects"}
+          icon={<CheckSquare className="w-5 h-5 text-[#0078D4]" />}
+        />
+        <Stat
+          label="Avg Cycle Time"
+          value={`${avgCycleTime} Days`}
+          subtext="Based on sprint durations"
+          icon={<Clock className="w-5 h-5 text-[#605E5C]" />}
+        />
+        <Stat
+          label="Pipeline Progress"
+          value={`${avgPipelineProgress}%`}
+          subtext={`${pipelines.length} Active Dev Pipelines`}
+          icon={<Layers className="w-5 h-5 text-[#107C10]" />}
+        />
+        <Stat
+          label="Work Hours Logged"
+          value={`${chartData.totalHours} hrs`}
+          subtext="Actual time invested"
+          icon={<Briefcase className="w-5 h-5 text-[#0078D4]" />}
+        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="glass-card p-5 text-center relative group">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium flex justify-center items-center gap-1">
-            Total Tasks
-            <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Total number of tasks associated with the selected project context"></i>
-          </h4>
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 m-0">{tasks.length}</h2>
-        </div>
-        <div className="glass-card p-5 text-center relative group">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium flex justify-center items-center gap-1">
-            Avg Cycle Time
-            <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Average duration of all sprints/cycles in days based on start and end dates"></i>
-          </h4>
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 m-0">{avgCycleTime} Days</h2>
-        </div>
-        <div className="glass-card p-5 text-center relative group">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium flex justify-center items-center gap-1">
-            Global Pipeline Progress
-            <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Average progress percentage across all active development pipelines"></i>
-          </h4>
-          <h2 className="text-3xl font-bold text-blue-600 m-0">{avgPipelineProgress}%</h2>
-        </div>
-        <div className="glass-card p-5 text-center relative group">
-          <h4 className="text-gray-500 dark:text-gray-400 mb-2 text-sm font-medium flex justify-center items-center gap-1">
-            Billable Hours
-            <i className="fa-solid fa-circle-info text-gray-400 text-xs cursor-help" title="Sum of actual hours logged (or calculated from task completion dates)"></i>
-          </h4>
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 m-0">{chartData.totalHours}</h2>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="glass-card p-5 md:col-span-2">
-          <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            Estimated vs Actual Work Hours
-            <i className="fa-solid fa-circle-info text-gray-400 text-sm cursor-help" title="Actual hours are directly entered or fall back to calculating the difference between task completion and start dates"></i>
+      {/* Engineering Charts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        {/* Estimated vs Actual Hours */}
+        <div className="lg:col-span-2 bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
+          <h3 className="font-semibold text-sm text-[#242424] dark:text-[#FFFFFF] mb-1">
+            Estimated vs. Actual Hours by Module
           </h3>
-          <div className="h-64">
-            <Bar data={hoursData} options={{ responsive: true, maintainAspectRatio: false }} />
+          <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mb-4">
+            Comparison between initial estimates and logged hours across architecture components.
+          </p>
+          <div className="h-60">
+            <Bar
+              data={hoursData}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: { beginAtZero: true, ticks: { precision: 0 } },
+                },
+              }}
+            />
           </div>
         </div>
 
-        <div className="glass-card p-5">
-          <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100">Task Distribution by Severity</h3>
-          <div className="h-64">
+        {/* Severity Distribution */}
+        <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
+          <h3 className="font-semibold text-sm text-[#242424] dark:text-[#FFFFFF] mb-1">
+            Task Severity Profile
+          </h3>
+          <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mb-4">
+            Critical, high, medium, and low priority tasks.
+          </p>
+          <div className="h-60 flex items-center justify-center">
             <Doughnut
               data={severityData}
               options={{
                 responsive: true,
                 maintainAspectRatio: false,
-                cutout: "75%",
-                plugins: { legend: { position: "right", labels: { boxWidth: 10, usePointStyle: true, color: 'inherit' } } },
+                cutout: "70%",
+                plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } } },
               }}
             />
           </div>
         </div>
       </div>
 
-      <div className="glass-card p-5 mb-6">
-        <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100">Incomplete Tasks by Status</h3>
-        <div className="h-40">
+      {/* Status Flow Bar */}
+      <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
+        <h3 className="font-semibold text-sm text-[#242424] dark:text-[#FFFFFF] mb-1">
+          Task Distribution by Status
+        </h3>
+        <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mb-4">
+          Visual status breakdown across Backlog, In Progress, Code Review, and Done.
+        </p>
+        <div className="h-28">
           <Bar
             data={statusData}
             options={{
               indexAxis: "y",
               responsive: true,
               maintainAspectRatio: false,
-              scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, display: false } },
+              scales: {
+                x: { stacked: true, grid: { display: false } },
+                y: { stacked: true, display: false },
+              },
             }}
           />
         </div>
       </div>
 
-      {/* Data Entry Forms */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="glass-card p-6">
-          <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <i className="fa-solid fa-list-check text-blue-600"></i> Add Task
+      {/* Creation Forms */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* Add Task Form */}
+        <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
+          <h3 className="font-bold text-sm text-[#242424] dark:text-[#FFFFFF] mb-3 flex items-center gap-2">
+            <Plus className="w-4 h-4 text-[#0078D4]" /> Add Engineering Task
           </h3>
           <form action={addTaskNode} className="space-y-3">
             <input type="hidden" name="projectId" value={selectedProjectId} />
-            <div className="flex gap-3">
-              <select name="pipelineId" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm cursor-pointer">
+            <div className="flex gap-2">
+              <select
+                name="pipelineId"
+                className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
+              >
                 <option value="none">No Pipeline</option>
-                {pipelines.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+                {pipelines.map((p) => (
+                  <option key={p._id} value={p._id}>
+                    {p.name}
+                  </option>
+                ))}
               </select>
-              <select name="predefinedTask" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm cursor-pointer">
-                <option value="">Select Task Category...</option>
-                {PREDEFINED_PIPELINE_TASKS['Development']?.map((task: string) => (
-                  <option key={task} value={task}>{task}</option>
+              <select
+                name="predefinedTask"
+                className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
+              >
+                <option value="">Category...</option>
+                {PREDEFINED_PIPELINE_TASKS["Development"]?.map((task: string) => (
+                  <option key={task} value={task}>
+                    {task}
+                  </option>
                 ))}
               </select>
             </div>
-            <input type="text" name="name" placeholder="Sub Task (Optional)..." className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-            <div className="flex gap-3">
-              <input type="number" name="estimatedHours" placeholder="Est. Hours" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm" />
-              <input type="number" name="actualHours" placeholder="Actual Hours" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm" />
+
+            <input
+              type="text"
+              name="name"
+              placeholder="Task Title or Specification..."
+              className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+              required
+            />
+
+            <div className="flex gap-2">
+              <input
+                type="number"
+                name="estimatedHours"
+                placeholder="Est. Hours"
+                className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF]"
+              />
+              <input
+                type="number"
+                name="actualHours"
+                placeholder="Actual Hours"
+                className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF]"
+              />
             </div>
-            <div className="flex gap-3">
-              <select name="status" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm cursor-pointer">
+
+            <div className="flex gap-2">
+              <select
+                name="status"
+                className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
+              >
                 <option value="Todo">Todo</option>
                 <option value="In Progress">In Progress</option>
                 <option value="Code Review">Code Review</option>
                 <option value="Done">Done</option>
               </select>
-              <select name="severity" className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm cursor-pointer">
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
+              <select
+                name="severity"
+                className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
+              >
+                <option value="low">Low Severity</option>
+                <option value="medium">Medium Severity</option>
+                <option value="high">High Severity</option>
                 <option value="critical">Critical</option>
               </select>
             </div>
-            <select name="cycleId" className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm cursor-pointer">
-              <option value="none">No Sprint</option>
-              {cycles.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+
+            <select
+              name="cycleId"
+              className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
+            >
+              <option value="none">No Sprint Cycle</option>
+              {cycles.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.name}
+                </option>
+              ))}
             </select>
-            <button type="submit" disabled={selectedProjectId === "all"} className="w-full p-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
-              {selectedProjectId === "all" ? "Select a Project First" : "Add Task"}
+
+            <button
+              type="submit"
+              disabled={selectedProjectId === "all"}
+              className="w-full py-2 bg-[#0078D4] hover:bg-[#006CBE] text-white rounded text-xs font-semibold disabled:opacity-50 transition-colors"
+            >
+              {selectedProjectId === "all" ? "Select a Specific Project First" : "Create Task"}
             </button>
           </form>
         </div>
 
-        <div className="glass-card p-6">
-          <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <i className="fa-solid fa-rotate text-emerald-600"></i> Add Sprint/Cycle
+        {/* Add Sprint Cycle Form */}
+        <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
+          <h3 className="font-bold text-sm text-[#242424] dark:text-[#FFFFFF] mb-3 flex items-center gap-2">
+            <RotateCcw className="w-4 h-4 text-[#107C10]" /> Define Sprint Cycle
           </h3>
           <form action={addCycle} className="space-y-3">
             <input type="hidden" name="projectId" value={selectedProjectId} />
-            <input type="text" name="name" placeholder="Sprint Name (e.g. Sprint 42)" className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" required />
-            <div className="flex gap-3">
+            <input
+              type="text"
+              name="name"
+              placeholder="Sprint Name (e.g. Sprint 24 - MVP Beta)..."
+              className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+              required
+            />
+            <div className="flex gap-2">
               <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-1">Start Date</label>
-                <input type="date" name="startDate" className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm" required />
+                <label className="text-[11px] text-[#605E5C] dark:text-[#C8C6C4] block mb-1">Start Date</label>
+                <input
+                  type="date"
+                  name="startDate"
+                  className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF]"
+                  required
+                />
               </div>
               <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-1">End Date</label>
-                <input type="date" name="endDate" className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm" required />
+                <label className="text-[11px] text-[#605E5C] dark:text-[#C8C6C4] block mb-1">End Date</label>
+                <input
+                  type="date"
+                  name="endDate"
+                  className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF]"
+                  required
+                />
               </div>
             </div>
-            <button type="submit" disabled={selectedProjectId === "all"} className="w-full mt-[14px] p-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors">
-              {selectedProjectId === "all" ? "Select a Project First" : "Add Cycle"}
+
+            <button
+              type="submit"
+              disabled={selectedProjectId === "all"}
+              className="w-full py-2 bg-[#107C10] hover:bg-[#0F7010] text-white rounded text-xs font-semibold disabled:opacity-50 transition-colors mt-4"
+            >
+              {selectedProjectId === "all" ? "Select a Specific Project First" : "Create Sprint Cycle"}
             </button>
           </form>
         </div>
       </div>
 
-      <EditableTaskList tasks={tasks} pipelines={pipelines} cycles={cycles} />
+      {/* Editable Tasks Table */}
+      <div className="mb-8">
+        <h3 className="font-bold text-base text-[#242424] dark:text-[#FFFFFF] mb-3">
+          Interactive Task Backlog & Execution
+        </h3>
+        <EditableTaskList tasks={tasks} />
+      </div>
 
-      <div className="glass-card p-6 mb-6">
-        <h3 className="text-lg font-bold mb-6 text-gray-900 dark:text-gray-100 flex items-center gap-2">
-          <i className="fa-solid fa-layer-group text-blue-600"></i> Active Development Pipelines
+      {/* Pipeline Cards Grid with Big Look Modal */}
+      <div className="mb-8">
+        <h3 className="font-bold text-base text-[#242424] dark:text-[#FFFFFF] mb-3 flex items-center gap-2">
+          <Layers className="w-4 h-4 text-[#0078D4]" />
+          Development Pipelines ({pipelines.length})
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {pipelines.map((pipeline: any) => (
-            <PipelineCard key={pipeline._id} pipeline={pipeline} />
+          {pipelines.map((p) => (
+            <PipelineCard key={p._id} pipeline={p} />
           ))}
           {pipelines.length === 0 && (
-            <div className="col-span-full text-center text-sm text-gray-500 dark:text-gray-400 py-6">No active development pipelines found. Head to Parallel Pipeline to create one.</div>
+            <div className="col-span-full py-12 text-center text-xs text-[#A19F9D] border border-dashed border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px]">
+              No development pipelines found for this context.
+            </div>
           )}
         </div>
       </div>
-      
+
+      {/* Workflow Guide */}
       <WorkflowGuide />
     </main>
   );

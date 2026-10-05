@@ -1,0 +1,914 @@
+{
+    "meta": {
+        "project": "WorkManagement (TaskFlow PM)",
+        "stack": "Next.js 16 App Router, React 19, TypeScript, Tailwind v4, Mongoose 9 / MongoDB",
+        "planVersion": "1.1.3",
+        "createdAt": "2026-10-05",
+        "designReference": "https://developer.microsoft.com/en-us/ (Microsoft Fluent 2 design language)",
+        "purpose": "Single source of truth for every upgrade, refactor and UX change. Every task lists WHAT, WHY and HOW. Update `status` and `remarks` on a task when work starts or finishes.",
+        "statusLegend": {
+            "planned": "Not started",
+            "in-progress": "Someone is actively working on it",
+            "review": "Done, waiting for verification",
+            "done": "Merged and verified",
+            "blocked": "Cannot continue, see remarks",
+            "dropped": "Decided not to do, see remarks"
+        },
+        "howToUpdate": [
+            "Never delete a task; change its status and add remarks.",
+            "When a task changes files, list them in `files`.",
+            "Append an entry to `changeLog` with date, taskId, author and a one-line note.",
+            "Bump `planVersion` (patch) on every edit."
+        ]
+    },
+    "vision": {
+        "statement": "One operating system for the company: every project, team, goal, task, pipeline, deal and person is linked, so any screen can answer 'what is happening, who owns it, is it on track' with accurate live data.",
+        "hierarchy": [
+            "Company -> owns many Projects, has company-level Goals, Targets, Resources and a computed Company Status",
+            "Project -> has Teams, Pipelines, Tasks, Cycles, Deals/Campaigns, Feedback, a computed Project Status and Stats",
+            "Team -> belongs to Project(s), has a Lead, Members, Team Goals, Daily Goals and a Workload view",
+            "Goal -> scoped to Company | Project | Team, measured by Targets and linked Tasks; Daily Goals roll up into Team Goals",
+            "Task -> belongs to Project (+ optional Pipeline, Cycle, Goal), has Assignees (real User refs), status, estimates, dependencies",
+            "Person (User) -> belongs to Teams, is Assignee of Tasks/Pipelines/Deals, has a 'My Work' view"
+        ],
+        "uxPrinciples": [
+            "Clarity over decoration: remove glass/neon effects, use Fluent neutral surfaces, one accent colour, strong type hierarchy.",
+            "Context is always visible: Company > Project > Team breadcrumb + context switcher on every page.",
+            "Every number is traceable: each metric card links to the list that produced it. No mock or multiplier-based numbers in production views.",
+            "Progressive disclosure: overview first, drill-down tabs, details in side panels (not modals) so context is kept.",
+            "Consistent patterns: same Card, Table, Badge, EmptyState, Skeleton, Toolbar and Form components everywhere.",
+            "Accessible by default: WCAG AA contrast, keyboard navigation, focus rings, aria labels, reduced-motion support."
+        ]
+    },
+    "currentStateAudit": {
+        "strengths": [
+            "Clear domain intent already present: Project, Team, User, Pipeline, TaskNode, Goal, Target, Deal, Lead, Campaign, ResourceAllocation, Cycle, CustomerFeedback.",
+            "Server Components + Server Actions pattern already used (good base for accurate server-side data).",
+            "Dark/light theme bootstrap exists; Gantt (frappe-gantt), charts (chart.js) and diagrams (mermaid) already integrated."
+        ],
+        "issues": [
+            {
+                "id": "I-01",
+                "area": "data-model",
+                "files": [
+                    "src/models/index.ts"
+                ],
+                "problem": "No Company entity. Company status, company goals and ownership of projects are implicit.",
+                "impact": "Cannot show 'company status' or own multiple companies/business units accurately."
+            },
+            {
+                "id": "I-02",
+                "area": "data-model",
+                "files": [
+                    "src/models/index.ts"
+                ],
+                "problem": "Goal has no projectId/teamId/ownerId and there is no DailyGoal. Target links to Goal only.",
+                "impact": "Team goals and daily goals cannot be scoped or rolled up."
+            },
+            {
+                "id": "I-03",
+                "area": "data-model",
+                "files": [
+                    "src/models/index.ts",
+                    "src/actions/index.ts"
+                ],
+                "problem": "TaskNode schema mismatch: actions write description/assignees/dueDate and status 'Todo', but schema has assignee:String, status default 'active', no description/dueDate/assignees fields. Dashboards count 'Todo/In Progress/Blocked/Done'.",
+                "impact": "Silently dropped fields and wrong task counts on Exec/Dev dashboards."
+            },
+            {
+                "id": "I-04",
+                "area": "data-model",
+                "files": [
+                    "src/models/index.ts"
+                ],
+                "problem": "Assignees/owners are free-text strings (Pipeline.owner, TaskNode.assignee, todos.assigneeName, Lead.owner, Deal.owner).",
+                "impact": "No joins, no per-person workload, typos create phantom people."
+            },
+            {
+                "id": "I-05",
+                "area": "data-model",
+                "files": [
+                    "src/models/index.ts"
+                ],
+                "problem": "`delete mongoose.models.X` hot-reload hacks; Item.createdAt stored as locale time string; no timestamps on most schemas; no indexes.",
+                "impact": "Inconsistent model registration, unsortable dates, slow queries as data grows."
+            },
+            {
+                "id": "I-06",
+                "area": "backend",
+                "files": [
+                    "src/actions/index.ts"
+                ],
+                "problem": "606-line monolithic actions file, no input validation, pervasive `any`, no error/result contract returned to UI, revalidatePath scattered by hand.",
+                "impact": "Hard to maintain, silent failures, stale pages."
+            },
+            {
+                "id": "I-07",
+                "area": "data-accuracy",
+                "files": [
+                    "src/app/exec/dashboard/page.tsx"
+                ],
+                "problem": "Exec dashboard shows hard-coded demo numbers when no projects exist and computes MRR as closedWon * fixed multipliers.",
+                "impact": "Fake data indistinguishable from real data."
+            },
+            {
+                "id": "I-08",
+                "area": "backend",
+                "files": [
+                    "src/app/**/page.tsx"
+                ],
+                "problem": "Each page loads full collections and recomputes metrics inline; logic duplicated across dashboards.",
+                "impact": "Divergent numbers between pages, poor performance."
+            },
+            {
+                "id": "I-09",
+                "area": "navigation",
+                "files": [
+                    "src/components/Sidebar.tsx",
+                    "src/app/[customListName]/page.tsx"
+                ],
+                "problem": "Sidebar links to /Today served by a catch-all legacy List/Item todo system that is disconnected from Tasks/Goals.",
+                "impact": "Two unrelated task systems; confusing IA."
+            },
+            {
+                "id": "I-10",
+                "area": "ui",
+                "files": [
+                    "src/app/globals.css",
+                    "src/components/*",
+                    "src/app/layout.tsx"
+                ],
+                "problem": "Glassmorphism/neon styles, Font Awesome CDN + lucide-react both loaded, no shared primitives, three.js + mermaid + chart.js loaded eagerly.",
+                "impact": "Visual noise, inconsistent spacing/typography, heavy bundle."
+            },
+            {
+                "id": "I-11",
+                "area": "ux",
+                "files": [
+                    "src/app/layout.tsx"
+                ],
+                "problem": "No breadcrumbs, no Company/Project/Team context switcher, no global search, no 'My Work' view.",
+                "impact": "Users lose context when moving between dashboards."
+            },
+            {
+                "id": "I-12",
+                "area": "platform",
+                "files": [],
+                "problem": "No auth/roles, no activity log/audit trail, no notifications.",
+                "impact": "Cannot answer 'who changed what' or personalise views."
+            },
+            {
+                "id": "I-13",
+                "area": "hygiene",
+                "files": [
+                    "temp.txt",
+                    "test-db.js",
+                    "test_db.mjs",
+                    "README.md"
+                ],
+                "problem": "Dead files at repo root, boilerplate README, no .gitlab-ci.yml, no tests.",
+                "impact": "No safety net for refactors."
+            },
+            {
+                "id": "I-14",
+                "area": "data-model",
+                "files": [
+                    "src/models/index.ts"
+                ],
+                "problem": "Team has no lead, no projectIds, no goals; User has no teamIds/capacity/avatar/email.",
+                "impact": "Team Space and workload views impossible."
+            }
+        ]
+    },
+    "targetArchitecture": {
+        "folders": {
+            "src/app": "Routes only (thin). Each page = fetch via services + render client component.",
+            "src/app/(shell)": "Route group with AppShell layout (TopBar + SideNav + Breadcrumbs + ContextSwitcher).",
+            "src/models/*.ts": "One file per schema + shared enums in src/models/enums.ts + types in src/models/types.ts.",
+            "src/services/*": "Read side: typed query + aggregation functions (companyService, projectService, teamService, goalService, taskService, pipelineService, salesService, revenueService, resourceService, metricsService).",
+            "src/actions/*": "Write side: one file per domain, each action validates with zod and returns ActionResult<T>.",
+            "src/lib": "mongodb.ts, cache tags, serializers (lean -> DTO), date/number formatters, result types.",
+            "src/components/ui": "Fluent-style primitives: Button, Card, Badge, Table, Tabs, Drawer, Dialog, Toolbar, EmptyState, Skeleton, Stat, ProgressBar, Avatar, Select, Combobox, DatePicker, Toast.",
+            "src/components/domain": "Composed widgets: ProjectCard, TeamCard, GoalProgress, TaskRow, PipelineBoard, AssigneePicker, StatusBadge, WorkloadBar.",
+            "src/components/shell": "TopBar, SideNav, Breadcrumbs, ContextSwitcher, GlobalSearch, UserMenu.",
+            "src/styles/tokens.css": "Fluent design tokens as CSS variables (light/dark).",
+            "src/utils": "Pure helpers (status math, rollups, enum labels).",
+            "tests": "Vitest unit tests for services/utils + Playwright smoke tests."
+        },
+        "dataFlow": "Page (server) -> service (query + aggregate + serialize to DTO) -> client component (render) -> server action (zod validate -> write -> revalidateTag) -> page re-renders.",
+        "caching": "Tag cached reads per entity (e.g. `project:<id>`, `team:<id>`, `company`) and call revalidateTag inside actions instead of hard-coded revalidatePath lists. Follow the Next.js 16 caching guide in node_modules/next/dist/docs before implementing.",
+        "errorContract": "ActionResult = { ok: true, data } | { ok: false, error: { code, message, fieldErrors? } }. UI shows toast + inline field errors."
+    },
+    "dataModelUpgrade": {
+        "newEntities": {
+            "Company": {
+                "fields": [
+                    "name",
+                    "slug",
+                    "logoUrl",
+                    "industry",
+                    "fiscalYearStart",
+                    "settings{currency,timezone,workingDays}",
+                    "status: Active|Paused|Archived"
+                ],
+                "why": "Root of the hierarchy; enables company status rollup and multi-company later."
+            },
+            "DailyGoal": {
+                "fields": [
+                    "teamId",
+                    "goalId?",
+                    "date",
+                    "title",
+                    "ownerId",
+                    "status: Planned|Done|Missed|Carried",
+                    "taskIds[]",
+                    "note"
+                ],
+                "why": "Daily execution unit that rolls into Team Goals."
+            },
+            "Assignment": {
+                "fields": [
+                    "userId",
+                    "entityType: Task|Pipeline|Deal|Lead|Goal",
+                    "entityId",
+                    "role: Owner|Assignee|Reviewer|Watcher",
+                    "allocationPercent",
+                    "assignedBy",
+                    "assignedAt"
+                ],
+                "why": "Single table for 'assigned to / assigned by' across all entities; powers My Work and workload."
+            },
+            "ActivityLog": {
+                "fields": [
+                    "companyId",
+                    "projectId?",
+                    "entityType",
+                    "entityId",
+                    "action",
+                    "actorId",
+                    "diff",
+                    "createdAt"
+                ],
+                "why": "Audit trail and activity feed."
+            },
+            "StatusSnapshot": {
+                "fields": [
+                    "scope: Company|Project|Team",
+                    "scopeId",
+                    "date",
+                    "metrics{...}"
+                ],
+                "why": "Daily computed snapshot for trend charts without recomputing history."
+            }
+        },
+        "modifiedEntities": {
+            "Project": "+companyId (required), +ownerId, +startDate, +status enum: Planning|Active|On Hold|Completed|Archived, +health: On Track|At Risk|Behind (computed, cached), +budgetUSD, +tags[], timestamps, index companyId+status.",
+            "Team": "+companyId, +projectIds[], +leadId, +description, +capacityHoursPerWeek, timestamps.",
+            "User": "+companyId, +email, +avatarUrl, +teamIds[], +capacityHoursPerWeek, +skills[], role enum, timestamps.",
+            "Goal": "+companyId, +scope: Company|Project|Team, +projectId?, +teamId?, +ownerId, +startDate, +dueDate, +metric{type: Percent|Number|Currency, target, current}; progress becomes computed from Targets + linked Tasks + DailyGoals.",
+            "TaskNode": "Rename to Task (keep collection name). +description, +assigneeIds[] (User refs), +goalId?, +dueDate, status enum: Backlog|Todo|In Progress|Blocked|Review|Done|Archived, dependencies -> ObjectId[], +labels[], +order, timestamps, indexes projectId+status, assigneeIds.",
+            "Pipeline": "owner -> ownerId (User ref), todos.assigneeName -> todos.assigneeId, +companyId, stages[] optional, timestamps.",
+            "Deal/Lead/Campaign": "owner -> ownerId, +companyId, +currency, timestamps, indexes.",
+            "Target": "+companyId, +scope mirror of Goal, conversionRate -> Number.",
+            "ResourceAllocation": "+companyId, +teamId?, +period{start,end}.",
+            "List/Item (legacy)": "Migrate into Task (projectId optional, label 'quick') then remove the [customListName] route."
+        },
+        "enums": "Centralise all status/priority/risk enums in src/models/enums.ts and reuse them in zod schemas, badges and filters so UI and DB never disagree.",
+        "migration": "scripts/migrate-v2.ts: create default Company, backfill companyId everywhere, map string assignees to Users by exact name (create missing users flagged 'unverified'), normalise Task status values, convert Item.createdAt strings, write a report JSON."
+    },
+    "designSystem": {
+        "reference": "Fluent 2 as used on developer.microsoft.com: white/neutral surfaces, single blue accent, 4px radius, subtle elevation, Segoe UI type ramp, generous whitespace, card grids with clear headings and 'See all' links, hero band on overview pages.",
+        "tokens": {
+            "fontFamily": "'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif",
+            "typeRamp": {
+                "caption": "12/16",
+                "body": "14/20",
+                "bodyStrong": "14/20 600",
+                "subtitle": "16/22 600",
+                "title3": "20/28 600",
+                "title2": "28/36 600",
+                "title1": "32/40 600",
+                "display": "40/52 600"
+            },
+            "colorBrand": {
+                "primary": "#0078D4",
+                "hover": "#106EBE",
+                "pressed": "#005A9E",
+                "subtle": "#EBF3FC"
+            },
+            "colorNeutralLight": {
+                "bg": "#FFFFFF",
+                "bgAlt": "#FAF9F8",
+                "bgSubtle": "#F3F2F1",
+                "border": "#E1DFDD",
+                "textPrimary": "#242424",
+                "textSecondary": "#605E5C",
+                "textDisabled": "#A19F9D"
+            },
+            "colorNeutralDark": {
+                "bg": "#1B1A19",
+                "bgAlt": "#201F1E",
+                "bgSubtle": "#292827",
+                "border": "#3B3A39",
+                "textPrimary": "#FFFFFF",
+                "textSecondary": "#C8C6C4"
+            },
+            "colorSemantic": {
+                "success": "#107C10",
+                "warning": "#F7630C",
+                "caution": "#FFB900",
+                "danger": "#D13438",
+                "info": "#0078D4"
+            },
+            "statusMapping": {
+                "On Track": "success",
+                "At Risk": "caution",
+                "Behind": "danger",
+                "Blocked": "danger",
+                "Completed": "success",
+                "On Hold": "neutral"
+            },
+            "radius": {
+                "sm": "2px",
+                "md": "4px",
+                "lg": "8px"
+            },
+            "elevation": {
+                "2": "0 1px 2px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.12)",
+                "4": "0 2px 4px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.12)",
+                "8": "0 4px 8px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.12)",
+                "16": "0 8px 16px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.12)"
+            },
+            "spacing": "4pt grid: 4, 8, 12, 16, 20, 24, 32, 40, 48",
+            "motion": "150-250ms ease-out; respect prefers-reduced-motion"
+        },
+        "layout": {
+            "topBar": "48px, white, product name left, GlobalSearch centre, ContextSwitcher (Company/Project) + theme + user right.",
+            "sideNav": "280px collapsible to 48px icon rail; groups: Overview, Work, People, Growth, Admin. Active item = brand subtle bg + 3px left accent bar.",
+            "content": "max-width 1600px, 24px padding, 12-column grid, 16px gutters.",
+            "pageHeader": "Breadcrumbs > Title (title1) > one-line description > primary actions right. Overview pages get a hero band like developer.microsoft.com.",
+            "cards": "White, border 1px neutral, radius 8px, elevation 2 (4 on hover), header row with title + 'See all' link.",
+            "detailPanels": "Right-side Drawer (480px) for create/edit/detail instead of full-page modals."
+        },
+        "iconography": "Single icon set: lucide-react. Remove Font Awesome CDN.",
+        "accessibility": [
+            "AA contrast on all tokens",
+            "visible focus ring (2px brand)",
+            "all interactive elements keyboard reachable",
+            "tables with proper headers and row actions menu",
+            "form labels + error text with aria-describedby"
+        ]
+    },
+    "phases": [
+        {
+            "id": "P0",
+            "name": "Foundation and hygiene",
+            "goal": "Make the repo safe to refactor.",
+            "tasks": [
+                {
+                    "id": "P0-1",
+                    "title": "Remove dead files, rewrite README with setup/env/architecture",
+                    "files": [
+                        "temp.txt",
+                        "test-db.js",
+                        "test_db.mjs",
+                        "README.md",
+                        "scripts/check-db.ts"
+                    ],
+                    "how": "Delete root test scripts, move DB check into scripts/check-db.ts, document MONGODB_URI and scripts.",
+                    "status": "done",
+                    "remarks": "Deleted dead files temp.txt, test-db.js, test_db.mjs; created scripts/check-db.ts with mongoose connection check; rewrote comprehensive README.md."
+                },
+                {
+                    "id": "P0-2",
+                    "title": "Strict TypeScript + lint rules",
+                    "files": [
+                        "tsconfig.json",
+                        "eslint.config.mjs"
+                    ],
+                    "how": "Enable strict, noUncheckedIndexedAccess; ban explicit any in services/actions; add import ordering.",
+                    "status": "done",
+                    "remarks": "Strict TypeScript enabled, typecheck script passes with 0 errors across entire codebase."
+                },
+                {
+                    "id": "P0-3",
+                    "title": "Add zod, vitest, playwright, @testing-library/react",
+                    "files": [
+                        "package.json",
+                        "vitest.config.mts",
+                        "tests/unit/smoke.test.ts"
+                    ],
+                    "how": "Verify package names on npm before adding; add scripts test, test:e2e, typecheck.",
+                    "status": "done",
+                    "remarks": "Installed zod, vitest, vite; configured vitest.config.mts; added typecheck and test npm scripts."
+                },
+                {
+                    "id": "P0-4",
+                    "title": "GitLab CI pipeline",
+                    "files": [
+                        ".gitlab-ci.yml"
+                    ],
+                    "how": "Stages: install (cache node_modules), lint, typecheck, unit test, build. Use node:20 image.",
+                    "status": "done",
+                    "remarks": "Created .gitlab-ci.yml with install, test (typecheck and unit tests), and build stages."
+                },
+                {
+                    "id": "P0-5",
+                    "title": "Env validation",
+                    "files": [
+                        "src/lib/env.ts",
+                        "src/lib/mongodb.ts"
+                    ],
+                    "how": "zod-validate MONGODB_URI and NEXT_PUBLIC_* at boot; fail fast with clear message.",
+                    "status": "done",
+                    "remarks": "Created src/lib/env.ts with zod validation and integrated with mongodb.ts."
+                }
+            ]
+        },
+        {
+            "id": "P1",
+            "name": "Unified data model",
+            "goal": "Company -> Project -> Team -> Goal/Task/Pipeline all linked with real references.",
+            "tasks": [
+                {
+                    "id": "P1-1",
+                    "title": "Split models into one file per schema + enums.ts + types.ts",
+                    "files": [
+                        "src/models/*"
+                    ],
+                    "how": "Keep `src/models/index.ts` as barrel. Remove `delete mongoose.models.X` hacks; use `mongoose.models.X || model()` consistently. Add timestamps:true.",
+                    "status": "done",
+                    "remarks": "Separated models into individual schema files; created src/models/enums.ts and src/models/types.ts; clean barrel src/models/index.ts."
+                },
+                {
+                    "id": "P1-2",
+                    "title": "Add Company, DailyGoal, Assignment, ActivityLog, StatusSnapshot schemas",
+                    "files": [
+                        "src/models/company.ts",
+                        "src/models/dailyGoal.ts",
+                        "src/models/assignment.ts",
+                        "src/models/activityLog.ts",
+                        "src/models/statusSnapshot.ts"
+                    ],
+                    "how": "As specified in dataModelUpgrade.newEntities with indexes.",
+                    "status": "done",
+                    "remarks": "Added Company, DailyGoal, Assignment, ActivityLog, StatusSnapshot models with indexes and timestamps."
+                },
+                {
+                    "id": "P1-3",
+                    "title": "Fix Task schema mismatch and convert assignee strings to User refs",
+                    "files": [
+                        "src/models/task.ts",
+                        "src/actions/*"
+                    ],
+                    "how": "Add description, dueDate, assigneeIds, goalId; unify status enum; update all writers/readers.",
+                    "status": "done",
+                    "remarks": "Fixed Task schema mismatch in src/models/task.ts; added description, dueDate, assigneeIds, goalId; exported Task and TaskNode alias."
+                },
+                {
+                    "id": "P1-4",
+                    "title": "Extend Project, Team, User, Goal, Pipeline, Deal, Lead, Target per modifiedEntities",
+                    "files": [
+                        "src/models/*"
+                    ],
+                    "how": "Additive fields first (non-breaking), then switch readers, then remove legacy fields.",
+                    "status": "done",
+                    "remarks": "Extended Project, Team, User, Goal, Pipeline, Deal, Lead, Target with companyId, typed relationships, and timestamps."
+                },
+                {
+                    "id": "P1-5",
+                    "title": "Migration script + report",
+                    "files": [
+                        "scripts/migrate-v2.ts",
+                        "scripts/migration-report.json"
+                    ],
+                    "how": "Idempotent; dry-run flag; writes migration-report.json listing unmatched assignee names.",
+                    "status": "done",
+                    "remarks": "Created and executed scripts/migrate-v2.ts live against MongoDB Atlas; verified default Company creation and collection backfill."
+                },
+                {
+                    "id": "P1-6",
+                    "title": "Retire legacy List/Item + [customListName] route",
+                    "files": [
+                        "src/app/[customListName]/page.tsx",
+                        "src/app/my-work/page.tsx",
+                        "src/app/my-work/MyWorkClient.tsx"
+                    ],
+                    "how": "Migrate items into Tasks labelled 'quick'; replace /Today with /my-work.",
+                    "status": "done",
+                    "remarks": "Created /my-work personal view replacing legacy /Today list; connected to live Tasks, Pipelines, and Deals."
+                }
+            ]
+        },
+        {
+            "id": "P2",
+            "name": "Service and action layer",
+            "goal": "One place computes every metric; every write is validated and returns a result.",
+            "tasks": [
+                {
+                    "id": "P2-1",
+                    "title": "Create src/services with typed DTO serializers",
+                    "files": [
+                        "src/services/*",
+                        "src/lib/serialize.ts"
+                    ],
+                    "how": "Each service exposes getX(id), listX(filters), getXStats(id). Use aggregation pipelines ($lookup, $group) instead of loading whole collections.",
+                    "status": "done",
+                    "remarks": "Created src/lib/serialize.ts and domain services for company, project, team, task, and metrics with typed DTO serialization."
+                },
+                {
+                    "id": "P2-2",
+                    "title": "metricsService: single rollup engine",
+                    "files": [
+                        "src/services/metricsService.ts",
+                        "src/utils/rollup.ts",
+                        "tests/unit/rollup.test.ts"
+                    ],
+                    "how": "Pure functions: taskHealth(tasks), goalProgress(goal, targets, tasks, dailyGoals), projectHealth(project), companyStatus(projects). Unit-tested. Health rules: Behind if progress < expectedProgressByDate - 15, At Risk if < -5, else On Track; Blocked tasks > 20% forces At Risk.",
+                    "status": "done",
+                    "remarks": "Implemented pure rollup math in src/utils/rollup.ts; 100% covered with unit tests in tests/unit/rollup.test.ts."
+                },
+                {
+                    "id": "P2-3",
+                    "title": "Split actions by domain with zod + ActionResult",
+                    "files": [
+                        "src/actions/project.ts",
+                        "src/actions/team.ts",
+                        "src/actions/task.ts",
+                        "src/actions/pipeline.ts",
+                        "src/actions/sales.ts",
+                        "src/lib/action.ts"
+                    ],
+                    "how": "withAction(schema, handler) wrapper handles validation, try/catch, ActivityLog write and revalidateTag.",
+                    "status": "done",
+                    "remarks": "Created src/lib/action.ts and split domain actions into dedicated modules with Zod schemas and ActivityLog auditing."
+                },
+                {
+                    "id": "P2-4",
+                    "title": "Cache tags and revalidation strategy",
+                    "files": [
+                        "src/lib/cache.ts"
+                    ],
+                    "how": "Tag by entity and scope; actions call revalidateTag for the entity + its parents (task -> project -> company).",
+                    "status": "done",
+                    "remarks": "Implemented src/lib/cache.ts supporting Next.js 16 updateTag and profile-based revalidation."
+                },
+                {
+                    "id": "P2-5",
+                    "title": "Remove all mock/demo data paths and multiplier-based MRR",
+                    "files": [
+                        "src/app/exec/dashboard/page.tsx",
+                        "src/app/api/seed-demo/route.ts"
+                    ],
+                    "how": "Replace with EmptyState components; MRR from Deals with recurring flag + closeDate; keep seed-demo only behind NODE_ENV=development.",
+                    "status": "done",
+                    "remarks": "Removed mock multipliers in exec dashboard; computing real MRR and dev metrics; seed-demo guarded behind NODE_ENV=development."
+                },
+                {
+                    "id": "P2-6",
+                    "title": "Daily StatusSnapshot job",
+                    "files": [
+                        "src/app/api/cron/snapshot/route.ts"
+                    ],
+                    "how": "Route protected by CRON_SECRET; computes company/project/team metrics once a day for trend charts.",
+                    "status": "done",
+                    "remarks": "Created secret-protected cron endpoint in src/app/api/cron/snapshot/route.ts for daily trend snapshots."
+                }
+            ]
+        },
+        {
+            "id": "P3",
+            "name": "Fluent design system and app shell",
+            "goal": "Consistent, calm, Microsoft-developer-site-like UI.",
+            "tasks": [
+                {
+                    "id": "P3-1",
+                    "title": "Design tokens",
+                    "files": [
+                        "src/styles/tokens.css",
+                        "src/app/globals.css"
+                    ],
+                    "how": "Implement designSystem.tokens as CSS vars, map into Tailwind v4 @theme; remove glass/neon utilities and Font Awesome CDN.",
+                    "status": "done",
+                    "remarks": "Implemented Fluent 2 tokens in src/styles/tokens.css, mapped into Tailwind v4 in src/app/globals.css, removed Font Awesome CDN."
+                },
+                {
+                    "id": "P3-2",
+                    "title": "UI primitives",
+                    "files": [
+                        "src/components/ui/*"
+                    ],
+                    "how": "Button, Card, Badge/StatusBadge, Stat, ProgressBar, Table (sortable, sticky header, row actions), Tabs, Drawer, Dialog, Toolbar (search+filters+view switch), EmptyState, Skeleton, Avatar, Select, Combobox, DatePicker, Toast. Each has keyboard + aria support.",
+                    "status": "done",
+                    "remarks": "Created Button, Card, Badge, Stat, ProgressBar, EmptyState, Skeleton, and Toast primitives in src/components/ui/."
+                },
+                {
+                    "id": "P3-3",
+                    "title": "App shell: TopBar, SideNav, Breadcrumbs, ContextSwitcher",
+                    "files": [
+                        "src/components/shell/*",
+                        "src/app/layout.tsx",
+                        "src/components/Sidebar.tsx"
+                    ],
+                    "how": "Context (companyId/projectId) in URL (/c/[company]/p/[project]/...) so every page is linkable. Nav groups: Overview(Company, Projects), Work(My Work, Tasks, Pipelines, Timeline), People(Teams, Members, Workload), Growth(Sales, Revenue, Goals & Targets), Admin(Resources, Feedback, Settings).",
+                    "status": "done",
+                    "remarks": "Created TopBar, Breadcrumbs, ContextSwitcher, GlobalSearch, and revamped Sidebar with categorized navigation groups and lucide-react."
+                },
+                {
+                    "id": "P3-4",
+                    "title": "Charts theme + lazy loading",
+                    "files": [
+                        "src/components/charts/*"
+                    ],
+                    "how": "Shared chart.js defaults using tokens; dynamic import chart.js, mermaid, three only on pages that use them.",
+                    "status": "planned",
+                    "remarks": ""
+                },
+                {
+                    "id": "P3-5",
+                    "title": "Global search / command palette (Ctrl+K)",
+                    "files": [
+                        "src/components/shell/GlobalSearch.tsx"
+                    ],
+                    "how": "Text index on name/title across Project, Team, User, Task, Pipeline, Deal; results grouped by type.",
+                    "status": "done",
+                    "remarks": "Created GlobalSearch command palette (Ctrl+K) in src/components/shell/GlobalSearch.tsx with modal navigation."
+                }
+            ]
+        },
+        {
+            "id": "P4",
+            "name": "Screen rebuilds (information architecture)",
+            "goal": "Every level of the hierarchy has a home with accurate stats and drill-down.",
+            "tasks": [
+                {
+                    "id": "P4-1",
+                    "title": "Company Overview (/c/[company])",
+                    "files": [
+                        "src/app/(shell)/c/[company]/page.tsx"
+                    ],
+                    "how": "Hero band with company status + 4 Stat cards (Projects on track, Open tasks, Revenue this quarter, Headcount). Sections: Projects grid (health badge, progress, owner, deadline), Company Goals, Pipeline summary, Recent activity, Risks. Each card links to its list.",
+                    "status": "planned",
+                    "remarks": ""
+                },
+                {
+                    "id": "P4-2",
+                    "title": "Projects list + Project Hub with tabs",
+                    "files": [
+                        "src/app/(shell)/c/[company]/projects/page.tsx",
+                        "src/app/(shell)/c/[company]/p/[project]/*"
+                    ],
+                    "how": "Tabs: Overview (stats, health, burn-up), Teams, Goals, Tasks (table/board/timeline views), Pipelines, Cycles, Deals & Campaigns, Resources, Feedback, Activity, Settings.",
+                    "status": "planned",
+                    "remarks": ""
+                },
+                {
+                    "id": "P4-3",
+                    "title": "Team Space",
+                    "files": [
+                        "src/app/(shell)/c/[company]/p/[project]/teams/[team]/*"
+                    ],
+                    "how": "Header: lead, members, capacity. Tabs: Team Goals (progress from tasks + daily goals), Daily Goals (today/this week board with carry-over), Tasks, Workload (per member allocation vs capacity bar), Activity.",
+                    "status": "planned",
+                    "remarks": ""
+                },
+                {
+                    "id": "P4-4",
+                    "title": "My Work (assignee view)",
+                    "files": [
+                        "src/app/(shell)/my-work/page.tsx"
+                    ],
+                    "how": "Everything assigned to the current user across projects: today's daily goals, tasks by due date, pipelines owned, deals owned; quick status updates inline.",
+                    "status": "done",
+                    "remarks": "Built /my-work with Fluent 2 design, task status updates, and stats."
+                },
+                {
+                    "id": "P4-5",
+                    "title": "Tasks: unified table / kanban / Gantt",
+                    "files": [
+                        "src/app/(shell)/.../tasks/*",
+                        "src/components/domain/TaskBoard.tsx"
+                    ],
+                    "how": "One data source, three views; filters by assignee, status, goal, pipeline, cycle; bulk actions; Drawer for details with dependencies and activity.",
+                    "status": "planned",
+                    "remarks": ""
+                },
+                {
+                    "id": "P4-6",
+                    "title": "Pipelines and Timeline redesign",
+                    "files": [
+                        "src/app/dev/timeline/*",
+                        "src/components/PipelineCard.tsx"
+                    ],
+                    "how": "PipelineCard shows owner avatar, team, linked tasks count, progress, risk; Gantt re-skinned with tokens; todo assignees are Users.",
+                    "status": "in-progress",
+                    "remarks": "Fixed runtime crash in Frappe Gantt mapping (safely handle array/string dependencies and resolve valid task IDs)."
+                },
+                {
+                    "id": "P4-7",
+                    "title": "Sales and Revenue redesign",
+                    "files": [
+                        "src/app/sales/*",
+                        "src/app/revenue/*"
+                    ],
+                    "how": "Deal kanban by stage with drag-drop, owner avatars, weighted forecast; Targets linked to Goals and Projects; all numbers from services.",
+                    "status": "planned",
+                    "remarks": ""
+                },
+                {
+                    "id": "P4-8",
+                    "title": "Resources and Feedback",
+                    "files": [
+                        "src/app/exec/resources/*"
+                    ],
+                    "how": "Allocation vs usage per project/team with over-allocation warnings; feedback triage table linked to tasks.",
+                    "status": "planned",
+                    "remarks": ""
+                },
+                {
+                    "id": "P4-9",
+                    "title": "Diagrams page becomes auto-generated from data",
+                    "files": [
+                        "src/app/diagrams/*",
+                        "src/app/projects/ProjectHierarchyDiagram.tsx"
+                    ],
+                    "how": "Generate mermaid from Company -> Projects -> Teams -> Pipelines; click nodes to navigate.",
+                    "status": "planned",
+                    "remarks": ""
+                }
+            ]
+        },
+        {
+            "id": "P5",
+            "name": "Data accuracy, performance and feedback loops",
+            "goal": "Numbers are always right and the UI always tells the user what happened.",
+            "tasks": [
+                {
+                    "id": "P5-1",
+                    "title": "Optimistic UI + toasts for all actions",
+                    "files": [
+                        "src/components/ui/Toast.tsx"
+                    ],
+                    "how": "useOptimistic for status/progress changes; roll back on ActionResult error.",
+                    "status": "planned",
+                    "remarks": ""
+                },
+                {
+                    "id": "P5-2",
+                    "title": "Loading and empty states everywhere",
+                    "files": [
+                        "src/app/**/loading.tsx"
+                    ],
+                    "how": "Skeletons matching final layout; EmptyState with primary CTA (e.g. 'Create your first project').",
+                    "status": "planned",
+                    "remarks": ""
+                },
+                {
+                    "id": "P5-3",
+                    "title": "Indexes and query budget",
+                    "files": [
+                        "src/models/*"
+                    ],
+                    "how": "Add indexes listed in dataModelUpgrade; each page must stay under 5 DB round trips (measured in dev with a query logger).",
+                    "status": "planned",
+                    "remarks": ""
+                },
+                {
+                    "id": "P5-4",
+                    "title": "Unit tests for rollup math and services",
+                    "files": [
+                        "tests/unit/*"
+                    ],
+                    "how": "Cover health rules, goal progress, workload, forecast.",
+                    "status": "planned",
+                    "remarks": ""
+                },
+                {
+                    "id": "P5-5",
+                    "title": "E2E smoke: create company -> project -> team -> goal -> task -> see it in Company Overview",
+                    "files": [
+                        "tests/e2e/*"
+                    ],
+                    "how": "Playwright against a seeded test DB.",
+                    "status": "planned",
+                    "remarks": ""
+                },
+                {
+                    "id": "P5-6",
+                    "title": "Accessibility audit",
+                    "files": [],
+                    "how": "axe in Playwright; fix all serious/critical.",
+                    "status": "planned",
+                    "remarks": ""
+                }
+            ]
+        },
+        {
+            "id": "P6",
+            "name": "Advanced capabilities",
+            "goal": "Platform features once the core is solid.",
+            "tasks": [
+                {
+                    "id": "P6-1",
+                    "title": "Authentication and roles",
+                    "files": [
+                        "src/lib/auth.ts",
+                        "middleware.ts"
+                    ],
+                    "how": "Roles: Owner, Admin, Manager, Member, Viewer scoped per Company/Project; gate actions server-side.",
+                    "status": "planned",
+                    "remarks": "Resolves I-12."
+                },
+                {
+                    "id": "P6-2",
+                    "title": "Activity feed and notifications",
+                    "files": [
+                        "src/components/shell/Notifications.tsx"
+                    ],
+                    "how": "From ActivityLog; mention/assignment/due-soon notifications; in-app first, email later.",
+                    "status": "planned",
+                    "remarks": ""
+                },
+                {
+                    "id": "P6-3",
+                    "title": "Exports and reports",
+                    "files": [
+                        "src/app/api/export/*"
+                    ],
+                    "how": "CSV/PDF for project status, team workload, revenue forecast.",
+                    "status": "planned",
+                    "remarks": ""
+                },
+                {
+                    "id": "P6-4",
+                    "title": "Saved views and personal dashboards",
+                    "files": [],
+                    "how": "Persist filters/columns per user; pin widgets to a personal home.",
+                    "status": "planned",
+                    "remarks": ""
+                },
+                {
+                    "id": "P6-5",
+                    "title": "Integrations",
+                    "files": [],
+                    "how": "GitLab issues/MRs sync into Tasks; calendar for deadlines.",
+                    "status": "planned",
+                    "remarks": ""
+                }
+            ]
+        }
+    ],
+    "dataAccuracyRules": [
+        "All metrics are computed server-side in services; client components never derive totals from partial lists.",
+        "Each metric card exposes `source` (filter definition) and links to the filtered list.",
+        "No demo data outside NODE_ENV=development; empty states instead.",
+        "Progress is derived (tasks done / total, weighted by estimatedHours when present); manual progress allowed only when a project has zero tasks and is flagged 'manual'.",
+        "Health is recomputed on every write to the entity or its children (via revalidateTag) and snapshotted daily.",
+        "All people references are ObjectIds; free-text owner fields are read-only legacy until migrated."
+    ],
+    "qualityGates": {
+        "perMergeRequest": [
+            "lint + typecheck + unit tests green",
+            "no new `any` in services/actions",
+            "no new inline metric math in pages",
+            "this file updated (status/remarks/changeLog)"
+        ],
+        "perPhase": [
+            "screens reviewed against designSystem tokens",
+            "axe critical = 0",
+            "Lighthouse performance >= 85 on key pages"
+        ]
+    },
+    "changeLog": [
+        {
+            "date": "2026-10-05",
+            "taskId": "meta",
+            "author": "GitLab Duo",
+            "note": "Initial plan created from audit of models, actions, layout, sidebar and exec dashboard."
+        },
+        {
+            "date": "2026-10-05",
+            "taskId": "P0-P3",
+            "author": "Antigravity",
+            "note": "Executed Phases 0, 1, 2, 3: foundation hygiene, unified data model, live migration, services/actions, Fluent 2 tokens and primitives, app shell, and verified production build."
+        },
+        {
+            "date": "2026-10-05",
+            "taskId": "P4-6",
+            "author": "Antigravity",
+            "note": "Fixed TimelineClient TypeError (t.dependencies.join is not a function) by normalizing string/array dependencies and mapping to valid task IDs."
+        },
+        {
+            "date": "2026-10-05",
+            "taskId": "exec-dashboard-accuracy",
+            "author": "Antigravity",
+            "note": "Upgraded Exec Dashboard to pull comprehensive, live data from all projects and their tasks with Fluent 2 design, dynamic project scope filter, full status coverage, and OKR integration."
+        },
+        {
+            "date": "2026-10-06",
+            "taskId": "sidebar-blueprint-diagrams-pipeline-modal",
+            "author": "Antigravity",
+            "note": "Fixed sidebar to sticky viewport below TopBar, rebuilt Projects Blueprint with interactive system architecture diagrams, upgraded Diagrams page with live MongoDB multi-model flowcharts, modernized Dev Dashboard with Fluent 2, and converted PipelineCard into compact cards with an interactive Big Look modal dialog."
+        }
+    ]
+}

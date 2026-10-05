@@ -1,0 +1,44 @@
+image: node:20
+
+stages:
+  - install
+  - test
+  - build
+
+variables:
+  npm_config_cache: "$CI_PROJECT_DIR/.npm"
+
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - .npm/
+    - node_modules/
+
+install_dependencies:
+  stage: install
+  script:
+    - npm ci --legacy-peer-deps
+  artifacts:
+    paths:
+      - node_modules/
+
+typecheck:
+  stage: test
+  script:
+    - npm run typecheck
+
+unit_test:
+  stage: test
+  script:
+    - npm test
+
+build:
+  stage: build
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - .next/
+    expire_in: 1 week

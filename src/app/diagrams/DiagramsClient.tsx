@@ -1,352 +1,352 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import mermaid from "mermaid";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
+import { Stat } from "@/components/ui/Stat";
+import {
+  GitGraph,
+  Layers,
+  FolderKanban,
+  Users,
+  CheckCircle2,
+  Workflow,
+  Target,
+  ArrowRight,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+} from "lucide-react";
 
-const pipelineCards = [
-  {
-    id: "strat-1",
-    title: "Strategic OKRs",
-    layer: "Strategic Level",
-    owner: "Executive Team",
-    status: "Active",
-    progress: 72,
-    risk: "Low",
-    metrics: [{ label: "Goals Linked", value: "100%" }]
-  },
-  {
-    id: "ops-1",
-    title: "Q3 Revenue Targets",
-    layer: "Operational Level",
-    owner: "Sales Director",
-    status: "At Risk",
-    progress: 45,
-    risk: "High",
-    metrics: [{ label: "Pipeline Coverage", value: "2.4x" }]
-  },
-  {
-    id: "exec-1",
-    title: "Engineering Sprints",
-    layer: "Execution Level",
-    owner: "Dev Leads",
-    status: "On Track",
-    progress: 88,
-    risk: "Medium",
-    metrics: [{ label: "Velocity", value: "45 pts" }]
-  }
-];
+interface DiagramsClientProps {
+  projects: any[];
+  pipelines: any[];
+  teams: any[];
+  tasks: any[];
+  goals: any[];
+  stats: {
+    totalProjects: number;
+    totalPipelines: number;
+    totalTeams: number;
+    totalTasks: number;
+    tasksDone: number;
+    totalGoals: number;
+    totalDeals: number;
+  };
+}
 
-export default function DiagramsClient() {
+export default function DiagramsClient({
+  projects,
+  pipelines,
+  teams,
+  tasks,
+  goals,
+  stats,
+}: DiagramsClientProps) {
+  const [activeDiagram, setActiveDiagram] = useState<"architecture" | "lifecycle" | "pipelines">("architecture");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const panZoomRef = useRef<any>(null);
+
+  const destroyPanZoom = () => {
+    if (panZoomRef.current) {
+      panZoomRef.current.destroy();
+      panZoomRef.current = null;
+    }
+  };
+
+  // Build live Mermaid code for the active diagram
+  const getDiagramCode = () => {
+    const sanitize = (str: string) => (str || "").replace(/["'\[\]\(\)]/g, " ").trim();
+
+    if (activeDiagram === "architecture") {
+      let code = `flowchart TD\n`;
+      code += `  classDef comp fill:#EBF3FC,stroke:#0078D4,stroke-width:2.5px,color:#0078D4,font-weight:bold;\n`;
+      code += `  classDef proj fill:#F3F2F1,stroke:#0078D4,stroke-width:1.5px,color:#242424,font-weight:bold;\n`;
+      code += `  classDef team fill:#FFFFFF,stroke:#605E5C,stroke-width:1.5px,color:#242424;\n`;
+      code += `  classDef pipe fill:#DFF6DD,stroke:#107C10,stroke-width:1.5px,color:#107C10;\n`;
+      code += `  classDef task fill:#FFFFFF,stroke:#E1DFDD,stroke-width:1px,color:#605E5C;\n`;
+
+      code += `  Company["🏢 Enterprise Organization"]:::comp\n`;
+
+      projects.forEach((p) => {
+        const pId = `P_${p._id}`;
+        code += `  ${pId}["📁 Project: ${sanitize(p.name)}"]:::proj\n`;
+        code += `  Company ==> ${pId}\n`;
+
+        // Associated pipelines
+        const pPipes = pipelines.filter((pipe) => pipe.projectId?._id === p._id);
+        pPipes.forEach((pipe) => {
+          const pipeId = `Pipe_${pipe._id}`;
+          code += `  ${pipeId}["⚡ Pipeline: ${sanitize(pipe.name)} (${pipe.progress}%)"]:::pipe\n`;
+          code += `  ${pId} --> ${pipeId}\n`;
+        });
+
+        // Associated tasks count
+        const pTasks = tasks.filter((t) => t.projectId?._id === p._id);
+        if (pTasks.length > 0) {
+          const tNode = `Tasks_${p._id}`;
+          code += `  ${tNode}["📋 ${pTasks.length} Tasks (${pTasks.filter((t: any) => ['done', 'completed'].includes(t.status.toLowerCase())).length} Done)"]:::task\n`;
+          code += `  ${pId} -.-> ${tNode}\n`;
+        }
+      });
+
+      // Teams block
+      if (teams.length > 0) {
+        code += `  subgraph TeamsCluster ["👥 Shared Functional Teams"]\n`;
+        teams.forEach((t) => {
+          code += `    T_${t._id}["👥 ${sanitize(t.name)} (${t.membersCount} members)"]:::team\n`;
+          code += `    Company -.-> T_${t._id}\n`;
+        });
+        code += `  end\n`;
+      }
+
+      return code;
+    }
+
+    if (activeDiagram === "pipelines") {
+      return `flowchart LR
+    %% Cross-functional Pipeline Interconnectivity
+    subgraph DevPhase ["1. Development Phase"]
+        Dev["💻 Core Development Pipeline"]
+    end
+
+    subgraph LaunchPhase ["2. Launch & Operations Phase"]
+        Mktg["📢 Marketing & Growth"]
+        Ops["⚙️ Operations & Deployment"]
+        HR["👥 Talent & Capability"]
+    end
+
+    subgraph RevenuePhase ["3. Commercialization Phase"]
+        Sales["💼 Sales & Deal Pipeline"]
+        Fin["💰 Finance & Revenue Recognition"]
+    end
+
+    Dev ==> Mktg
+    Dev ==> Ops
+    Dev ==> HR
+    Mktg --> Sales
+    Ops --> Sales
+    Sales ==> Fin
+    
+    classDef highlight fill:#EBF3FC,stroke:#0078D4,stroke-width:2px,color:#0078D4,font-weight:bold;
+    class Dev,Sales,Fin highlight;`;
+    }
+
+    // Lifecycle
+    return `flowchart TD
+    subgraph Strategy ["Strategic Level (Executive Leadership)"]
+        ExecDash["📊 Executive Dashboard & Portfolio Health"]
+        OKRs["🎯 Strategic Goals & OKRs"]
+        Finance["📈 Revenue Forecast & MRR Target"]
+    end
+
+    subgraph Management ["Management & Planning"]
+        Blueprints["📁 Project Blueprints & Teams"]
+        ResourceAlloc["👥 Capacity & Headcount Allocation"]
+        SprintCycles["🔄 Sprint Cycles & Iterations"]
+    end
+
+    subgraph Execution ["Engineering & Operational Delivery"]
+        Pipelines["⚡ Parallel Delivery Pipelines"]
+        TaskNodes["✅ Task Nodes & Kanban Board"]
+        TimelineGantt["📅 Timeline & Frappe Gantt Chart"]
+    end
+
+    subgraph Commercialization ["Commercialization & Feedback"]
+        DealsPipe["🤝 B2B Sales & Pilot Agreements"]
+        Telemetry["📡 Real-time Telemetry & Health Monitoring"]
+    end
+
+    ExecDash ==> Blueprints
+    OKRs --> Pipelines
+    Finance --> DealsPipe
+    Blueprints ==> Pipelines
+    ResourceAlloc --> TaskNodes
+    Pipelines ==> TaskNodes
+    SprintCycles --> TaskNodes
+    TaskNodes ==> TimelineGantt
+    TimelineGantt ==> DealsPipe
+    DealsPipe ==> Telemetry
+    Telemetry -. Live Rollups .-> ExecDash
+
+    classDef stage fill:#FFFFFF,stroke:#0078D4,stroke-width:1.5px,color:#242424;
+    class ExecDash,Blueprints,Pipelines,TaskNodes,DealsPipe,Telemetry stage;`;
+  };
+
   useEffect(() => {
-    mermaid.initialize({ startOnLoad: true, theme: "dark" });
-    mermaid.contentLoaded();
-  }, []);
+    if (!containerRef.current) return;
+    destroyPanZoom();
+
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: "neutral",
+      securityLevel: "loose",
+      fontFamily: "Segoe UI, Inter, sans-serif",
+    });
+
+    const code = getDiagramCode();
+    const renderId = `diagram-${activeDiagram}-${Date.now()}`;
+
+    mermaid
+      .render(renderId, code)
+      .then(async (result) => {
+        if (containerRef.current) {
+          containerRef.current.innerHTML = result.svg;
+
+          const svgElement = containerRef.current.querySelector("svg");
+          if (svgElement) {
+            svgElement.style.width = "100%";
+            svgElement.style.height = "100%";
+            svgElement.style.maxWidth = "100%";
+
+            const { default: svgPanZoom } = await import("svg-pan-zoom");
+            panZoomRef.current = svgPanZoom(svgElement, {
+              zoomEnabled: true,
+              controlIconsEnabled: false,
+              fit: true,
+              center: true,
+              panEnabled: true,
+              minZoom: 0.2,
+              maxZoom: 8,
+            });
+
+            panZoomRef.current.zoom(0.85);
+            panZoomRef.current.center();
+          }
+        }
+      })
+      .catch((err) => {
+        console.error("Mermaid render error:", err);
+      });
+
+    return () => destroyPanZoom();
+  }, [activeDiagram, projects, pipelines, teams, tasks]);
+
+  const handleZoomIn = () => panZoomRef.current?.zoomIn();
+  const handleZoomOut = () => panZoomRef.current?.zoomOut();
+  const handleReset = () => panZoomRef.current?.reset();
 
   return (
-    <main className="flex flex-col min-w-0 p-6 flex-1">
-      <header className="glass-card p-6 mb-6 border-l-4 border-cyan-500 dark:border-cyan-400 neon-border-blue flex justify-between items-center">
+    <main className="flex flex-col min-w-0 p-4 md:p-8 flex-1 max-w-7xl mx-auto w-full">
+      {/* Header */}
+      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold glow-text">Logic Flow Diagrams</h1>
-          <div className="date-badge mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
-            <i className="fa-solid fa-project-diagram"></i> Architecture Visualization
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+              System Architecture & Flow Diagrams
+            </h1>
+            <Badge tone="success" size="sm">
+              Live Auto-Generated
+            </Badge>
           </div>
+          <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">
+            Dynamic architectural visualization generated directly from active database entities and pipeline dependencies.
+          </p>
         </div>
       </header>
 
-      {/* Pipeline Cards Ecosystem Rollup */}
-      <div className="mb-8">
-        <div className="flex items-center gap-2 mb-4">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Live Ecosystem Rollup</h2>
-          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">Simulated Data</span>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {pipelineCards.map(card => (
-            <div key={card.id} className="glass-card p-5 relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <div className="text-xs font-bold text-cyan-600 dark:text-cyan-400 mb-1 uppercase tracking-wider">{card.layer}</div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{card.title}</h3>
-                </div>
-                <span className={`px-2 py-1 text-xs rounded-full font-medium ${card.status === 'On Track' || card.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                  {card.status}
-                </span>
-              </div>
-              
-              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
-                <i className="fa-regular fa-user"></i> {card.owner}
-              </div>
-
-              <div className="mb-4">
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-gray-600 dark:text-gray-400">Progress</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">{card.progress}%</span>
-                </div>
-                <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full">
-                  <div className="h-full bg-cyan-500 rounded-full" style={{ width: `${card.progress}%` }}></div>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center border-t border-gray-100 dark:border-gray-700 pt-3">
-                {card.metrics.map((m, i) => (
-                  <div key={i} className="flex flex-col">
-                    <span className="text-xs text-gray-500 dark:text-gray-400">{m.label}</span>
-                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{m.value}</span>
-                  </div>
-                ))}
-                <div className="flex flex-col text-right">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">Risk Profile</span>
-                  <span className={`text-sm font-semibold ${card.risk === 'High' ? 'text-rose-500' : card.risk === 'Medium' ? 'text-amber-500' : 'text-emerald-500'}`}>
-                    {card.risk}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+      {/* Live Ecosystem Rollup Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <Stat
+          label="Strategic Objectives"
+          value={`${stats.totalGoals} Goals Active`}
+          subtext="Linked to measurable targets"
+          icon={<Target className="w-5 h-5 text-[#0078D4]" />}
+        />
+        <Stat
+          label="Project Blueprints"
+          value={`${stats.totalProjects} Projects`}
+          subtext="Ecosystem architecture maps"
+          icon={<FolderKanban className="w-5 h-5 text-[#0078D4]" />}
+        />
+        <Stat
+          label="Delivery Pipelines"
+          value={`${stats.totalPipelines} Roadmaps`}
+          subtext="Active cross-functional tracks"
+          icon={<Layers className="w-5 h-5 text-[#107C10]" />}
+        />
+        <Stat
+          label="Task Execution"
+          value={`${stats.tasksDone} / ${stats.totalTasks} Done`}
+          subtext="Complete telemetry coverage"
+          icon={<CheckCircle2 className="w-5 h-5 text-[#107C10]" />}
+        />
       </div>
 
-      <div className="glass-card p-8 text-center mb-6 overflow-x-auto">
-        <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">Work Management Lifecycle Workflow</h3>
-        <p className="text-sm text-gray-500 mb-6 flex justify-center gap-4">
-          <span><span className="mr-1">✅</span> Fully Implemented</span>
-          <span><span className="mr-1">🔵</span> Implemented - Pending Test</span>
-          <span><span className="mr-1">🟡</span> Focused for Implementation</span>
-        </p>
-        
-        <div className="mermaid flex justify-center w-full min-w-[800px]">
-          {`flowchart TD
-    %% Strategic Planning Phase
-    subgraph Strategy["Strategic Level (Exec Dashboard)"]
-        G[✅ Define Company Goals / OKRs] --> T[✅ Set Quantifiable Targets]
-    end
-    
-    %% Operational Phase
-    subgraph Ops["Operational Level (Revenue & Sales Dashboards)"]
-        T --> P1[🔵 Create Operational Pipelines]
-        P1 --> D[🔵 Track Deals & Campaigns]
-    end
+      {/* Flow Diagram Tabs & Controls */}
+      <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-[#E1DFDD] dark:border-[#3B3A39] mb-4">
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setActiveDiagram("architecture")}
+              className={`px-3 py-1.5 rounded-[4px] text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                activeDiagram === "architecture"
+                  ? "bg-[#0078D4] text-white"
+                  : "bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#EDEBE9]"
+              }`}
+            >
+              <FolderKanban className="w-3.5 h-3.5" />
+              <span>1. Live Entity Hierarchy</span>
+            </button>
 
-    %% Execution Phase
-    subgraph Execution["Execution Level (Dev & Projects Dashboards)"]
-        G --> P2[✅ Create Projects]
-        Team[✅ Assign Teams to Projects] -.-> P2
-        P2 --> C[✅ Break down into Cycles/Sprints]
-        C --> Tasks[✅ Assign TaskNodes to Users]
-    end
-    
-    %% Data Flow Back to Dashboards
-    Tasks -- "Hours & Status" --> DevDash((✅ Dev Dashboard Metrics))
-    D -- "Revenue & Leads" --> RevDash((✅ Revenue Dashboard Metrics))
-    T -- "Target Completion" --> ExecDash((✅ Exec Dashboard OKR Progress))
-    Tasks -- "Task Rollups" --> ExecDash
+            <button
+              onClick={() => setActiveDiagram("pipelines")}
+              className={`px-3 py-1.5 rounded-[4px] text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                activeDiagram === "pipelines"
+                  ? "bg-[#0078D4] text-white"
+                  : "bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#EDEBE9]"
+              }`}
+            >
+              <Workflow className="w-3.5 h-3.5" />
+              <span>2. Parallel Pipeline Interconnectivity</span>
+            </button>
 
-    classDef dash fill:#090,stroke:#333,stroke-width:2px;
-    class DevDash,RevDash,ExecDash dash;`}
+            <button
+              onClick={() => setActiveDiagram("lifecycle")}
+              className={`px-3 py-1.5 rounded-[4px] text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                activeDiagram === "lifecycle"
+                  ? "bg-[#0078D4] text-white"
+                  : "bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#EDEBE9]"
+              }`}
+            >
+              <GitGraph className="w-3.5 h-3.5" />
+              <span>3. Work Management Lifecycle</span>
+            </button>
+          </div>
+
+          {/* Pan Zoom Controls */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleZoomIn}
+              className="p-1.5 rounded bg-[#F3F2F1] dark:bg-[#292827] hover:bg-[#E1DFDD] text-[#242424] dark:text-[#FFFFFF] transition-colors"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleZoomOut}
+              className="p-1.5 rounded bg-[#F3F2F1] dark:bg-[#292827] hover:bg-[#E1DFDD] text-[#242424] dark:text-[#FFFFFF] transition-colors"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              className="p-1.5 rounded bg-[#F3F2F1] dark:bg-[#292827] hover:bg-[#E1DFDD] text-[#242424] dark:text-[#FFFFFF] text-xs font-semibold px-2 transition-colors"
+              title="Reset View"
+            >
+              <RotateCcw className="w-3.5 h-3.5 mr-1" />
+              <span>Reset</span>
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div className="glass-card p-8 text-center mb-6 overflow-x-auto">
-        <h3 className="text-xl font-semibold mb-6 text-gray-900 dark:text-gray-100">Work Management Entity Data Model</h3>
-        
-        <div className="mermaid flex justify-center w-full min-w-[800px]">
-          {`erDiagram
-    USER ||--o{ TEAM_MEMBER : "belongs to"
-    TEAM ||--o{ TEAM_MEMBER : "has"
-    TEAM ||--o{ PROJECT : "owns"
-    
-    GOAL ||--o{ PROJECT : "drives"
-    GOAL ||--o{ TARGET : "measured by"
-    
-    PROJECT ||--o{ CYCLE : "divided into"
-    PROJECT ||--o{ TASKNODE : "contains"
-    
-    CYCLE ||--o{ TASKNODE : "scopes"
-    
-    PIPELINE ||--o{ TASKNODE : "operationalizes"
-    
-    USER {
-        ObjectId id
-        String name
-        String role
-    }
-    
-    TEAM {
-        ObjectId id
-        String name
-        ObjectId[] members
-    }
-    
-    GOAL {
-        ObjectId id
-        String title
-        String description
-        String category
-        Number progress
-        String status
-    }
-    
-    PROJECT {
-        ObjectId id
-        String name
-        ObjectId teamId
-        Date deadline
-        String status
-    }
-    
-    TARGET {
-        ObjectId id
-        String name
-        ObjectId goalId
-        String status
-        Number expectedValue
-        Number actualValue
-    }
-    
-    TASKNODE {
-        ObjectId id
-        String name
-        ObjectId projectId
-        ObjectId cycleId
-        String assignee
-        Number estimatedHours
-        Number actualHours
-    }`}
-        </div>
-      </div>
-
-      <div className="glass-card p-8 text-center mb-6 overflow-x-auto">
-        <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">Full Dashboard Ecosystem Map (360° Lifecycle)</h3>
-        <p className="text-sm text-gray-500 mb-6 flex justify-center gap-4">
-          <span><span className="mr-1">✅</span> Fully Implemented</span>
-          <span><span className="mr-1">🔵</span> Implemented - Pending Test</span>
-          <span><span className="mr-1">🟡</span> Focused for Implementation</span>
-        </p>
-
-        <div className="mermaid flex justify-center w-full min-w-[800px]">
-          {`flowchart TD
-    %% Portfolio / Enterprise Layer
-    subgraph Portfolio["Portfolio Management (Enterprise)"]
-        Board[🟡 Board / Investors Rollup]
-        Alloc[🔵 Resource & Budget Allocation]
-    end
-
-    %% Strategic Layer
-    subgraph Strategic["Strategic Level (Exec Dashboard)"]
-        G[✅ Company OKRs] 
-        ResDash((🔵 Resource Dashboard Risks & Budgets))
-    end
-    
-    %% Operational Layer
-    subgraph Operational["Operational Level (Sales, Finance, HR)"]
-        T[✅ Targets & Quotas]
-        P1[🔵 Sales Campaigns & Pipelines]
-        D[🔵 Deals & Revenue Tracking]
-    end
-
-    %% Execution Layer
-    subgraph Execution["Execution Level (Dev & Projects)"]
-        P2[✅ Project Portfolios]
-        C[✅ Dev Sprints & Cycles]
-        Tasks[✅ TaskNodes & Engineering Delivery]
-    end
-
-    %% Customer Feedback Loop
-    subgraph Market["Market & Customer"]
-        CustInsights((🟡 Customer Insights Satisfaction & Feedback))
-    end
-
-    %% Flow Connections
-    Board --> Alloc
-    Alloc --> G
-    Alloc --> ResDash
-    
-    G --> T
-    G --> P2
-    
-    T --> P1
-    P1 --> D
-    
-    P2 --> C
-    C --> Tasks
-    
-    %% Cross-functional Dependencies & Loops
-    Tasks -. "Feature Readiness" .-> P1
-    D -. "Revenue/Funding" .-> ResDash
-    ResDash -. "Constraints" .-> P2
-    
-    %% Output & Rollups
-    Tasks -- "Dev Metrics" --> DevDash((✅ Dev Dashboard))
-    D -- "Sales KPIs" --> RevDash((✅ Revenue Dashboard))
-    
-    %% Customer Loop
-    Tasks --> Market
-    Market --> CustInsights
-    CustInsights -. "Feature Requests/Bugs" .-> P2
-    
-    DevDash --> Board
-    RevDash --> Board
-    G --> Board
-
-    classDef dash fill:#080,stroke:#333,stroke-width:2px;
-    class DevDash,RevDash,ResDash,CustInsights dash;`}
-        </div>
-      </div>
-      <div className="glass-card p-8 text-center mb-6 overflow-x-auto">
-        <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">Perfect Execution of Project Step (Ecommerce Example)</h3>
-        <p className="text-sm text-gray-500 mb-6 flex justify-center gap-4">
-          Visualizing the flawless end-to-end flow from ideation to revenue generation.
-        </p>
-
-        <div className="mermaid flex justify-center w-full min-w-[800px]">
-          {`flowchart TD
-    %% Ideation & Approval
-    subgraph Ideation ["1. Ideation & Approval (Exec / Strategy)"]
-        M[Company Meetings & Presentations] --> |Decision Made| Appr[Project Approved]
-    end
-
-    %% Project Setup
-    subgraph Setup ["2. Project Setup (Projects Pipeline Page)"]
-        Appr --> PCreate[Create Project Record]
-        PCreate -.-> PDetails>Name, Description, Category: e.g. Ecommerce Product]
-    end
-
-    %% Team Building
-    subgraph Teaming ["3. Team Building (Teams & Units Page)"]
-        PCreate --> TBuild[Assemble Perfect Team]
-        GlobalPool[(Global Member Pool)] --> |Select Members| TBuild
-        TBuild -.-> TDetails>Draft Devs, Sales, HR, Research from Pool]
-    end
-
-    %% Pipeline Initialization
-    subgraph PipelineInit ["4. Pipeline Initialization (Parallel Pipeline Page)"]
-        TBuild --> PInit[Initialize New Pipeline]
-        PInit --> LinkProj[Link to Project]
-        PInit --> LinkTeam[Link Assembled Team]
-        LinkProj --> PipeType[Define Pipeline Type: Dev, Sales, HR...]
-        LinkTeam --> PipeType
-    end
-
-    %% Execution & Flow (Ecommerce Example)
-    subgraph Execution ["5. Omnichannel Execution (Ecommerce Example)"]
-        PipeType --> Dev[Development Pipeline<br/>Build Ecommerce Platform]
-        PipeType --> Rnd[Research Pipeline<br/>Market Analysis]
-        PipeType --> HR[HR Pipeline<br/>Manage Cashflow & Payroll for Team]
-        
-        Dev --> Prod((Product Launch &<br/>Distribution))
-        Rnd --> Prod
-        HR --> Prod
-    end
-
-    %% Sales & Revenue Lifecycle
-    subgraph RevSales ["6. Sales & Revenue Lifecycle (Dashboards)"]
-        Prod --> Sales[Sales Pipeline<br/>Generate Leads & Close Deals]
-        Sales --> Rev[Revenue Dashboard<br/>Track Targets & Incoming Cashflow]
-        Rev -.-> |ROI & Metrics| Ideation
-    end
-    
-    classDef highlight fill:#0284c7,stroke:#fff,stroke-width:2px,color:#fff;
-    class M,PCreate,TBuild,PInit,Dev,Sales,Rev highlight;`}
+        {/* Diagram Canvas */}
+        <div className="bg-[#FAF9F8] dark:bg-[#1B1A19] rounded-[8px] border border-[#E1DFDD] dark:border-[#3B3A39] w-full h-[650px] overflow-hidden relative shadow-inner">
+          <div ref={containerRef} className="w-full h-full" />
         </div>
       </div>
     </main>
