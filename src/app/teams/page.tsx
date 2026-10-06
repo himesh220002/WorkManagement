@@ -1,10 +1,22 @@
 import connectToDatabase from "@/lib/mongodb";
 import { Team, User } from "@/models";
 import RegisterMemberForm from "@/app/teams/RegisterMemberForm";
-import LinkMemberForm from "@/app/teams/LinkMemberForm";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import GlobalMemberDirectory from "@/app/teams/GlobalMemberDirectory";
+import TeamCard from "@/app/teams/TeamCard";
+import { Badge } from "@/components/ui/Badge";
+import { calculateMeritEvaluation } from "@/utils/meritEvaluation";
 import { revalidatePath } from "next/cache";
+import {
+  Users,
+  Plus,
+  Building2,
+  UserPlus,
+  Layers,
+  Sparkles,
+  ShieldCheck,
+  Award,
+} from "lucide-react";
 
 async function addTeam(formData: FormData) {
   "use server";
@@ -15,178 +27,238 @@ async function addTeam(formData: FormData) {
   if (name) {
     await Team.create({ name, members: memberIds });
     revalidatePath("/teams");
-  }
-}
-
-async function deleteTeam(formData: FormData) {
-  "use server";
-  await connectToDatabase();
-  const id = formData.get("teamId");
-
-  if (id) {
-    await Team.findByIdAndDelete(id);
-    revalidatePath("/teams");
-  }
-}
-async function addTeamMember(formData: FormData) {
-  "use server";
-  await connectToDatabase();
-  const teamId = formData.get("teamId") as string;
-  const name = formData.get("name") as string;
-  const role = formData.get("role") as string;
-  const position = formData.get("position") as string;
-  const rank = formData.get("rank") as string;
-
-  if (teamId && name && role) {
-    const newUser = (await User.create({ name, role, position, rank })) as any;
-    await Team.findByIdAndUpdate(teamId, { $push: { members: newUser._id } } as any);
-    revalidatePath("/teams");
-  }
-}
-
-async function removeTeamMember(formData: FormData) {
-  "use server";
-  await connectToDatabase();
-  const teamId = formData.get("teamId") as string;
-  const userId = formData.get("userId") as string;
-
-  if (teamId && userId) {
-    await Team.findByIdAndUpdate(teamId, { $pull: { members: userId } } as any);
-    // We NO LONGER delete the user, just unlink them from the team
-    revalidatePath("/teams");
+    revalidatePath("/diagrams");
   }
 }
 
 export default async function TeamsPage() {
   await connectToDatabase();
-  const teams = await Team.find({}).populate("members").lean();
+  const teamsRaw = await Team.find({}).populate("members").lean();
   const allUsersData = await User.find({}).lean();
 
   // Sanitize for client components
-  const allUsers = allUsersData.map(u => ({
+  const allUsers = allUsersData.map((u: any) => ({
     _id: u._id.toString(),
     name: u.name,
+    email: u.email || "",
     role: u.role,
     position: u.position,
     rank: u.rank,
     status: u.status,
     joinedDate: u.joinedDate ? new Date(u.joinedDate).toISOString() : null,
     leftDate: u.leftDate ? new Date(u.leftDate).toISOString() : null,
-    details: u.details
+    details: u.details || "",
+    performanceScore: u.performanceScore ?? 82,
+    completedProjectsCount: u.completedProjectsCount ?? 0,
+    currentProjectsCount: u.currentProjectsCount ?? 1,
+    relevancyScore: u.relevancyScore ?? 85,
+    supervisorRating: u.supervisorRating ?? 4.2,
+    teamLeadRating: u.teamLeadRating ?? 4.3,
+    remarks: u.remarks || "",
   }));
 
-  const userOptions = allUsers.map(u => ({
+  const userOptions = allUsers.map((u) => ({
     id: u._id,
-    name: `${u.name} - ${u.role} ${u.position ? `(${u.position})` : ''} - Rank ${u.rank || 1}`
+    name: `${u.name} — ${u.role} ${u.position ? `(${u.position})` : ""} [Rank ${u.rank || 1}]`,
   }));
+
+  const cleanTeams = teamsRaw.map((t: any) => ({
+    _id: t._id.toString(),
+    name: t.name,
+    members: Array.isArray(t.members)
+      ? t.members.map((m: any) => ({
+          _id: (m._id || m).toString(),
+          name: m.name || "Member",
+          role: m.role || "Member",
+          position: m.position || "",
+          rank: m.rank || "1",
+          status: m.status || "Working",
+          joinedDate: m.joinedDate ? new Date(m.joinedDate).toISOString() : null,
+          leftDate: m.leftDate ? new Date(m.leftDate).toISOString() : null,
+          details: m.details || "",
+          performanceScore: m.performanceScore ?? 82,
+          completedProjectsCount: m.completedProjectsCount ?? 0,
+          currentProjectsCount: m.currentProjectsCount ?? 1,
+          relevancyScore: m.relevancyScore ?? 85,
+          supervisorRating: m.supervisorRating ?? 4.2,
+          teamLeadRating: m.teamLeadRating ?? 4.3,
+          remarks: m.remarks || "",
+        }))
+      : [],
+  }));
+
+  // Aggregate promotion statistics
+  const activeStaff = allUsers.filter((u) => u.status === "Working" || !u.status);
+  const promotionReadyCount = activeStaff.filter(
+    (u) => calculateMeritEvaluation(u).isPromotionReady
+  ).length;
+  const avgMeritScore =
+    activeStaff.length > 0
+      ? Math.round(
+          activeStaff.reduce(
+            (acc, u) => acc + calculateMeritEvaluation(u).overallMeritScore,
+            0
+          ) / activeStaff.length
+        )
+      : 80;
 
   return (
-    <main className="flex flex-col min-w-0 p-6 flex-1">
-      <header className="glass-card p-6 mb-6 border-l-4 border-violet-500 neon-border-purple">
+    <main className="flex flex-col min-w-0 p-4 flex-1 max-w-[1600px] mx-auto w-full">
+      {/* Header */}
+      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-5 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold glow-text-purple">Teams & Units</h1>
-          <div className="date-badge mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
-            <i className="fa-solid fa-users"></i> Organizational Structure
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+              Teams, Squads &amp; Member Directory
+            </h1>
+            <Badge tone="brand" size="sm">
+              Organizational Units
+            </Badge>
+            <Badge tone="success" size="sm">
+              Dynamic Staff Rotation
+            </Badge>
+          </div>
+          <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">
+            Enterprise squad management, talent capability tiers (Rank 1–5), cross-initiative rotations, and global personnel records.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="text-xs font-semibold px-3 py-1 bg-[#EBF3FC] dark:bg-[#1C2B3D] text-[#0078D4] dark:text-[#479EF5] rounded-full inline-flex items-center gap-1.5 border border-[#0078D4]/20">
+            <Users className="w-3.5 h-3.5" />
+            <span>{cleanTeams.length} Active Squads</span>
+          </div>
+          <div className="text-xs font-semibold px-3 py-1 bg-[#DFF6DD] dark:bg-[#0F3818] text-[#107C10] dark:text-[#54B054] rounded-full inline-flex items-center gap-1.5 border border-[#107C10]/20">
+            <span>{allUsers.length} Registered Members</span>
+          </div>
+          <div className="text-xs font-semibold px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 rounded-full inline-flex items-center gap-1.5 border border-emerald-300 dark:border-emerald-700 shadow-sm">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
+            <span>{promotionReadyCount} Promotion Eligible</span>
           </div>
         </div>
       </header>
 
-      <div className="flex gap-4">
-
-        {/* Global Member Registration */}
-        <RegisterMemberForm />
-
-        {/* Upgrade: Added form to create a team natively with multi-select */}
-        <form action={addTeam} className="glass-card overflow-visible relative z-50 p-6 mb-6 flex flex-col gap-4 flex-1">
-          <div className="flex gap-4 items-center w-full">
-            <label className="text-lg text-gray-700 font-black dark:text-gray-100 whitespace-nowrap">Team Name:</label>
-            <input
-              type="text"
-              name="teamName"
-              className="tech-input flex-1"
-              placeholder="New Team Name..."
-              required
-            />
+      {/* Anti-Bias Meritocracy Architecture Ribbon */}
+      <div className="bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-5 h-5" />
           </div>
-          <div className="w-full flex gap-4 items-start">
-            <div className="flex-1">
-              <MultiSelectDropdown name="memberIds" options={userOptions} placeholder="Select initial members..." />
-            </div>
-            <button type="submit" className="px-6 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600 transition-colors flex items-center gap-2 h-[42px] font-semibold shadow-md hover:shadow-lg">
-              <i className="fa-solid fa-plus"></i> Create
-            </button>
+          <div>
+            <h2 className="text-xs font-bold text-[#242424] dark:text-[#FFFFFF] uppercase tracking-wider flex items-center gap-2">
+              <span>Automated Merit Progression Engine</span>
+              <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                Anti-Office Politics Active
+              </span>
+            </h2>
+            <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-0.5">
+              Promotions are computed dynamically: <strong>Performance Index (25%)</strong> + <strong>Tenure Working Days (10%)</strong> + <strong>Deliverables (25%)</strong> + <strong>Team Lead &amp; Supervisor Reviews (30%)</strong> + <strong>Skill Relevancy (10%)</strong>. Transparent criteria guarantee dedication is recognized automatically.
+            </p>
           </div>
-        </form>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0 self-stretch md:self-auto justify-between md:justify-end border-t md:border-t-0 pt-2 md:pt-0 border-[#EDEBE9] dark:border-[#292827]">
+          <div className="text-center px-3.5 py-1.5 bg-white dark:bg-[#201F1E] rounded-[6px] border border-[#E1DFDD] dark:border-[#3B3A39]">
+            <div className="text-[10px] text-[#8A8886]">Avg Merit Index</div>
+            <div className="text-sm font-bold text-[#0078D4]">{avgMeritScore}%</div>
+          </div>
+          <div className="text-center px-3.5 py-1.5 bg-white dark:bg-[#201F1E] rounded-[6px] border border-[#E1DFDD] dark:border-[#3B3A39]">
+            <div className="text-[10px] text-[#8A8886]">Ready for Rank-Up</div>
+            <div className="text-sm font-bold text-emerald-600">{promotionReadyCount} staff</div>
+          </div>
+        </div>
       </div>
 
+      {/* Forms Ribbon: Register Global Member + Create Team */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Register Global Member */}
+        <RegisterMemberForm />
+
+        {/* Create Team Form with Multi-Select initial members */}
+        <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex-1 flex flex-col justify-between">
+          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-[#F3F2F1] dark:border-[#292827]">
+            <Building2 className="w-4 h-4 text-[#107C10]" />
+            <h2 className="text-sm font-semibold text-[#242424] dark:text-[#FFFFFF]">
+              Establish New Operational Team
+            </h2>
+          </div>
+
+          <form action={addTeam} className="space-y-3 text-xs">
+            <div>
+              <label className="block font-medium text-[#242424] dark:text-[#FFFFFF] mb-1">
+                Team / Squad Name *
+              </label>
+              <input
+                type="text"
+                name="teamName"
+                placeholder="e.g. Core Engineering, Growth Squad"
+                className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block font-medium text-[#242424] dark:text-[#FFFFFF] mb-1">
+                Initial Team Members (Optional)
+              </label>
+              <div className="overflow-visible relative z-20">
+                <MultiSelectDropdown
+                  name="memberIds"
+                  options={userOptions}
+                  placeholder="Select initial company members..."
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                className="px-4 py-2 bg-[#107C10] hover:bg-[#0E6A0E] text-white rounded-[4px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Create Team</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* Global Directory */}
       <div className="mb-6">
         <GlobalMemberDirectory users={allUsers} />
       </div>
 
-      <div className="space-y-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-        {teams && teams.length > 0 ? (
-          teams.map((t: any) => (
-            <div key={t._id.toString()} className="glass-card overflow-hidden transition-all group">
-              {/* Team Header */}
-              <div className="p-4 bg-white/5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center group-hover:bg-violet-500/5 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center text-violet-500">
-                    <i className="fa-solid fa-user-group"></i>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-gray-900 dark:text-gray-100 text-lg">{t.name}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">{t.members?.length || 0} Members</div>
-                  </div>
-                </div>
-                <form action={deleteTeam} className="m-0">
-                  <input type="hidden" name="teamId" value={t._id.toString()} />
-                  <button type="submit" className="text-red-500 hover:text-red-600 transition-colors p-2" title="Delete Team">
-                    <i className="fa-solid fa-trash"></i>
-                  </button>
-                </form>
-              </div>
-
-              {/* Member List */}
-              <div className="p-4 space-y-3">
-                {t.members && t.members.length > 0 ? (
-                  t.members.map((member: any) => (
-                    <div key={member._id.toString()} className="flex justify-between items-center bg-white/10 p-2 rounded border border-gray-200/50 dark:border-gray-600/50 hover:bg-white/20 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400 text-xs font-bold uppercase">
-                          {member.name.substring(0, 2)}
-                        </div>
-                        <div>
-                          <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{member.name}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {member.role} {member.position && `- ${member.position}`} {member.rank && `(Rank ${member.rank})`}
-                          </div>
-                        </div>
-                      </div>
-                      <form action={removeTeamMember} className="m-0">
-                        <input type="hidden" name="teamId" value={t._id.toString()} />
-                        <input type="hidden" name="userId" value={member._id.toString()} />
-                        <button type="submit" className="text-gray-400 hover:text-red-500 text-sm transition-colors p-1" title="Remove Member">
-                          <i className="fa-solid fa-times"></i>
-                        </button>
-                      </form>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-gray-500 dark:text-gray-400 italic py-2">No members in this team yet.</div>
-                )}
-
-                {/* Link Member Form Client Component */}
-                <LinkMemberForm teamId={t._id.toString()} availableUsers={allUsers} />
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="glass-card p-10 text-center">
-            <i className="fa-solid fa-users-slash text-4xl text-gray-500 dark:text-gray-400 mb-4"></i>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">No teams configured</h3>
-            <p className="text-gray-500 dark:text-gray-400 mt-2">Create a new organizational team above!</p>
+      {/* Active Squads Cards Grid */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-[#0078D4]" />
+            <h3 className="font-bold text-sm text-[#242424] dark:text-[#FFFFFF] uppercase tracking-wider">
+              Configured Teams &amp; Squads ({cleanTeams.length})
+            </h3>
           </div>
-        )}
+          <span className="text-xs text-[#605E5C] dark:text-[#C8C6C4]">
+            Click member to view profile • Manage &amp; Rotate to adjust squad composition
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {cleanTeams.map((t) => (
+            <TeamCard key={t._id} team={t} allUsers={allUsers} />
+          ))}
+
+          {cleanTeams.length === 0 && (
+            <div className="col-span-full py-16 text-center bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px]">
+              <Users className="w-10 h-10 text-[#C8C6C4] mx-auto mb-2" />
+              <h4 className="font-semibold text-sm text-[#242424] dark:text-[#FFFFFF]">
+                No Teams Established
+              </h4>
+              <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">
+                Create a team above to assemble squads and assign members.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </main>
   );

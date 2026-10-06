@@ -24,6 +24,13 @@ const userSchema = new Schema<IUser>(
     joinedDate: { type: Date, default: Date.now },
     leftDate: { type: Date },
     details: { type: String },
+    performanceScore: { type: Number, default: 82 },
+    completedProjectsCount: { type: Number, default: 0 },
+    currentProjectsCount: { type: Number, default: 1 },
+    relevancyScore: { type: Number, default: 85 },
+    supervisorRating: { type: Number, default: 4.2 },
+    teamLeadRating: { type: Number, default: 4.3 },
+    remarks: { type: String, default: "" },
   },
   { timestamps: true }
 );

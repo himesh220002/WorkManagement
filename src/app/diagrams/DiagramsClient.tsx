@@ -1,22 +1,33 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import mermaid from "mermaid";
-import { Badge, StatusBadge } from "@/components/ui/Badge";
-import { Stat } from "@/components/ui/Stat";
 import {
-  GitGraph,
-  Layers,
   FolderKanban,
-  Users,
-  CheckCircle2,
   Workflow,
-  Target,
-  ArrowRight,
+  GitGraph,
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  Target,
+  Layers,
+  CheckCircle2,
+  Users,
+  CheckSquare,
+  Maximize2,
+  Minimize2,
+  ArrowRightLeft,
 } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
+import { Stat } from "@/components/ui/Stat";
+
+interface TeamMemberItem {
+  _id: string;
+  name: string;
+  role: string;
+  position?: string;
+  rank?: string;
+}
 
 interface DiagramsClientProps {
   projects: any[];
@@ -40,34 +51,57 @@ export default function DiagramsClient({
   pipelines,
   teams,
   tasks,
-  goals,
   stats,
 }: DiagramsClientProps) {
-  const [activeDiagram, setActiveDiagram] = useState<"architecture" | "lifecycle" | "pipelines">("architecture");
+  const [activeDiagram, setActiveDiagram] = useState<
+    "architecture" | "pipelines" | "lifecycle"
+  >("architecture");
+
+  // Dynamic Expansion Controls for the Architecture Hierarchy
+  const [expandMembers, setExpandMembers] = useState(false);
+  const [expandPipelines, setExpandPipelines] = useState(true);
+  const [expandTasks, setExpandTasks] = useState(false);
+  const [orientation, setOrientation] = useState<"LR" | "TD">("LR");
+
   const containerRef = useRef<HTMLDivElement>(null);
-  const panZoomRef = useRef<any>(null);
+  const panZoomRef = useRef<{
+    destroy: () => void;
+    zoomIn: () => void;
+    zoomOut: () => void;
+    reset: () => void;
+    zoom: (scale: number) => void;
+    center: () => void;
+  } | null>(null);
 
   const destroyPanZoom = () => {
     if (panZoomRef.current) {
-      panZoomRef.current.destroy();
+      try {
+        panZoomRef.current.destroy();
+      } catch (e) {
+        console.warn("Failed to destroy panZoom", e);
+      }
       panZoomRef.current = null;
     }
   };
 
   // Build live Mermaid code for the active diagram
   const getDiagramCode = () => {
-    const sanitize = (str: string) => (str || "").replace(/["'\[\]\(\)]/g, " ").trim();
+    const sanitize = (str: string) =>
+      (str || "").replace(/["'\[\]\(\)\{\}<>]/g, " ").trim();
 
     if (activeDiagram === "architecture") {
-      let code = `flowchart TD\n`;
+      let code = `flowchart ${orientation}\n`;
       code += `  classDef comp fill:#EBF3FC,stroke:#0078D4,stroke-width:2.5px,color:#0078D4,font-weight:bold;\n`;
       code += `  classDef proj fill:#F3F2F1,stroke:#0078D4,stroke-width:1.5px,color:#242424,font-weight:bold;\n`;
       code += `  classDef team fill:#FFFFFF,stroke:#605E5C,stroke-width:1.5px,color:#242424;\n`;
+      code += `  classDef member fill:#F8F9FA,stroke:#0078D4,stroke-width:1px,color:#242424;\n`;
       code += `  classDef pipe fill:#DFF6DD,stroke:#107C10,stroke-width:1.5px,color:#107C10;\n`;
       code += `  classDef task fill:#FFFFFF,stroke:#E1DFDD,stroke-width:1px,color:#605E5C;\n`;
+      code += `  classDef taskDone fill:#DFF6DD,stroke:#107C10,stroke-width:1px,color:#107C10;\n`;
 
       code += `  Company["🏢 Enterprise Organization"]:::comp\n`;
 
+      // Projects Block
       projects.forEach((p) => {
         const pId = `P_${p._id}`;
         code += `  ${pId}["📁 Project: ${sanitize(p.name)}"]:::proj\n`;
@@ -75,27 +109,66 @@ export default function DiagramsClient({
 
         // Associated pipelines
         const pPipes = pipelines.filter((pipe) => pipe.projectId?._id === p._id);
-        pPipes.forEach((pipe) => {
-          const pipeId = `Pipe_${pipe._id}`;
-          code += `  ${pipeId}["⚡ Pipeline: ${sanitize(pipe.name)} (${pipe.progress}%)"]:::pipe\n`;
-          code += `  ${pId} --> ${pipeId}\n`;
-        });
+        if (expandPipelines) {
+          pPipes.forEach((pipe) => {
+            const pipeId = `Pipe_${pipe._id}`;
+            code += `  ${pipeId}["⚡ Pipeline: ${sanitize(pipe.name)} (${pipe.progress}%)"]:::pipe\n`;
+            code += `  ${pId} --> ${pipeId}\n`;
+          });
+        } else if (pPipes.length > 0) {
+          const pipeSummaryId = `Pipes_Sum_${p._id}`;
+          code += `  ${pipeSummaryId}["⚡ ${pPipes.length} Pipelines"]:::pipe\n`;
+          code += `  ${pId} --> ${pipeSummaryId}\n`;
+        }
 
-        // Associated tasks count
+        // Associated tasks
         const pTasks = tasks.filter((t) => t.projectId?._id === p._id);
         if (pTasks.length > 0) {
-          const tNode = `Tasks_${p._id}`;
-          code += `  ${tNode}["📋 ${pTasks.length} Tasks (${pTasks.filter((t: any) => ['done', 'completed'].includes(t.status.toLowerCase())).length} Done)"]:::task\n`;
-          code += `  ${pId} -.-> ${tNode}\n`;
+          if (expandTasks) {
+            // Expanded individual tasks
+            pTasks.slice(0, 10).forEach((t: any) => {
+              const isDone = ["done", "completed"].includes(t.status.toLowerCase());
+              const tId = `T_${t._id}`;
+              code += `  ${tId}["${isDone ? "✅" : "📋"} ${sanitize(t.name)} [${t.status}]"]:::${
+                isDone ? "taskDone" : "task"
+              }\n`;
+              code += `  ${pId} -.-> ${tId}\n`;
+            });
+            if (pTasks.length > 10) {
+              const moreId = `MoreTasks_${p._id}`;
+              code += `  ${moreId}["... +${pTasks.length - 10} more tasks"]:::task\n`;
+              code += `  ${pId} -.-> ${moreId}\n`;
+            }
+          } else {
+            // Collapsed tasks count
+            const tNode = `Tasks_${p._id}`;
+            const doneCount = pTasks.filter((t: any) =>
+              ["done", "completed"].includes(t.status.toLowerCase())
+            ).length;
+            code += `  ${tNode}["📋 ${pTasks.length} Tasks (${doneCount} Done)"]:::task\n`;
+            code += `  ${pId} -.-> ${tNode}\n`;
+          }
         }
       });
 
-      // Teams block
+      // Teams Block
       if (teams.length > 0) {
         code += `  subgraph TeamsCluster ["👥 Shared Functional Teams"]\n`;
         teams.forEach((t) => {
-          code += `    T_${t._id}["👥 ${sanitize(t.name)} (${t.membersCount} members)"]:::team\n`;
-          code += `    Company -.-> T_${t._id}\n`;
+          const tId = `T_${t._id}`;
+          code += `    ${tId}["👥 ${sanitize(t.name)} (${t.membersCount || t.members?.length || 0} members)"]:::team\n`;
+          code += `    Company -.-> ${tId}\n`;
+
+          // Expanded individual team members
+          if (expandMembers && Array.isArray(t.members) && t.members.length > 0) {
+            t.members.forEach((m: TeamMemberItem) => {
+              const mId = `M_${t._id}_${m._id}`;
+              const roleDisplay = sanitize(m.position || m.role || "Member");
+              const rankDisplay = m.rank ? ` R${m.rank}` : "";
+              code += `    ${mId}["👤 ${sanitize(m.name)} - ${roleDisplay}${rankDisplay}"]:::member\n`;
+              code += `    ${tId} --> ${mId}\n`;
+            });
+          }
         });
         code += `  end\n`;
       }
@@ -132,7 +205,7 @@ export default function DiagramsClient({
     class Dev,Sales,Fin highlight;`;
     }
 
-    // Lifecycle
+    // Lifecycle Diagram
     return `flowchart TD
     subgraph Strategy ["Strategic Level (Executive Leadership)"]
         ExecDash["📊 Executive Dashboard & Portfolio Health"]
@@ -199,19 +272,30 @@ export default function DiagramsClient({
             svgElement.style.height = "100%";
             svgElement.style.maxWidth = "100%";
 
-            const { default: svgPanZoom } = await import("svg-pan-zoom");
-            panZoomRef.current = svgPanZoom(svgElement, {
-              zoomEnabled: true,
-              controlIconsEnabled: false,
-              fit: true,
-              center: true,
-              panEnabled: true,
-              minZoom: 0.2,
-              maxZoom: 8,
-            });
+            try {
+              const { default: svgPanZoom } = await import("svg-pan-zoom");
+              panZoomRef.current = svgPanZoom(svgElement, {
+                zoomEnabled: true,
+                controlIconsEnabled: false,
+                fit: true,
+                center: true,
+                panEnabled: true,
+                minZoom: 0.1,
+                maxZoom: 10,
+              });
 
-            panZoomRef.current.zoom(0.85);
-            panZoomRef.current.center();
+              // Safe RAF wrap to guarantee the matrix is invertible
+              requestAnimationFrame(() => {
+                try {
+                  panZoomRef.current?.zoom(0.85);
+                  panZoomRef.current?.center();
+                } catch (err) {
+                  console.warn("svgPanZoom fit/zoom deferred:", err);
+                }
+              });
+            } catch (err) {
+              console.warn("svgPanZoom initialization deferred:", err);
+            }
           }
         }
       })
@@ -220,27 +304,71 @@ export default function DiagramsClient({
       });
 
     return () => destroyPanZoom();
-  }, [activeDiagram, projects, pipelines, teams, tasks]);
+  }, [
+    activeDiagram,
+    projects,
+    pipelines,
+    teams,
+    tasks,
+    expandMembers,
+    expandPipelines,
+    expandTasks,
+    orientation,
+  ]);
 
-  const handleZoomIn = () => panZoomRef.current?.zoomIn();
-  const handleZoomOut = () => panZoomRef.current?.zoomOut();
-  const handleReset = () => panZoomRef.current?.reset();
+  const handleZoomIn = () => {
+    try {
+      panZoomRef.current?.zoomIn();
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
+  const handleZoomOut = () => {
+    try {
+      panZoomRef.current?.zoomOut();
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
+  const handleReset = () => {
+    try {
+      panZoomRef.current?.reset();
+      panZoomRef.current?.zoom(0.85);
+      panZoomRef.current?.center();
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
+  const handleExpandAll = () => {
+    setExpandMembers(true);
+    setExpandPipelines(true);
+    setExpandTasks(true);
+  };
+
+  const handleCollapseAll = () => {
+    setExpandMembers(false);
+    setExpandPipelines(false);
+    setExpandTasks(false);
+  };
 
   return (
-    <main className="flex flex-col min-w-0 p-4 md:p-8 flex-1 max-w-7xl mx-auto w-full">
+    <main className="flex flex-col min-w-0 p-4 flex-1 max-w-[1600px] mx-auto w-full">
       {/* Header */}
       <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
-              System Architecture & Flow Diagrams
+              System Architecture &amp; Flow Diagrams
             </h1>
             <Badge tone="success" size="sm">
               Live Auto-Generated
             </Badge>
           </div>
           <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">
-            Dynamic architectural visualization generated directly from active database entities and pipeline dependencies.
+            Dynamic architectural visualization generated directly from active database entities, teams, pipelines, and tasks.
           </p>
         </div>
       </header>
@@ -275,11 +403,11 @@ export default function DiagramsClient({
 
       {/* Flow Diagram Tabs & Controls */}
       <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-[#E1DFDD] dark:border-[#3B3A39] mb-4">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pb-4 border-b border-[#E1DFDD] dark:border-[#3B3A39] mb-4">
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setActiveDiagram("architecture")}
-              className={`px-3 py-1.5 rounded-[4px] text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+              className={`px-3 py-2 rounded-[4px] text-xs font-semibold transition-colors flex items-center gap-1.5 ${
                 activeDiagram === "architecture"
                   ? "bg-[#0078D4] text-white"
                   : "bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#EDEBE9]"
@@ -291,7 +419,7 @@ export default function DiagramsClient({
 
             <button
               onClick={() => setActiveDiagram("pipelines")}
-              className={`px-3 py-1.5 rounded-[4px] text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+              className={`px-3 py-2 rounded-[4px] text-xs font-semibold transition-colors flex items-center gap-1.5 ${
                 activeDiagram === "pipelines"
                   ? "bg-[#0078D4] text-white"
                   : "bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#EDEBE9]"
@@ -303,7 +431,7 @@ export default function DiagramsClient({
 
             <button
               onClick={() => setActiveDiagram("lifecycle")}
-              className={`px-3 py-1.5 rounded-[4px] text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+              className={`px-3 py-2 rounded-[4px] text-xs font-semibold transition-colors flex items-center gap-1.5 ${
                 activeDiagram === "lifecycle"
                   ? "bg-[#0078D4] text-white"
                   : "bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#EDEBE9]"
@@ -335,18 +463,97 @@ export default function DiagramsClient({
             <button
               type="button"
               onClick={handleReset}
-              className="p-1.5 rounded bg-[#F3F2F1] dark:bg-[#292827] hover:bg-[#E1DFDD] text-[#242424] dark:text-[#FFFFFF] text-xs font-semibold px-2 transition-colors"
+              className="flex items-center gap-1 p-1.5 rounded bg-[#F3F2F1] dark:bg-[#292827] hover:bg-[#E1DFDD] text-[#242424] dark:text-[#FFFFFF] text-xs font-semibold px-2 transition-colors"
               title="Reset View"
             >
-              <RotateCcw className="w-3.5 h-3.5 mr-1" />
+              <RotateCcw className="w-3.5 h-3.5 mr-0.5" />
               <span>Reset</span>
             </button>
           </div>
         </div>
 
+        {/* Dynamic Expand/Retract Child Controls (Active for Architecture Diagram) */}
+        {activeDiagram === "architecture" && (
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 mb-4 rounded-[6px] bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] text-xs">
+            <div className="flex items-center gap-2 font-semibold text-[#605E5C] dark:text-[#C8C6C4]">
+              <span>Expand Hierarchy Branches:</span>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Toggle Team Members */}
+              <label className="flex items-center gap-1.5 cursor-pointer font-medium text-[#242424] dark:text-[#FFFFFF]">
+                <input
+                  type="checkbox"
+                  checked={expandMembers}
+                  onChange={(e) => setExpandMembers(e.target.checked)}
+                  className="rounded accent-[#0078D4] w-3.5 h-3.5 cursor-pointer"
+                />
+                <Users className="w-3.5 h-3.5 text-[#0078D4]" />
+                <span>Team Members</span>
+              </label>
+
+              {/* Toggle Pipelines */}
+              <label className="flex items-center gap-1.5 cursor-pointer font-medium text-[#242424] dark:text-[#FFFFFF]">
+                <input
+                  type="checkbox"
+                  checked={expandPipelines}
+                  onChange={(e) => setExpandPipelines(e.target.checked)}
+                  className="rounded accent-[#0078D4] w-3.5 h-3.5 cursor-pointer"
+                />
+                <Layers className="w-3.5 h-3.5 text-[#107C10]" />
+                <span>Pipelines</span>
+              </label>
+
+              {/* Toggle Individual Tasks */}
+              <label className="flex items-center gap-1.5 cursor-pointer font-medium text-[#242424] dark:text-[#FFFFFF]">
+                <input
+                  type="checkbox"
+                  checked={expandTasks}
+                  onChange={(e) => setExpandTasks(e.target.checked)}
+                  className="rounded accent-[#0078D4] w-3.5 h-3.5 cursor-pointer"
+                />
+                <CheckSquare className="w-3.5 h-3.5 text-[#8F6B00]" />
+                <span>Individual Tasks</span>
+              </label>
+
+              <span className="text-[#E1DFDD] dark:text-[#3B3A39]">|</span>
+
+              {/* Orientation Switcher */}
+              <button
+                type="button"
+                onClick={() => setOrientation(orientation === "LR" ? "TD" : "LR")}
+                className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] hover:bg-[#F3F2F1] transition-colors font-medium text-[#242424] dark:text-[#FFFFFF]"
+                title="Switch layout orientation (Left-to-Right or Top-to-Bottom)"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5 text-[#0078D4]" />
+                <span>Layout: {orientation === "LR" ? "Horizontal (LR)" : "Vertical (TD)"}</span>
+              </button>
+
+              {/* Expand All / Collapse All */}
+              <button
+                type="button"
+                onClick={handleExpandAll}
+                className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] hover:bg-[#F3F2F1] text-[#0078D4] font-medium"
+              >
+                <Maximize2 className="w-3 h-3" />
+                <span>Expand All</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCollapseAll}
+                className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] hover:bg-[#F3F2F1] text-[#605E5C] dark:text-[#C8C6C4] font-medium"
+              >
+                <Minimize2 className="w-3 h-3" />
+                <span>Collapse All</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Diagram Canvas */}
         <div className="bg-[#FAF9F8] dark:bg-[#1B1A19] rounded-[8px] border border-[#E1DFDD] dark:border-[#3B3A39] w-full h-[650px] overflow-hidden relative shadow-inner">
-          <div ref={containerRef} className="w-full h-full" />
+          <div ref={containerRef} className="w-full h-full cursor-move" />
         </div>
       </div>
     </main>

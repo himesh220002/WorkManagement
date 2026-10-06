@@ -256,7 +256,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
     class Dev,Sales,Fin highlight;`;
 
   return (
-    <main className="flex flex-col min-w-0 p-4 md:p-8 flex-1 max-w-7xl mx-auto w-full">
+    <main className="flex flex-col min-w-0 p-4 flex-1 max-w-[1600px] mx-auto w-full">
       {/* Page Header */}
       <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex justify-between items-center">
         <div>
@@ -509,7 +509,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
                   <div className="border-t border-blue-100 dark:border-blue-800 pt-2">
                     <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Pipeline Tasks:</p>
                     <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
-                      {["UI Design & Wireframes","Frontend Component Development","Backend API Integration","Authentication Module","Unit Testing","CI/CD Pipeline Setup","Bug Fixes & QA"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0"></span>{t}</li>)}
+                      {["UI Design & Wireframes", "Frontend Component Development", "Backend API Integration", "Authentication Module", "Unit Testing", "CI/CD Pipeline Setup", "Bug Fixes & QA"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0"></span>{t}</li>)}
                     </ul>
                   </div>
                 </div>
@@ -531,7 +531,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
                   <div className="border-t border-emerald-100 dark:border-emerald-800 pt-2">
                     <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Pipeline Tasks:</p>
                     <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
-                      {["Lead List Preparation","Email Campaigns","Cold Calls","Demo Scheduling","Follow-ups","CRM Updates","Deal Closure"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>{t}</li>)}
+                      {["Lead List Preparation", "Email Campaigns", "Cold Calls", "Demo Scheduling", "Follow-ups", "CRM Updates", "Deal Closure"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>{t}</li>)}
                     </ul>
                   </div>
                 </div>
@@ -553,7 +553,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
                   <div className="border-t border-yellow-100 dark:border-yellow-800 pt-2">
                     <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Pipeline Tasks:</p>
                     <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
-                      {["Expense Report Collection","Invoice Verification","Payroll Audit","Tax Compliance Check","Budget Variance Analysis","Financial Statement Preparation","Audit Report Submission"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0"></span>{t}</li>)}
+                      {["Expense Report Collection", "Invoice Verification", "Payroll Audit", "Tax Compliance Check", "Budget Variance Analysis", "Financial Statement Preparation", "Audit Report Submission"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0"></span>{t}</li>)}
                     </ul>
                   </div>
                 </div>
@@ -575,7 +575,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
                   <div className="border-t border-amber-100 dark:border-amber-800 pt-2">
                     <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Pipeline Tasks:</p>
                     <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
-                      {["Vendor Evaluation","Contract Review","Logistics Tracking","Warehouse Utilization Analysis","Inventory Reordering","Delivery SLA Monitoring","Process Improvement Implementation"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"></span>{t}</li>)}
+                      {["Vendor Evaluation", "Contract Review", "Logistics Tracking", "Warehouse Utilization Analysis", "Inventory Reordering", "Delivery SLA Monitoring", "Process Improvement Implementation"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"></span>{t}</li>)}
                     </ul>
                   </div>
                 </div>
@@ -597,7 +597,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
                   <div className="border-t border-pink-100 dark:border-pink-800 pt-2">
                     <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Pipeline Tasks:</p>
                     <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
-                      {["Offer Letter Dispatch","Document Verification","Orientation Session","Training Modules","System Access Provisioning","Mentorship Assignment","Feedback Collection"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-pink-400 shrink-0"></span>{t}</li>)}
+                      {["Offer Letter Dispatch", "Document Verification", "Orientation Session", "Training Modules", "System Access Provisioning", "Mentorship Assignment", "Feedback Collection"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-pink-400 shrink-0"></span>{t}</li>)}
                     </ul>
                   </div>
                 </div>
@@ -619,7 +619,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
                   <div className="border-t border-violet-100 dark:border-violet-800 pt-2">
                     <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Pipeline Tasks:</p>
                     <ul className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
-                      {["Content Creation","Social Media Posting","Ad Campaign Setup","SEO Optimization","Influencer Outreach","Analytics Tracking","Campaign Report"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0"></span>{t}</li>)}
+                      {["Content Creation", "Social Media Posting", "Ad Campaign Setup", "SEO Optimization", "Influencer Outreach", "Analytics Tracking", "Campaign Report"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0"></span>{t}</li>)}
                     </ul>
                   </div>
                 </div>
@@ -641,7 +641,7 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
                   <div className="border-t border-rose-100 dark:border-rose-800 pt-2">
                     <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Pipeline Tasks:</p>
                     <ul className="grid grid-cols-2 gap-x-4 text-xs text-gray-500 dark:text-gray-400">
-                      {["Self-Assessment Collection","Manager Evaluations","Peer Reviews","Performance Scoring","Feedback Meetings","Promotion/Increment Decisions","HR Report Submission"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0"></span>{t}</li>)}
+                      {["Self-Assessment Collection", "Manager Evaluations", "Peer Reviews", "Performance Scoring", "Feedback Meetings", "Promotion/Increment Decisions", "HR Report Submission"].map(t => <li key={t} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0"></span>{t}</li>)}
                     </ul>
                   </div>
                 </div>

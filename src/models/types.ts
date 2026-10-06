@@ -90,6 +90,13 @@ export interface IUser {
   joinedDate?: Date;
   leftDate?: Date;
   details?: string;
+  performanceScore?: number;
+  completedProjectsCount?: number;
+  currentProjectsCount?: number;
+  relevancyScore?: number;
+  supervisorRating?: number;
+  teamLeadRating?: number;
+  remarks?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }

@@ -1,188 +1,519 @@
 "use client";
 
-import { addTarget, toggleTargetChecklist, updateTargetChecklist, deleteTarget, updateTarget, addGoal } from "@/actions";
-
 import { useState } from "react";
+import {
+  addTarget,
+  toggleTargetChecklist,
+  updateTargetChecklist,
+  deleteTarget,
+  updateTarget,
+  addGoal,
+} from "@/actions";
+import { Badge } from "@/components/ui/Badge";
+import {
+  Target,
+  Plus,
+  Trash2,
+  Edit3,
+  Building2,
+  Globe,
+  Link as LinkIcon,
+  CheckSquare,
+  Square,
+  Sparkles,
+} from "lucide-react";
 
-export default function RevenueTargetsClient({ targets, goals = [] }: { targets: any[], goals?: any[] }) {
+interface TargetChecklistItem {
+  name: string;
+  isCompleted: boolean;
+}
+
+interface TargetItem {
+  _id: string;
+  name: string;
+  industry?: string;
+  region?: string;
+  status: string;
+  expectedValue: number;
+  actualValue: number;
+  goalId?: string | null;
+  checklist: TargetChecklistItem[];
+}
+
+interface GoalItem {
+  _id: string;
+  title: string;
+}
+
+interface RevenueTargetsClientProps {
+  targets: TargetItem[];
+  goals?: GoalItem[];
+}
+
+export default function RevenueTargetsClient({
+  targets = [],
+  goals = [],
+}: RevenueTargetsClientProps) {
   const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
 
   return (
-    <main className="flex flex-col min-w-0 p-6 flex-1">
-      <header className="glass-card p-6 mb-6 border-l-4 border-amber-500 flex justify-between items-center neon-border-amber">
+    <main className="flex flex-col min-w-0 p-4 flex-1 max-w-[1600px] mx-auto w-full">
+      {/* Header */}
+      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold glow-text-amber">Target Customization & Goals</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+              Revenue Target Customization &amp; Goals
+            </h1>
+            <Badge tone="brand" size="sm">
+              Strategic OKRs
+            </Badge>
+            <Badge tone="success" size="sm">
+              Live Alignment
+            </Badge>
+          </div>
+          <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">
+            Define corporate revenue targets, link strategic OKR initiatives, and track milestone checklists.
+          </p>
         </div>
-        <div className="storage-tag px-3 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full text-sm font-medium text-gray-600 dark:text-gray-300">
-          <span className="w-2 h-2 rounded-full bg-green-500 inline-block mr-2"></span>
-          Active
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold px-3 py-1 bg-[#DFF6DD] dark:bg-[#0F3818] text-[#107C10] dark:text-[#54B054] rounded-full inline-flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#107C10]" />
+            Active Target Tracking ({targets.length})
+          </span>
         </div>
       </header>
 
-      {/* Strategic Goals & OKRs Form */}
-      <div className="glass-card p-6 mb-6">
-        <h2 className="text-xl text-gray-900 dark:text-gray-100 font-semibold mb-4">Strategic Goals & OKRs</h2>
-        <form action={addGoal} className="flex gap-4 flex-wrap items-center">
-          <input
-            type="text"
-            name="title"
-            className="tech-input flex-1 min-w-[200px]"
-            placeholder="New Goal Title (e.g. Q3 Market Expansion)..."
-            required
-          />
-          <input
-            type="text"
-            name="description"
-            className="tech-input flex-1 min-w-[200px]"
-            placeholder="Key Result / Description..."
-          />
-          <select name="category" className="tech-input cursor-pointer">
-            <option value="Company">Company</option>
-            <option value="Department">Department</option>
-            <option value="Team">Team</option>
-          </select>
-          <button type="submit" className="px-4 py-2 bg-indigo-500 text-white rounded-lg shadow-sm hover:bg-indigo-600 transition-colors flex items-center gap-2 font-semibold">
-            <i className="fa-solid fa-bullseye"></i> Set Goal
-          </button>
-        </form>
-      </div>
+      {/* Creation Panels (Goals & Targets) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Set Strategic Goal Form */}
+        <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-[#F3F2F1] dark:border-[#292827]">
+            <Sparkles className="w-4 h-4 text-[#0078D4]" />
+            <h2 className="text-sm font-semibold text-[#242424] dark:text-[#FFFFFF]">
+              Strategic Goals &amp; Executive OKRs
+            </h2>
+          </div>
+          <form action={addGoal} className="space-y-3 text-xs">
+            <div>
+              <label className="block font-medium text-[#242424] dark:text-[#FFFFFF] mb-1">
+                Goal Title *
+              </label>
+              <input
+                type="text"
+                name="title"
+                required
+                placeholder="e.g. Q4 International Expansion & Enterprise ARR"
+                className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+              />
+            </div>
 
-      {/* Create Target Form */}
-      <div className="glass-card p-6 mb-6">
-        <h4 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">Create New Target</h4>
-        <form action={addTarget} className="flex gap-4 flex-wrap items-center">
-          <input type="text" name="name" className="tech-input flex-1 min-w-[150px]" placeholder="Target Name" required />
-          <input type="number" name="expectedValue" className="tech-input w-32" placeholder="Expected Val" required />
-          <input type="number" name="actualValue" className="tech-input w-32" placeholder="Actual Val" />
-          
-          <select name="goalId" className="tech-input w-48 cursor-pointer">
-            <option value="">No Linked Goal</option>
-            {goals.map(g => (
-              <option key={g._id} value={g._id}>{g.title}</option>
-            ))}
-          </select>
-          
-          <input type="text" name="industry" className="tech-input w-32" placeholder="Industry" />
-          <input type="text" name="region" className="tech-input w-32" placeholder="Region" />
-          <button type="submit" className="px-4 py-2 bg-emerald-500 text-white rounded-lg shadow-sm hover:bg-emerald-600 transition-colors flex items-center gap-2 font-semibold">
-            <i className="fa-solid fa-plus"></i> Create Target
-          </button>
-        </form>
-      </div>
-
-      {/* Target List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {targets && targets.length > 0 ? (
-          targets.map((target) => (
-            <div key={target._id} className="glass-card p-6 flex flex-col h-full relative hover:neon-border-blue transition-all group">
-              {target.goalId && (
-                <div className="absolute -top-3 -right-3 bg-blue-500 text-white text-xs px-3 py-1.5 rounded-full shadow border-2 border-white dark:border-gray-800 flex items-center gap-1.5 truncate max-w-[200px]" title={goals.find(g => g._id === target.goalId)?.title || "Linked Goal"}>
-                  <i className="fa-solid fa-link"></i> <span className="truncate">{goals.find(g => g._id === target.goalId)?.title || "Linked Goal"}</span>
-                </div>
-              )}
-              
-              {editingTargetId === target._id ? (
-                <form action={async (formData) => {
-                  await updateTarget(formData);
-                  setEditingTargetId(null);
-                }} className="flex flex-col gap-3 mb-4">
-                  <input type="hidden" name="targetId" value={target._id} />
-                  <input type="text" name="name" defaultValue={target.name} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-semibold" required />
-                  <div className="flex gap-2">
-                    <input type="number" name="actualValue" defaultValue={target.actualValue} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Actual" required />
-                    <input type="number" name="expectedValue" defaultValue={target.expectedValue} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Expected" required />
-                  </div>
-                  <div className="flex gap-2">
-                    <input type="text" name="industry" defaultValue={target.industry} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Industry" />
-                    <input type="text" name="region" defaultValue={target.region} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" placeholder="Region" />
-                  </div>
-                  <select name="status" defaultValue={target.status} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 mb-2">
-                    <option value="Active">Active</option>
-                    <option value="Completed">Completed</option>
-                    <option value="Rejected">Rejected</option>
-                  </select>
-                  <select name="goalId" defaultValue={target.goalId || ""} className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-                    <option value="">No Linked Goal</option>
-                    {goals.map(g => (
-                      <option key={g._id} value={g._id}>{g.title}</option>
-                    ))}
-                  </select>
-                  <div className="flex gap-2 justify-end mt-2">
-                    <button type="button" onClick={() => setEditingTargetId(null)} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">Cancel</button>
-                    <button type="submit" className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">Save Changes</button>
-                  </div>
-                </form>
-              ) : (
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{target.name}</h4>
-                      <button onClick={() => setEditingTargetId(target._id)} className="text-gray-400 hover:text-blue-500 transition-colors p-1" title="Edit Target">
-                        <i className="fa-solid fa-pen text-xs"></i>
-                      </button>
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                      <i className="fa-solid fa-industry mr-1"></i> {target.industry || "N/A"} &nbsp;|&nbsp;
-                      <i className="fa-solid fa-earth-americas ml-1 mr-1"></i> {target.region || "N/A"}
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <div className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
-                        Actual: {target.actualValue}
-                      </div>
-                      <div className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
-                        Expected: {target.expectedValue}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <span className={`px-2 py-1 text-xs rounded-full font-medium ${target.status === "Completed" ? "bg-emerald-100 text-emerald-700" : target.status === "Rejected" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
-                      {target.status}
-                    </span>
-                    <form action={deleteTarget} className="m-0" onSubmit={(e) => { if (!window.confirm("Are you sure you want to delete this Target?")) e.preventDefault(); }}>
-                      <input type="hidden" name="targetId" value={target._id.toString()} />
-                      <button type="submit" className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Delete Target">
-                        <i className="fa-solid fa-trash-can text-sm"></i>
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              )}
-
-              {/* Checklist */}
-              <div className="flex-1 mb-4 bg-white/5 dark:bg-gray-700/30 p-3 rounded-md border border-gray-200/50 dark:border-gray-600/50">
-                <h5 className="text-sm font-semibold mb-3 text-gray-600 dark:text-gray-300">Completion Checklist</h5>
-                <div className="space-y-3 mb-4">
-                  {target.checklist && target.checklist.map((task: any, index: number) => (
-                    <form key={index} action={toggleTargetChecklist} className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:bg-gray-700/50 rounded transition-colors m-0">
-                      <input type="hidden" name="targetId" value={target._id.toString()} />
-                      <input type="hidden" name="taskIndex" value={index.toString()} />
-                      <input 
-                        type="checkbox" 
-                        onChange={(e) => e.target.form?.submit()}
-                        defaultChecked={task.isCompleted}
-                        className="w-4 h-4 cursor-pointer accent-blue-500" 
-                      />
-                      <span className={`text-sm ${task.isCompleted ? 'text-gray-500 dark:text-gray-400 line-through' : 'text-gray-900 dark:text-gray-100'}`}>
-                        {task.name}
-                      </span>
-                    </form>
-                  ))}
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-medium text-[#242424] dark:text-[#FFFFFF] mb-1">
+                  Key Result / Description
+                </label>
+                <input
+                  type="text"
+                  name="description"
+                  placeholder="e.g. Hit $2.5M in closed ARR"
+                  className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                />
               </div>
 
-              {/* Add New Checklist Item Form */}
-              <form action={updateTargetChecklist} className="flex gap-2 m-0 border-t border-gray-200/50 dark:border-gray-700/50 pt-4 mt-auto">
-                <input type="hidden" name="targetId" value={target._id.toString()} />
-                <input type="text" name="taskName" className="tech-input flex-1" placeholder="Add actionable step..." required />
-                <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold">Add</button>
-              </form>
+              <div>
+                <label className="block font-medium text-[#242424] dark:text-[#FFFFFF] mb-1">
+                  Category
+                </label>
+                <select
+                  name="category"
+                  className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                >
+                  <option value="Company">Company</option>
+                  <option value="Department">Department</option>
+                  <option value="Team">Team</option>
+                </select>
+              </div>
             </div>
-          ))
-        ) : (
-          <div className="glass-card p-10 text-center col-span-full">
-            <i className="fa-solid fa-bullseye text-4xl text-gray-500 dark:text-gray-400 mb-4"></i>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">No Targets Found</h3>
-            <p className="text-gray-500 dark:text-gray-400 mt-2">Create your first revenue or performance target above.</p>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                className="px-4 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Set Goal</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Create Target Form */}
+        <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-[#F3F2F1] dark:border-[#292827]">
+            <Target className="w-4 h-4 text-[#107C10]" />
+            <h2 className="text-sm font-semibold text-[#242424] dark:text-[#FFFFFF]">
+              Create Quantitative Revenue Target
+            </h2>
+          </div>
+          <form action={addTarget} className="space-y-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
+                <label className="block font-medium text-[#242424] dark:text-[#FFFFFF] mb-1">
+                  Target Name *
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  placeholder="e.g. North America SaaS Target"
+                  className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-[#242424] dark:text-[#FFFFFF] mb-1">
+                  Link to Goal
+                </label>
+                <select
+                  name="goalId"
+                  className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                >
+                  <option value="">No Linked Goal</option>
+                  {goals.map((g) => (
+                    <option key={g._id} value={g._id}>
+                      {g.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <label className="block font-medium text-[#242424] dark:text-[#FFFFFF] mb-1">
+                  Expected Val *
+                </label>
+                <input
+                  type="number"
+                  name="expectedValue"
+                  required
+                  placeholder="500000"
+                  className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-[#242424] dark:text-[#FFFFFF] mb-1">
+                  Actual Val
+                </label>
+                <input
+                  type="number"
+                  name="actualValue"
+                  placeholder="0"
+                  defaultValue={0}
+                  className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-[#242424] dark:text-[#FFFFFF] mb-1">
+                  Industry
+                </label>
+                <input
+                  type="text"
+                  name="industry"
+                  placeholder="Fintech"
+                  className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-[#242424] dark:text-[#FFFFFF] mb-1">
+                  Region
+                </label>
+                <input
+                  type="text"
+                  name="region"
+                  placeholder="NA East"
+                  className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                className="px-4 py-2 bg-[#107C10] hover:bg-[#0E6A0E] text-white rounded-[4px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Create Target</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* Target Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {targets.map((target) => {
+          const attainment = target.expectedValue
+            ? Math.round((target.actualValue / target.expectedValue) * 100)
+            : 0;
+          const linkedGoal = goals.find((g) => g._id === target.goalId);
+
+          return (
+            <div
+              key={target._id}
+              className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 shadow-sm hover:shadow-md hover:border-[#0078D4] transition-all flex flex-col justify-between"
+            >
+              <div>
+                {/* Linked Goal Badge */}
+                {linkedGoal && (
+                  <div className="mb-3 inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[#EBF3FC] dark:bg-[#1C2B3D] text-[#0078D4] dark:text-[#479EF5]">
+                    <LinkIcon className="w-3 h-3" />
+                    <span className="truncate max-w-[240px]">{linkedGoal.title}</span>
+                  </div>
+                )}
+
+                {editingTargetId === target._id ? (
+                  <form
+                    action={async (formData) => {
+                      await updateTarget(formData);
+                      setEditingTargetId(null);
+                    }}
+                    className="space-y-3 mb-4 text-xs"
+                  >
+                    <input type="hidden" name="targetId" value={target._id} />
+                    <input
+                      type="text"
+                      name="name"
+                      defaultValue={target.name}
+                      required
+                      className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] font-semibold text-[#242424] dark:text-[#FFFFFF]"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        name="actualValue"
+                        defaultValue={target.actualValue}
+                        placeholder="Actual"
+                        required
+                        className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px]"
+                      />
+                      <input
+                        type="number"
+                        name="expectedValue"
+                        defaultValue={target.expectedValue}
+                        placeholder="Expected"
+                        required
+                        className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px]"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        name="industry"
+                        defaultValue={target.industry || ""}
+                        placeholder="Industry"
+                        className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px]"
+                      />
+                      <input
+                        type="text"
+                        name="region"
+                        defaultValue={target.region || ""}
+                        placeholder="Region"
+                        className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px]"
+                      />
+                    </div>
+                    <select
+                      name="status"
+                      defaultValue={target.status}
+                      className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px]"
+                    >
+                      <option value="Active">Active</option>
+                      <option value="Completed">Completed</option>
+                      <option value="Rejected">Rejected</option>
+                    </select>
+                    <select
+                      name="goalId"
+                      defaultValue={target.goalId || ""}
+                      className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px]"
+                    >
+                      <option value="">No Linked Goal</option>
+                      {goals.map((g) => (
+                        <option key={g._id} value={g._id}>
+                          {g.title}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex justify-end gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingTargetId(null)}
+                        className="px-3 py-1 bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px]"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-3 py-1 bg-[#0078D4] text-white rounded-[4px] font-semibold"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-sm text-[#242424] dark:text-[#FFFFFF]">
+                          {target.name}
+                        </h3>
+                        <button
+                          onClick={() => setEditingTargetId(target._id)}
+                          className="text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#0078D4] p-1"
+                          title="Edit Target"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-3 text-[11px] text-[#605E5C] dark:text-[#C8C6C4] mt-1">
+                        <span className="flex items-center gap-1">
+                          <Building2 className="w-3 h-3" />
+                          {target.industry || "General"}
+                        </span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1">
+                          <Globe className="w-3 h-3" />
+                          {target.region || "Global"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-[3px] ${
+                          target.status === "Completed"
+                            ? "bg-[#DFF6DD] text-[#107C10]"
+                            : target.status === "Rejected"
+                            ? "bg-[#FDE7E9] text-[#D13438]"
+                            : "bg-[#FFF4CE] text-[#8F6B00]"
+                        }`}
+                      >
+                        {target.status}
+                      </span>
+                      <form
+                        action={deleteTarget}
+                        onSubmit={(e) => {
+                          if (!window.confirm(`Delete target "${target.name}"?`)) {
+                            e.preventDefault();
+                          }
+                        }}
+                      >
+                        <input type="hidden" name="targetId" value={target._id} />
+                        <button
+                          type="submit"
+                          className="text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#D13438] p-1"
+                          title="Delete Target"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* Progress bar */}
+                <div className="my-3">
+                  <div className="flex justify-between items-center text-xs mb-1">
+                    <span className="font-semibold text-[#242424] dark:text-[#FFFFFF]">
+                      ${target.actualValue.toLocaleString()} / ${target.expectedValue.toLocaleString()}
+                    </span>
+                    <span className="font-bold text-[#0078D4]">{attainment}%</span>
+                  </div>
+                  <div className="w-full bg-[#EDEBE9] dark:bg-[#323130] h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-[#0078D4] h-full rounded-full transition-all"
+                      style={{ width: `${Math.min(attainment, 100)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Checklist */}
+                <div className="mt-4 pt-3 border-t border-[#F3F2F1] dark:border-[#292827]">
+                  <h4 className="text-xs font-semibold text-[#605E5C] dark:text-[#C8C6C4] uppercase tracking-wider mb-2">
+                    Actionable Milestone Checklist
+                  </h4>
+                  <div className="space-y-1.5 mb-3 max-h-36 overflow-y-auto">
+                    {target.checklist?.map((task, idx) => (
+                      <form
+                        key={idx}
+                        action={toggleTargetChecklist}
+                        className="flex items-center gap-2 p-1.5 rounded hover:bg-[#F3F2F1] dark:hover:bg-[#292827] transition-colors"
+                      >
+                        <input type="hidden" name="targetId" value={target._id} />
+                        <input type="hidden" name="taskIndex" value={idx.toString()} />
+                        <button
+                          type="submit"
+                          className="text-[#0078D4] dark:text-[#479EF5] shrink-0"
+                        >
+                          {task.isCompleted ? (
+                            <CheckSquare className="w-4 h-4 text-[#107C10]" />
+                          ) : (
+                            <Square className="w-4 h-4 text-[#8A8886]" />
+                          )}
+                        </button>
+                        <span
+                          className={`text-xs ${
+                            task.isCompleted
+                              ? "line-through text-[#8A8886]"
+                              : "text-[#242424] dark:text-[#FFFFFF]"
+                          }`}
+                        >
+                          {task.name}
+                        </span>
+                      </form>
+                    ))}
+                    {(!target.checklist || target.checklist.length === 0) && (
+                      <p className="text-xs text-[#8A8886] italic py-1">No steps added yet.</p>
+                    )}
+                  </div>
+
+                  {/* Add Checklist Step Form */}
+                  <form action={updateTargetChecklist} className="flex gap-2">
+                    <input type="hidden" name="targetId" value={target._id} />
+                    <input
+                      type="text"
+                      name="taskName"
+                      required
+                      placeholder="Add actionable step..."
+                      className="flex-1 p-1.5 text-xs bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                    />
+                    <button
+                      type="submit"
+                      className="px-2.5 py-1.5 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] text-xs font-semibold"
+                    >
+                      Add
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {targets.length === 0 && (
+          <div className="col-span-full py-16 text-center bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px]">
+            <Target className="w-10 h-10 text-[#C8C6C4] mx-auto mb-2" />
+            <h3 className="font-semibold text-sm text-[#242424] dark:text-[#FFFFFF]">
+              No Revenue Targets Defined
+            </h3>
+            <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">
+              Create your first target using the creation form above.
+            </p>
           </div>
         )}
       </div>

@@ -328,7 +328,7 @@ export default function ExecDashboardClient({
   const activeProjectObj = projects.find((p) => p._id === selectedProjectId);
 
   return (
-    <main className="flex flex-col min-w-0 p-4 md:p-8 flex-1 max-w-7xl mx-auto w-full">
+    <main className="flex flex-col min-w-0 p-4 flex-1 max-w-[1600px] mx-auto w-full">
       {/* Top Header with Fluent 2 design */}
       <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14),0_0_2px_rgba(0,0,0,0.12)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -440,11 +440,10 @@ export default function ExecDashboardClient({
       <div className="flex border-b border-[#E1DFDD] dark:border-[#3B3A39] mb-6 gap-2">
         <button
           onClick={() => setActiveTab("portfolio")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === "portfolio"
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${activeTab === "portfolio"
               ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
               : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-          }`}
+            }`}
         >
           <FolderKanban className="w-4 h-4" />
           Projects Portfolio & Health ({projects.length})
@@ -452,11 +451,10 @@ export default function ExecDashboardClient({
 
         <button
           onClick={() => setActiveTab("tasks")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === "tasks"
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${activeTab === "tasks"
               ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
               : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-          }`}
+            }`}
         >
           <ListTodo className="w-4 h-4" />
           All Tasks Breakdown ({scopedTasks.length})
@@ -464,11 +462,10 @@ export default function ExecDashboardClient({
 
         <button
           onClick={() => setActiveTab("pipelines")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === "pipelines"
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${activeTab === "pipelines"
               ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
               : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-          }`}
+            }`}
         >
           <Layers className="w-4 h-4" />
           Strategic Pipelines ({scopedPipelines.length})
@@ -476,11 +473,10 @@ export default function ExecDashboardClient({
 
         <button
           onClick={() => setActiveTab("okrs")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === "okrs"
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${activeTab === "okrs"
               ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
               : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-          }`}
+            }`}
         >
           <Target className="w-4 h-4" />
           Strategic Goals & OKRs ({scopedGoals.length})
@@ -524,9 +520,8 @@ export default function ExecDashboardClient({
                 {scopedProjects.map((p) => (
                   <tr
                     key={p._id}
-                    className={`hover:bg-[#F3F2F1] dark:hover:bg-[#292827] transition-colors ${
-                      selectedProjectId === p._id ? "bg-[#EBF3FC] dark:bg-[#1C2B3D]" : ""
-                    }`}
+                    className={`hover:bg-[#F3F2F1] dark:hover:bg-[#292827] transition-colors ${selectedProjectId === p._id ? "bg-[#EBF3FC] dark:bg-[#1C2B3D]" : ""
+                      }`}
                   >
                     <td className="py-3.5 px-4">
                       <div className="font-semibold text-[#242424] dark:text-[#FFFFFF]">
@@ -678,13 +673,12 @@ export default function ExecDashboardClient({
                     </td>
                     <td className="py-3 px-4">
                       <span
-                        className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                          t.priority === "High"
+                        className={`text-xs font-semibold px-2 py-0.5 rounded ${t.priority === "High"
                             ? "bg-[#FDE7E9] text-[#D13438]"
                             : t.priority === "Low"
-                            ? "bg-[#DFF6DD] text-[#107C10]"
-                            : "bg-[#FFF4CE] text-[#8F6B00]"
-                        }`}
+                              ? "bg-[#DFF6DD] text-[#107C10]"
+                              : "bg-[#FFF4CE] text-[#8F6B00]"
+                          }`}
                       >
                         {t.priority}
                       </span>

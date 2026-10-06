@@ -39,6 +39,15 @@ export default async function DiagramsPage() {
     _id: t._id.toString(),
     name: t.name,
     membersCount: Array.isArray(t.members) ? t.members.length : 0,
+    members: Array.isArray(t.members)
+      ? t.members.map((m: any) => ({
+          _id: (m._id || m).toString(),
+          name: m.name || "Member",
+          role: m.role || "Contributor",
+          position: m.position || "",
+          rank: m.rank || "1",
+        }))
+      : [],
     leadName: t.leadId ? t.leadId.name : "Unassigned",
   }));
 

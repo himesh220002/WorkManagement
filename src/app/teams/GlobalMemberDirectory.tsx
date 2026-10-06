@@ -1,165 +1,462 @@
 "use client";
 
 import { useState } from "react";
-import { updateUserProfile } from "@/actions";
+import MemberProfileModal, { UserDetail } from "@/components/MemberProfileModal";
+import {
+  calculateMeritEvaluation,
+  getPromotionBadgeInfo,
+  MeritEvaluationResult,
+  PromotionBadgeInfo,
+} from "@/utils/meritEvaluation";
+import {
+  Users,
+  ChevronDown,
+  ChevronUp,
+  Search,
+  UserCheck,
+  UserX,
+  UserMinus,
+  Award,
+  Sparkles,
+  Star,
+  Clock,
+  CheckSquare,
+  TrendingUp,
+  Crown,
+  Target,
+  ArrowUpRight,
+  ShieldCheck,
+  CheckCircle2,
+} from "lucide-react";
 
-export default function GlobalMemberDirectory({ users }: { users: any[] }) {
-  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+interface GlobalMemberDirectoryProps {
+  users: UserDetail[];
+}
 
+type FilterOption = "all" | "ready" | "contender" | "rank1" | "rank2" | "rank3" | "rank4" | "rank5";
+
+export default function GlobalMemberDirectory({ users = [] }: GlobalMemberDirectoryProps) {
+  const [selectedUser, setSelectedUser] = useState<UserDetail | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<FilterOption>("all");
   const [isOpenWorking, setIsOpenWorking] = useState(true);
   const [isOpenQuit, setIsOpenQuit] = useState(false);
   const [isOpenDropped, setIsOpenDropped] = useState(false);
 
-  const working = users.filter(u => u.status === "Working" || !u.status);
-  const quit = users.filter(u => u.status === "Quit");
-  const dropped = users.filter(u => u.status === "Dropped");
+  // Compute merit evaluations for each user
+  const usersWithMerit = users.map((u) => {
+    const merit = calculateMeritEvaluation(u);
+    const badge = getPromotionBadgeInfo(merit);
+    return { user: u, merit, badge };
+  });
 
-  const renderUser = (u: any) => {
-    const isEditing = editingUserId === u._id;
+  // Calculate promotion stats across active personnel
+  const activeStaff = usersWithMerit.filter(
+    (item) => item.user.status === "Working" || !item.user.status
+  );
+  const readyCount = activeStaff.filter((item) => item.merit.isPromotionReady).length;
+  const contenderCount = activeStaff.filter(
+    (item) => item.merit.readinessStatus === "Strong Contender"
+  ).length;
+
+  const filtered = usersWithMerit.filter(({ user: u, merit }) => {
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch =
+      !q ||
+      u.name.toLowerCase().includes(q) ||
+      (u.role && u.role.toLowerCase().includes(q)) ||
+      (u.position && u.position.toLowerCase().includes(q));
+
+    if (!matchesSearch) return false;
+
+    if (activeFilter === "ready") return merit.isPromotionReady;
+    if (activeFilter === "contender") return merit.readinessStatus === "Strong Contender";
+    if (activeFilter === "rank1") return merit.currentRank === 1;
+    if (activeFilter === "rank2") return merit.currentRank === 2;
+    if (activeFilter === "rank3") return merit.currentRank === 3;
+    if (activeFilter === "rank4") return merit.currentRank === 4;
+    if (activeFilter === "rank5") return merit.currentRank === 5;
+    return true;
+  });
+
+  const working = filtered.filter(
+    (item) => item.user.status === "Working" || !item.user.status
+  );
+  const quit = filtered.filter((item) => item.user.status === "Quit");
+  const dropped = filtered.filter((item) => item.user.status === "Dropped");
+
+  const renderMemberCard = ({
+    user: u,
+    merit,
+    badge,
+  }: {
+    user: UserDetail;
+    merit: MeritEvaluationResult;
+    badge: PromotionBadgeInfo;
+  }) => {
+    const avgRating = ((merit.supervisorRating + merit.teamLeadRating) / 2).toFixed(1);
 
     return (
-      <div key={u._id} className="bg-white/5 border border-gray-200/90 dark:border-gray-700/50 p-4 rounded-xl hover:bg-white/10 transition-all flex flex-col gap-2">
-        {!isEditing ? (
-          <>
-            <div className="flex justify-between items-start">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-500 font-bold uppercase shrink-0">
-                  {u.name.substring(0, 2)}
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900 dark:text-gray-100 truncate max-w-[120px]">{u.name}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[120px]">
-                    {u.role} {u.position ? `- ${u.position}` : ''}
-                  </div>
-                </div>
+      <div
+        key={u._id}
+        onClick={() => setSelectedUser(u)}
+        className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] hover:border-[#0078D4] dark:hover:border-[#0078D4] p-4 rounded-[8px] shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group relative overflow-hidden"
+      >
+        {/* Glowing Top accent when promotion ready */}
+        {merit.isPromotionReady && (
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600" />
+        )}
+
+        <div>
+          {/* Header: Avatar, Name, Role, and Promotion Badge */}
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-full bg-[#EBF3FC] dark:bg-[#1C2B3D] text-[#0078D4] dark:text-[#479EF5] flex items-center justify-center font-bold text-xs uppercase shrink-0 ring-2 ring-white dark:ring-[#201F1E] shadow-sm">
+                {u.name.substring(0, 2)}
               </div>
-              <button
-                onClick={() => setEditingUserId(u._id)}
-                className="text-gray-400 hover:text-blue-500 transition-colors p-2 text-sm shrink-0"
-              >
-                <i className="fa-solid fa-pen-to-square"></i> Edit
-              </button>
+              <div className="min-w-0 flex-1">
+                <h4 className="font-bold text-xs sm:text-sm text-[#242424] dark:text-[#FFFFFF] truncate group-hover:text-[#0078D4] transition-colors">
+                  {u.name}
+                </h4>
+                <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] truncate">
+                  {u.position || u.role}
+                </p>
+              </div>
             </div>
-            {(u.joinedDate || u.leftDate) && (
-              <div className="text-xs text-gray-500 flex flex-col mt-2">
-                {u.joinedDate && <span>Joined: {new Date(u.joinedDate).toLocaleDateString('en-US')}</span>}
-                {u.leftDate && <span>Left: {new Date(u.leftDate).toLocaleDateString('en-US')}</span>}
+
+            {/* Promotion Badge */}
+            <div className="shrink-0">
+              <span
+                className={`text-[10px] sm:text-[11px] px-2.5 py-0.5 rounded-full font-semibold border inline-flex items-center gap-1 shadow-sm ${badge.badgeStyle}`}
+                title={`Status: ${merit.readinessStatus}`}
+              >
+                {badge.statusType === "ready" && (
+                  <Sparkles className="w-3 h-3 text-emerald-600 animate-pulse" />
+                )}
+                {badge.statusType === "contender" && (
+                  <Star className="w-3 h-3 text-amber-600 fill-amber-500" />
+                )}
+                {badge.statusType === "principal" && (
+                  <Crown className="w-3 h-3 text-purple-600" />
+                )}
+                <span>{badge.shortLabel}</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Rank & Composite Merit Score Bar */}
+          <div className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded-[4px] bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#EDEBE9] dark:border-[#292827] mb-3">
+            <span className="font-semibold text-[#242424] dark:text-[#FFFFFF] flex items-center gap-1.5">
+              <Award className="w-3.5 h-3.5 text-[#0078D4]" />
+              <span>Rank {merit.currentRank} Seniority</span>
+            </span>
+            <span
+              className={`font-bold ${
+                merit.isPromotionReady
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-[#0078D4]"
+              }`}
+            >
+              {merit.overallMeritScore}% Merit Index
+            </span>
+          </div>
+
+          {/* 4-Metric Objective Telemetry Grid */}
+          <div className="grid grid-cols-2 gap-2 text-[11px] mb-3">
+            <div className="p-2 rounded-[4px] bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#F3F2F1] dark:border-[#292827]">
+              <div className="flex items-center gap-1 text-[#8A8886] mb-0.5">
+                <Clock className="w-3 h-3 text-[#0078D4]" />
+                <span>Working Days</span>
+              </div>
+              <div className="font-bold text-[#242424] dark:text-[#FFFFFF]">
+                {merit.workingDays}d{" "}
+                <span className="text-[10px] font-normal text-[#8A8886]">
+                  / {merit.minTenureRequired}d min
+                </span>
+              </div>
+            </div>
+
+            <div className="p-2 rounded-[4px] bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#F3F2F1] dark:border-[#292827]">
+              <div className="flex items-center gap-1 text-[#8A8886] mb-0.5">
+                <CheckSquare className="w-3 h-3 text-[#107C10]" />
+                <span>Deliverables</span>
+              </div>
+              <div className="font-bold text-[#242424] dark:text-[#FFFFFF]">
+                {merit.completedProjects} done{" "}
+                <span className="text-[10px] font-normal text-[#8A8886]">
+                  ({merit.currentProjects} active)
+                </span>
+              </div>
+            </div>
+
+            <div className="p-2 rounded-[4px] bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#F3F2F1] dark:border-[#292827]">
+              <div className="flex items-center gap-1 text-[#8A8886] mb-0.5">
+                <Star className="w-3 h-3 text-[#F59E0B] fill-[#F59E0B]" />
+                <span>Ratings (TL + Sup)</span>
+              </div>
+              <div className="font-bold text-[#242424] dark:text-[#FFFFFF]">
+                {avgRating} ★{" "}
+                <span className="text-[10px] font-normal text-[#8A8886]">
+                  ({merit.teamLeadRating} / {merit.supervisorRating})
+                </span>
+              </div>
+            </div>
+
+            <div className="p-2 rounded-[4px] bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#F3F2F1] dark:border-[#292827]">
+              <div className="flex items-center gap-1 text-[#8A8886] mb-0.5">
+                <TrendingUp className="w-3 h-3 text-[#0078D4]" />
+                <span>Performance</span>
+              </div>
+              <div className="font-bold text-[#242424] dark:text-[#FFFFFF]">
+                {merit.performanceScore}%{" "}
+                <span className="text-[10px] font-normal text-[#8A8886]">
+                  ({merit.relevancyScore}% rel)
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Progress towards Next Rank Bar */}
+          {merit.currentRank < 5 && (
+            <div className="mb-3">
+              <div className="flex items-center justify-between text-[11px] text-[#605E5C] dark:text-[#C8C6C4] mb-1">
+                <span>Target: Rank {merit.nextRank}</span>
+                <span className="font-semibold text-[#0078D4]">
+                  {merit.progressPercent}% ({merit.promotionThreshold}% req)
+                </span>
+              </div>
+              <div className="w-full bg-[#EDEBE9] dark:bg-[#3B3A39] h-2 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    merit.isPromotionReady
+                      ? "bg-emerald-500 shadow-sm"
+                      : merit.progressPercent >= 80
+                      ? "bg-amber-500"
+                      : "bg-[#0078D4]"
+                  }`}
+                  style={{ width: `${merit.progressPercent}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Sense of Achievement & Improvement Chance Highlight */}
+          <div className="p-2.5 rounded-[4px] bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#EDEBE9] dark:border-[#292827] text-[11px] mb-3">
+            {merit.isPromotionReady ? (
+              <div className="flex items-start gap-1.5 text-emerald-700 dark:text-emerald-400 font-medium">
+                <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-600 animate-pulse" />
+                <span>All tenure, project &amp; performance benchmarks met. Promotion eligible!</span>
+              </div>
+            ) : merit.currentRank === 5 ? (
+              <div className="flex items-start gap-1.5 text-purple-700 dark:text-purple-300 font-medium">
+                <Crown className="w-3.5 h-3.5 shrink-0 mt-0.5 text-purple-600" />
+                <span>Principal tier reached. Strategic architectural and squad mentorship focus.</span>
+              </div>
+            ) : (
+              <div className="flex items-start gap-1.5 text-[#605E5C] dark:text-[#C8C6C4]">
+                <Target className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[#0078D4]" />
+                <span className="line-clamp-2">
+                  <strong className="text-[#242424] dark:text-[#FFFFFF]">Goal:</strong>{" "}
+                  {merit.actionableFeedback[0] || "Continue active sprint deliverable cadence."}
+                </span>
               </div>
             )}
-            {u.details && <div className="text-sm text-gray-600 dark:text-gray-300 italic mt-1 line-clamp-2">{u.details}</div>}
-          </>
-        ) : (
-          <form action={async (formData) => {
-            await updateUserProfile(formData);
-            setEditingUserId(null);
-          }} className="flex flex-col gap-3">
-            <input type="hidden" name="userId" value={u._id} />
+          </div>
+        </div>
 
-            <div className="flex justify-between items-center mb-2">
-              <div className="font-semibold text-gray-900 dark:text-gray-100 truncate max-w-[120px]">{u.name}</div>
-              <button type="button" onClick={() => setEditingUserId(null)} className="text-gray-400 hover:text-gray-200 shrink-0">
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">Status</label>
-                <select name="status" defaultValue={u.status || "Working"} className="tech-input !py-1.5 !text-xs">
-                  <option value="Working">Working</option>
-                  <option value="Quit">Quit</option>
-                  <option value="Dropped">Dropped</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">Details</label>
-                <input type="text" name="details" defaultValue={u.details || ""} className="tech-input !py-1.5 !text-xs" placeholder="Notes..." />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Joined Date</label>
-                  <input type="date" name="joinedDate" defaultValue={u.joinedDate ? new Date(u.joinedDate).toISOString().split('T')[0] : ''} className="tech-input !py-1.5 !text-xs" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Left Date</label>
-                  <input type="date" name="leftDate" defaultValue={u.leftDate ? new Date(u.leftDate).toISOString().split('T')[0] : ''} className="tech-input !py-1.5 !text-xs" />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end mt-2">
-              <button type="submit" className="px-4 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition-colors">
-                Save
-              </button>
-            </div>
-          </form>
-        )}
+        {/* Card Footer */}
+        <div className="flex items-center justify-between text-[11px] pt-2 border-t border-[#F3F2F1] dark:border-[#292827] text-[#8A8886]">
+          <span>Audit trail verified</span>
+          <span className="text-[#0078D4] font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+            <span>Inspect Profile</span>
+            <ArrowUpRight className="w-3.5 h-3.5" />
+          </span>
+        </div>
       </div>
     );
   };
 
   return (
-    <div className="glass-card p-6 flex flex-col gap-6 w-full transition-all">
-      <div className="flex items-center gap-2 mb-2">
-        <i className="fa-solid fa-address-book text-emerald-500"></i>
-        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Global Member Directory</h2>
+    <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] w-full">
+      {/* Directory Header with Search & Merit Summary */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-5 pb-4 border-b border-[#E1DFDD] dark:border-[#3B3A39]">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <Users className="w-5 h-5 text-[#0078D4]" />
+            <h2 className="text-base font-bold text-[#242424] dark:text-[#FFFFFF]">
+              Global Personnel &amp; Merit Progression Directory
+            </h2>
+            <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-full text-[11px] font-semibold">
+              Anti-Bias Objective Meritocracy
+            </span>
+          </div>
+          <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">
+            Data-driven progression calculated from performance index, active tenure, deliverables, supervisor &amp; team lead reviews.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 w-full lg:w-auto">
+          <div className="relative flex-1 lg:w-72">
+            <Search className="w-4 h-4 text-[#8A8886] absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name, role, title..."
+              className="w-full pl-9 pr-3 py-1.5 text-xs bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+            />
+          </div>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-6">
-        {/* Working Section */}
-        <div className="flex flex-col gap-4">
-          <div
-            className="flex justify-between items-center cursor-pointer hover:opacity-80 transition-opacity border-b border-emerald-500/20 pb-2"
-            onClick={() => setIsOpenWorking(!isOpenWorking)}
+      {/* Filter Ribbon: All, Promotion Eligible, Contenders, Ranks */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-5 border-b border-[#F3F2F1] dark:border-[#292827] text-xs">
+        <button
+          onClick={() => setActiveFilter("all")}
+          className={`px-3 py-1.5 rounded-[4px] font-medium transition-colors shrink-0 ${
+            activeFilter === "all"
+              ? "bg-[#0078D4] text-white"
+              : "bg-[#FAF9F8] dark:bg-[#1B1A19] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#F3F2F1]"
+          }`}
+        >
+          All Members ({users.length})
+        </button>
+
+        <button
+          onClick={() => setActiveFilter("ready")}
+          className={`px-3 py-1.5 rounded-[4px] font-medium transition-colors shrink-0 flex items-center gap-1.5 ${
+            activeFilter === "ready"
+              ? "bg-emerald-600 text-white"
+              : "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800"
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>✨ Promotion Ready ({readyCount})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveFilter("contender")}
+          className={`px-3 py-1.5 rounded-[4px] font-medium transition-colors shrink-0 flex items-center gap-1.5 ${
+            activeFilter === "contender"
+              ? "bg-amber-600 text-white"
+              : "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 border border-amber-200 dark:border-amber-800"
+          }`}
+        >
+          <Star className="w-3.5 h-3.5 fill-amber-500" />
+          <span>Strong Contenders ({contenderCount})</span>
+        </button>
+
+        <span className="text-[#8A8886] mx-1">|</span>
+
+        {(["rank1", "rank2", "rank3", "rank4", "rank5"] as FilterOption[]).map((r, i) => (
+          <button
+            key={r}
+            onClick={() => setActiveFilter(r)}
+            className={`px-2.5 py-1 rounded-[4px] font-medium transition-colors shrink-0 ${
+              activeFilter === r
+                ? "bg-[#242424] text-white dark:bg-white dark:text-[#242424]"
+                : "bg-[#FAF9F8] dark:bg-[#1B1A19] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#F3F2F1]"
+            }`}
           >
-            <h3 className="font-semibold text-emerald-500">Working ({working.length})</h3>
-            <button className="text-gray-500 hover:text-emerald-500 transition-colors">
-              <i className={`fa-solid fa-chevron-${isOpenWorking ? 'up' : 'down'}`}></i>
-            </button>
+            Rank {i + 1}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-6">
+        {/* Working Active Members */}
+        <div>
+          <div
+            onClick={() => setIsOpenWorking(!isOpenWorking)}
+            className="flex items-center justify-between cursor-pointer py-2 border-b border-[#E1DFDD] dark:border-[#3B3A39] text-xs font-semibold text-[#107C10] select-none hover:opacity-80 transition-opacity"
+          >
+            <div className="flex items-center gap-2">
+              <UserCheck className="w-4 h-4" />
+              <span>Active Personnel ({working.length})</span>
+            </div>
+            {isOpenWorking ? (
+              <ChevronUp className="w-4 h-4 text-[#605E5C]" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-[#605E5C]" />
+            )}
           </div>
           {isOpenWorking && (
-            <div className="flex flex-wrap gap-4">
-              {working.map(renderUser)}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+              {working.map(renderMemberCard)}
+              {working.length === 0 && (
+                <div className="col-span-full py-8 text-center text-xs text-[#8A8886] italic">
+                  No active personnel matching the selected filter or search query.
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Quit Section */}
-        <div className="flex flex-col gap-4">
+        {/* Quit Members */}
+        <div>
           <div
-            className="flex justify-between items-center cursor-pointer hover:opacity-80 transition-opacity border-b border-amber-500/20 pb-2"
             onClick={() => setIsOpenQuit(!isOpenQuit)}
+            className="flex items-center justify-between cursor-pointer py-2 border-b border-[#E1DFDD] dark:border-[#3B3A39] text-xs font-semibold text-[#8F6B00] select-none hover:opacity-80 transition-opacity"
           >
-            <h3 className="font-semibold text-amber-500">Quit ({quit.length})</h3>
-            <button className="text-gray-500 hover:text-amber-500 transition-colors">
-              <i className={`fa-solid fa-chevron-${isOpenQuit ? 'up' : 'down'}`}></i>
-            </button>
+            <div className="flex items-center gap-2">
+              <UserMinus className="w-4 h-4" />
+              <span>Resigned / Quit ({quit.length})</span>
+            </div>
+            {isOpenQuit ? (
+              <ChevronUp className="w-4 h-4 text-[#605E5C]" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-[#605E5C]" />
+            )}
           </div>
           {isOpenQuit && (
-            <div className="flex flex-wrap gap-4">
-              {quit.map(renderUser)}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+              {quit.map(renderMemberCard)}
+              {quit.length === 0 && (
+                <div className="col-span-full py-6 text-center text-xs text-[#8A8886] italic">
+                  No resigned personnel found.
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Dropped Section */}
-        <div className="flex flex-col gap-4">
+        {/* Dropped Members */}
+        <div>
           <div
-            className="flex justify-between items-center cursor-pointer hover:opacity-80 transition-opacity border-b border-rose-500/20 pb-2"
             onClick={() => setIsOpenDropped(!isOpenDropped)}
+            className="flex items-center justify-between cursor-pointer py-2 border-b border-[#E1DFDD] dark:border-[#3B3A39] text-xs font-semibold text-[#D13438] select-none hover:opacity-80 transition-opacity"
           >
-            <h3 className="font-semibold text-rose-500">Dropped ({dropped.length})</h3>
-            <button className="text-gray-500 hover:text-rose-500 transition-colors">
-              <i className={`fa-solid fa-chevron-${isOpenDropped ? 'up' : 'down'}`}></i>
-            </button>
+            <div className="flex items-center gap-2">
+              <UserX className="w-4 h-4" />
+              <span>Dropped / Archived ({dropped.length})</span>
+            </div>
+            {isOpenDropped ? (
+              <ChevronUp className="w-4 h-4 text-[#605E5C]" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-[#605E5C]" />
+            )}
           </div>
           {isOpenDropped && (
-            <div className="flex flex-wrap gap-4">
-              {dropped.map(renderUser)}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+              {dropped.map(renderMemberCard)}
+              {dropped.length === 0 && (
+                <div className="col-span-full py-6 text-center text-xs text-[#8A8886] italic">
+                  No archived personnel found.
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Member Profile Popup Modal */}
+      {selectedUser && (
+        <MemberProfileModal
+          user={selectedUser}
+          onClose={() => setSelectedUser(null)}
+        />
+      )}
     </div>
   );
 }
+

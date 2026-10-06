@@ -270,6 +270,19 @@ export async function addTeam(formData: FormData) {
   if (name) {
     await Team.create({ name });
     revalidatePath("/projects");
+    revalidatePath("/teams");
+    revalidatePath("/diagrams");
+  }
+}
+
+export async function deleteTeam(formData: FormData) {
+  await connectToDatabase();
+  const id = formData.get("teamId") as string;
+  if (id) {
+    await Team.findByIdAndDelete(id);
+    revalidatePath("/teams");
+    revalidatePath("/projects");
+    revalidatePath("/diagrams");
   }
 }
 
@@ -603,5 +616,60 @@ export async function linkUserToTeam(formData: FormData) {
   if (teamId && userId) {
     await Team.findByIdAndUpdate(teamId, { $addToSet: { members: userId } });
     revalidatePath("/teams");
+    revalidatePath("/diagrams");
   }
 }
+
+export async function unlinkUserFromTeam(formData: FormData) {
+  await connectToDatabase();
+  const teamId = formData.get("teamId") as string;
+  const userId = formData.get("userId") as string;
+
+  if (teamId && userId) {
+    await Team.findByIdAndUpdate(teamId, { $pull: { members: userId } });
+    revalidatePath("/teams");
+    revalidatePath("/diagrams");
+  }
+}
+
+export async function updateMemberMeritStats(formData: FormData) {
+  await connectToDatabase();
+  const userId = formData.get("userId") as string;
+  const performanceScore = Number(formData.get("performanceScore"));
+  const completedProjectsCount = Number(formData.get("completedProjectsCount"));
+  const currentProjectsCount = Number(formData.get("currentProjectsCount"));
+  const relevancyScore = Number(formData.get("relevancyScore"));
+  const supervisorRating = Number(formData.get("supervisorRating"));
+  const teamLeadRating = Number(formData.get("teamLeadRating"));
+  const remarks = formData.get("remarks") as string;
+
+  if (userId) {
+    const updateData: any = {};
+    if (!isNaN(performanceScore)) updateData.performanceScore = performanceScore;
+    if (!isNaN(completedProjectsCount)) updateData.completedProjectsCount = completedProjectsCount;
+    if (!isNaN(currentProjectsCount)) updateData.currentProjectsCount = currentProjectsCount;
+    if (!isNaN(relevancyScore)) updateData.relevancyScore = relevancyScore;
+    if (!isNaN(supervisorRating)) updateData.supervisorRating = supervisorRating;
+    if (!isNaN(teamLeadRating)) updateData.teamLeadRating = teamLeadRating;
+    if (remarks !== undefined) updateData.remarks = remarks;
+
+    await User.findByIdAndUpdate(userId, updateData);
+    revalidatePath("/teams");
+    revalidatePath("/diagrams");
+  }
+}
+
+export async function promoteMemberByMerit(formData: FormData) {
+  await connectToDatabase();
+  const userId = formData.get("userId") as string;
+  const newRank = formData.get("newRank") as string;
+
+  if (userId && newRank) {
+    await User.findByIdAndUpdate(userId, { rank: newRank });
+    revalidatePath("/teams");
+    revalidatePath("/diagrams");
+    revalidatePath("/about");
+  }
+}
+
+
