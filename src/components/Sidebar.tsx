@@ -15,6 +15,7 @@ import {
   Cpu,
   BookOpen,
   Briefcase,
+  ShieldCheck,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -55,12 +56,13 @@ export default function Sidebar() {
       items: [
         { label: "Resource Allocation", href: "/exec/resources", icon: Cpu },
         { label: "Documentation", href: "/about", icon: BookOpen },
+        { label: "Tenant Auth & RBAC", href: "/auth/login", icon: ShieldCheck },
       ],
     },
   ];
 
   return (
-    <aside className="w-full xl:w-64 xl:sticky xl:top-12 xl:h-[calc(100vh-48px)] bg-white dark:bg-[#201F1E] border-r border-[#E1DFDD] dark:border-[#3B3A39] p-3 flex flex-col gap-6 overflow-y-auto shrink-0 select-none z-20">
+    <aside className="hidden xl:flex xl:flex-col w-64 sticky top-12 h-[calc(100vh-48px)] bg-white dark:bg-[#201F1E] border-r border-[#E1DFDD] dark:border-[#3B3A39] p-3 gap-6 overflow-y-auto shrink-0 select-none z-20">
       <nav className="flex flex-col gap-5">
         {navGroups.map((group, gIdx) => (
           <div key={gIdx} className="flex flex-col gap-1">

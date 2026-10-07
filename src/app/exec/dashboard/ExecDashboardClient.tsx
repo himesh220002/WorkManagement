@@ -21,6 +21,7 @@ import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Stat } from "@/components/ui/Stat";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { addGoal, deleteGoal, updateGoal } from "@/actions";
+import { formatDate } from "@/utils/dateUtils";
 import {
   FolderKanban,
   CheckCircle2,
@@ -328,13 +329,13 @@ export default function ExecDashboardClient({
   const activeProjectObj = projects.find((p) => p._id === selectedProjectId);
 
   return (
-    <main className="flex flex-col min-w-0 p-4 flex-1 max-w-[1600px] mx-auto w-full">
+    <main className="flex flex-col min-w-0 p-0 sm:p-4 flex-1 max-w-[1600px] mx-auto w-full">
       {/* Top Header with Fluent 2 design */}
       <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14),0_0_2px_rgba(0,0,0,0.12)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
-              Executive & Strategic Portfolio Dashboard
+            <h1 className="text-xl sm:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+              Executive &amp; Strategic Portfolio Dashboard
             </h1>
             <Badge tone="success" size="sm">
               Live Verified Data
@@ -390,7 +391,7 @@ export default function ExecDashboardClient({
       )}
 
       {/* Executive Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4 mb-8">
         <Stat
           label={isAll ? "Active Projects" : "Project Status"}
           value={isAll ? `${portfolioStats.activeProjects} / ${portfolioStats.totalProjects}` : activeProjectObj?.status || "Active"}
@@ -409,7 +410,7 @@ export default function ExecDashboardClient({
           icon={<CheckCircle2 className="w-5 h-5 text-[#107C10]" />}
           change={{
             value: `${currentTaskCounts.progressPercent}% Done`,
-            positive: currentTaskCounts.progressPercent >= 50,
+            positive: currentTaskCounts.progressPercent >= 20,
           }}
         />
 
@@ -437,12 +438,12 @@ export default function ExecDashboardClient({
       </div>
 
       {/* View Switcher Tabs */}
-      <div className="flex border-b border-[#E1DFDD] dark:border-[#3B3A39] mb-6 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 border-b border-[#E1DFDD] dark:border-[#3B3A39] mb-6 gap-2">
         <button
           onClick={() => setActiveTab("portfolio")}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${activeTab === "portfolio"
-              ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-              : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+            ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+            : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
             }`}
         >
           <FolderKanban className="w-4 h-4" />
@@ -452,8 +453,8 @@ export default function ExecDashboardClient({
         <button
           onClick={() => setActiveTab("tasks")}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${activeTab === "tasks"
-              ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-              : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+            ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+            : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
             }`}
         >
           <ListTodo className="w-4 h-4" />
@@ -463,8 +464,8 @@ export default function ExecDashboardClient({
         <button
           onClick={() => setActiveTab("pipelines")}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${activeTab === "pipelines"
-              ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-              : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+            ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+            : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
             }`}
         >
           <Layers className="w-4 h-4" />
@@ -474,8 +475,8 @@ export default function ExecDashboardClient({
         <button
           onClick={() => setActiveTab("okrs")}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${activeTab === "okrs"
-              ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-              : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+            ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+            : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
             }`}
         >
           <Target className="w-4 h-4" />
@@ -485,7 +486,7 @@ export default function ExecDashboardClient({
 
       {/* Tab 1: Project Portfolio Table */}
       {activeTab === "portfolio" && (
-        <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
+        <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-2 sm:p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
           <div className="flex justify-between items-center mb-4">
             <div>
               <h2 className="text-lg font-bold text-[#242424] dark:text-[#FFFFFF]">
@@ -615,8 +616,8 @@ export default function ExecDashboardClient({
 
       {/* Tab 2: All Tasks Detailed Breakdown */}
       {activeTab === "tasks" && (
-        <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
-          <div className="flex justify-between items-center mb-4">
+        <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-2 sm:p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
+          <div className="flex flex-col sm:flex-row gap-2 justify-between items-center mb-4">
             <div>
               <h2 className="text-lg font-bold text-[#242424] dark:text-[#FFFFFF]">
                 Task Execution & Velocity ({scopedTasks.length} Tasks)
@@ -674,10 +675,10 @@ export default function ExecDashboardClient({
                     <td className="py-3 px-4">
                       <span
                         className={`text-xs font-semibold px-2 py-0.5 rounded ${t.priority === "High"
-                            ? "bg-[#FDE7E9] text-[#D13438]"
-                            : t.priority === "Low"
-                              ? "bg-[#DFF6DD] text-[#107C10]"
-                              : "bg-[#FFF4CE] text-[#8F6B00]"
+                          ? "bg-[#FDE7E9] text-[#D13438]"
+                          : t.priority === "Low"
+                            ? "bg-[#DFF6DD] text-[#107C10]"
+                            : "bg-[#FFF4CE] text-[#8F6B00]"
                           }`}
                       >
                         {t.priority}
@@ -686,8 +687,8 @@ export default function ExecDashboardClient({
                     <td className="py-3 px-4">
                       <StatusBadge status={t.status} />
                     </td>
-                    <td className="py-3 px-4 text-xs text-[#605E5C] dark:text-[#C8C6C4]">
-                      {t.dueDate ? new Date(t.dueDate).toLocaleDateString() : "No deadline"}
+                    <td className="py-3 px-4 text-xs text-[#605E5C] dark:text-[#C8C6C4]" suppressHydrationWarning>
+                      {formatDate(t.dueDate)}
                     </td>
                   </tr>
                 ))}
@@ -699,8 +700,8 @@ export default function ExecDashboardClient({
 
       {/* Tab 3: Strategic Pipelines */}
       {activeTab === "pipelines" && (
-        <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
-          <div className="flex justify-between items-center mb-6">
+        <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-2 sm:p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
+          <div className="flex flex-col sm:flex-row gap-2 justify-between items-center mb-6">
             <div>
               <h2 className="text-lg font-bold text-[#242424] dark:text-[#FFFFFF]">
                 Active Project Pipelines ({scopedPipelines.length})
@@ -732,7 +733,7 @@ export default function ExecDashboardClient({
 
       {/* Tab 4: Strategic Goals & OKRs */}
       {activeTab === "okrs" && (
-        <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
+        <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-2 sm:p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
           <div className="flex justify-between items-center mb-4">
             <div>
               <h2 className="text-lg font-bold text-[#242424] dark:text-[#FFFFFF]">

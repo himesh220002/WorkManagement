@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { updateUserProfile, updateMemberMeritStats, promoteMemberByMerit } from "@/actions";
+import {
+  updateUserProfile,
+  updateMemberMeritStats,
+  promoteMemberByMerit,
+  archiveMemberAction,
+  restoreMemberAction,
+  resignMemberAction,
+} from "@/actions";
+import { normalizeRole } from "@/server/auth/rbac";
 import { Badge } from "@/components/ui/Badge";
 import {
   calculateMeritEvaluation,
@@ -27,6 +35,10 @@ import {
   Sparkles,
   ArrowUpRight,
   SlidersHorizontal,
+  Archive,
+  RotateCcw,
+  LogOut,
+  AlertTriangle,
 } from "lucide-react";
 
 export interface UserDetail extends UserMeritData {
@@ -45,6 +57,8 @@ interface MemberProfileModalProps {
   user: UserDetail;
   onClose: () => void;
   onUpdated?: () => void;
+  currentRole?: string;
+  currentUserId?: string;
 }
 
 const RANK_DESCRIPTIONS: Record<string, string> = {
@@ -59,9 +73,94 @@ export default function MemberProfileModal({
   user,
   onClose,
   onUpdated,
+  currentRole,
+  currentUserId,
 }: MemberProfileModalProps) {
   const [activeTab, setActiveTab] = useState<"merit" | "profile" | "rate">("merit");
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState(false);
+  const [isResignConfirmOpen, setIsResignConfirmOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+
+  const normalizedCurrentRole = normalizeRole(currentRole);
+  const normalizedTargetRole = normalizeRole(user.role);
+  const isSelf = Boolean(currentUserId && currentUserId === user._id);
+
+  // Archiving permission: Superuser can archive all, Owner can archive manager/TL/employee, Manager can archive TL/employee
+  const canArchive =
+    normalizedCurrentRole === "superuser" ||
+    (normalizedCurrentRole === "owner" && normalizedTargetRole !== "superuser") ||
+    (normalizedCurrentRole === "manager" && !["owner", "superuser", "manager"].includes(normalizedTargetRole));
+
+  const canPromote = ["owner", "manager", "superuser"].includes(normalizedCurrentRole);
+  const canRate = ["owner", "manager", "teamlead", "superuser"].includes(normalizedCurrentRole);
+
+  const handleArchive = async () => {
+    setActionLoading(true);
+    try {
+      const fd = new FormData();
+      fd.set("userId", user._id);
+      const res = await archiveMemberAction(fd);
+      if (res.success) {
+        setActionFeedback("Member archived successfully.");
+        if (onUpdated) onUpdated();
+        setTimeout(() => {
+          onClose();
+        }, 800);
+      } else {
+        alert(res.error || "Failed to archive member.");
+      }
+    } catch (err: any) {
+      alert(err.message || "Error archiving member");
+    } finally {
+      setActionLoading(false);
+      setIsArchiveConfirmOpen(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    setActionLoading(true);
+    try {
+      const fd = new FormData();
+      fd.set("userId", user._id);
+      const res = await restoreMemberAction(fd);
+      if (res.success) {
+        setActionFeedback("Member restored to active working roster.");
+        if (onUpdated) onUpdated();
+        setTimeout(() => {
+          onClose();
+        }, 800);
+      } else {
+        alert(res.error || "Failed to restore member.");
+      }
+    } catch (err: any) {
+      alert(err.message || "Error restoring member");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleResign = async () => {
+    setActionLoading(true);
+    try {
+      const fd = new FormData();
+      fd.set("userId", user._id);
+      const res = await resignMemberAction(fd);
+      if (res.success) {
+        alert("Your resignation has been submitted and processed. Session will now log out.");
+        document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+        window.location.href = "/auth/login";
+      } else {
+        alert(res.error || "Failed to submit resignation.");
+      }
+    } catch (err: any) {
+      alert(err.message || "Error submitting resignation");
+    } finally {
+      setActionLoading(false);
+      setIsResignConfirmOpen(false);
+    }
+  };
 
   // Compute live deterministic merit telemetry
   const merit: MeritEvaluationResult = calculateMeritEvaluation(user);
@@ -140,17 +239,19 @@ export default function MemberProfileModal({
             <span>Member Record &amp; Squads</span>
           </button>
 
-          <button
-            onClick={() => setActiveTab("rate")}
-            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
-              activeTab === "rate"
-                ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-                : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-            }`}
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span>Update Ratings &amp; Reviews</span>
-          </button>
+          {canRate && (
+            <button
+              onClick={() => setActiveTab("rate")}
+              className={`pb-2.5 px-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+                activeTab === "rate"
+                  ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+                  : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+              }`}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Update Ratings &amp; Reviews</span>
+            </button>
+          )}
         </div>
 
         {/* Modal Body */}
@@ -225,24 +326,30 @@ export default function MemberProfileModal({
                       <span>Verified: All tenure, project, and rating criteria satisfied.</span>
                     </div>
 
-                    <form
-                      action={async (formData) => {
-                        await promoteMemberByMerit(formData);
-                        if (onUpdated) onUpdated();
-                        onClose();
-                      }}
-                      className="m-0"
-                    >
-                      <input type="hidden" name="userId" value={user._id} />
-                      <input type="hidden" name="newRank" value={merit.nextRank.toString()} />
-                      <button
-                        type="submit"
-                        className="px-4 py-1.5 bg-[#107C10] hover:bg-[#0E6A0E] text-white rounded-[4px] font-bold text-xs shadow-sm flex items-center gap-1.5 transition-colors"
+                    {canPromote ? (
+                      <form
+                        action={async (formData) => {
+                          await promoteMemberByMerit(formData);
+                          if (onUpdated) onUpdated();
+                          onClose();
+                        }}
+                        className="m-0"
                       >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Promote to Rank {merit.nextRank}</span>
-                      </button>
-                    </form>
+                        <input type="hidden" name="userId" value={user._id} />
+                        <input type="hidden" name="newRank" value={merit.nextRank.toString()} />
+                        <button
+                          type="submit"
+                          className="px-4 py-1.5 bg-[#107C10] hover:bg-[#0E6A0E] text-white rounded-[4px] font-bold text-xs shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Promote to Rank {merit.nextRank}</span>
+                        </button>
+                      </form>
+                    ) : (
+                      <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                        Pending Management Promotion Execution
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -294,12 +401,19 @@ export default function MemberProfileModal({
                     <span className="text-[10px] text-[#605E5C] dark:text-[#C8C6C4] uppercase block mb-1">
                       Team Lead Rating
                     </span>
-                    <span className="text-base font-bold text-[#0078D4] flex items-center gap-1">
-                      <Star className="w-4 h-4 fill-[#0078D4] text-[#0078D4]" />
-                      <span>{merit.teamLeadRating.toFixed(1)} / 5.0</span>
-                    </span>
+                    {merit.teamLeadRating > 0 ? (
+                      <span className="text-base font-bold text-[#0078D4] flex items-center gap-1">
+                        <Star className="w-4 h-4 fill-[#0078D4] text-[#0078D4]" />
+                        <span>{merit.teamLeadRating.toFixed(1)} / 5.0</span>
+                      </span>
+                    ) : (
+                      <span className="text-sm font-semibold text-[#8A8886] flex items-center gap-1">
+                        <Star className="w-4 h-4 text-[#8A8886]" />
+                        <span>Not Yet Rated</span>
+                      </span>
+                    )}
                     <span className="text-[10px] text-[#605E5C] dark:text-[#C8C6C4] block mt-1">
-                      Sprint execution peer score
+                      {merit.teamLeadRating > 0 ? "Sprint execution peer score" : "Pending TL sprint review"}
                     </span>
                   </div>
 
@@ -308,12 +422,19 @@ export default function MemberProfileModal({
                     <span className="text-[10px] text-[#605E5C] dark:text-[#C8C6C4] uppercase block mb-1">
                       Supervisor Rating
                     </span>
-                    <span className="text-base font-bold text-[#5C2D91] dark:text-[#B4A0FF] flex items-center gap-1">
-                      <Star className="w-4 h-4 fill-[#5C2D91] text-[#5C2D91]" />
-                      <span>{merit.supervisorRating.toFixed(1)} / 5.0</span>
-                    </span>
+                    {merit.supervisorRating > 0 ? (
+                      <span className="text-base font-bold text-[#5C2D91] dark:text-[#B4A0FF] flex items-center gap-1">
+                        <Star className="w-4 h-4 fill-[#5C2D91] text-[#5C2D91]" />
+                        <span>{merit.supervisorRating.toFixed(1)} / 5.0</span>
+                      </span>
+                    ) : (
+                      <span className="text-sm font-semibold text-[#8A8886] flex items-center gap-1">
+                        <Star className="w-4 h-4 text-[#8A8886]" />
+                        <span>Not Yet Rated</span>
+                      </span>
+                    )}
                     <span className="text-[10px] text-[#605E5C] dark:text-[#C8C6C4] block mt-1">
-                      Management review score
+                      {merit.supervisorRating > 0 ? "Management review score" : "Pending supervisor evaluation"}
                     </span>
                   </div>
 
@@ -323,10 +444,10 @@ export default function MemberProfileModal({
                       Performance Index
                     </span>
                     <span className="text-base font-bold text-[#242424] dark:text-[#FFFFFF] block">
-                      {merit.performanceScore} / 100
+                      {merit.performanceScore > 0 ? `${merit.performanceScore} / 100` : "0 / 100 (Unreviewed)"}
                     </span>
                     <span className="text-[10px] text-[#107C10] block mt-1">
-                      Task delivery rate
+                      {merit.performanceScore > 0 ? "Task delivery rate" : "Awaiting initial sprint deliverables"}
                     </span>
                   </div>
 
@@ -336,10 +457,10 @@ export default function MemberProfileModal({
                       Domain Relevancy
                     </span>
                     <span className="text-base font-bold text-[#242424] dark:text-[#FFFFFF] block">
-                      {merit.relevancyScore}% Match
+                      {merit.relevancyScore > 0 ? `${merit.relevancyScore}% Match` : "Pending Skill Review"}
                     </span>
                     <span className="text-[10px] text-[#0078D4] block mt-1">
-                      Skill &amp; capability match
+                      {merit.relevancyScore > 0 ? "Skill & capability match" : "Requires technical alignment"}
                     </span>
                   </div>
                 </div>
@@ -470,6 +591,144 @@ export default function MemberProfileModal({
                   <p className="text-xs text-[#242424] dark:text-[#FFFFFF] leading-relaxed">
                     {user.details}
                   </p>
+                </div>
+              )}
+
+              {/* Lifecycle & Governance Card */}
+              <div className="p-4 bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-bold text-[#605E5C] dark:text-[#C8C6C4] uppercase tracking-wider flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5 text-[#0078D4]" />
+                    <span>Employment Lifecycle &amp; Governance</span>
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                      user.status === "Archived"
+                        ? "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
+                        : user.status === "Resigned"
+                        ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                        : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                    }`}
+                  >
+                    {user.status || "Working"}
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-[#605E5C] dark:text-[#A19F9D] mb-3 leading-relaxed">
+                  {user.status === "Archived"
+                    ? "This member is currently archived. All active team and project assignments have been detached."
+                    : user.status === "Resigned"
+                    ? "This member has voluntarily resigned and concluded their tenure with the organization."
+                    : "Active organization member. Management can archive staff upon offboarding, or employees may submit voluntary resignation."}
+                </p>
+
+                {actionFeedback && (
+                  <div className="mb-3 p-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded text-emerald-800 dark:text-emerald-200 text-xs font-semibold">
+                    {actionFeedback}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#F3F2F1] dark:border-[#292827]">
+                  {/* Archive button for Owner, Manager, Superuser (when member is Working) */}
+                  {canArchive && (user.status === "Working" || !user.status) && !isSelf && (
+                    <button
+                      type="button"
+                      onClick={() => setIsArchiveConfirmOpen(true)}
+                      disabled={actionLoading}
+                      className="px-3 py-1.5 rounded-[4px] border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Archive className="w-3.5 h-3.5" />
+                      <span>Archive Member</span>
+                    </button>
+                  )}
+
+                  {/* Restore button for Owner, Manager, Superuser (when member is Archived or Resigned) */}
+                  {canArchive && (user.status === "Archived" || user.status === "Resigned") && (
+                    <button
+                      type="button"
+                      onClick={handleRestore}
+                      disabled={actionLoading}
+                      className="px-3 py-1.5 rounded-[4px] border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Restore to Active Roster</span>
+                    </button>
+                  )}
+
+                  {/* Resign / Quit button for Employees or Self */}
+                  {(isSelf || normalizeRole(currentRole) === "employee") && (user.status === "Working" || !user.status) && (
+                    <button
+                      type="button"
+                      onClick={() => setIsResignConfirmOpen(true)}
+                      disabled={actionLoading}
+                      className="px-3 py-1.5 rounded-[4px] border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 text-amber-800 dark:text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Resign / Quit Organization</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Archive Confirmation Dialog */}
+              {isArchiveConfirmOpen && (
+                <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 rounded-[8px] space-y-3">
+                  <div className="flex items-center gap-2 text-rose-800 dark:text-rose-200 font-bold">
+                    <AlertTriangle className="w-4 h-4 text-rose-600" />
+                    <span>Confirm Archiving Member: {user.name}</span>
+                  </div>
+                  <p className="text-xs text-rose-700 dark:text-rose-300 leading-relaxed">
+                    Are you sure you want to archive <strong>{user.name}</strong> ({user.role.toUpperCase()})? This will offboard them from active company operations and release their team assignments.
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsArchiveConfirmOpen(false)}
+                      className="px-3 py-1 rounded-[4px] border border-rose-300 bg-white dark:bg-[#201F1E] text-xs font-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleArchive}
+                      disabled={actionLoading}
+                      className="px-3 py-1 rounded-[4px] bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1"
+                    >
+                      <Archive className="w-3.5 h-3.5" />
+                      <span>{actionLoading ? "Archiving..." : "Yes, Archive Member"}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Resign Confirmation Dialog */}
+              {isResignConfirmOpen && (
+                <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-[8px] space-y-3">
+                  <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200 font-bold">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    <span>Confirm Voluntary Resignation</span>
+                  </div>
+                  <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+                    Are you sure you wish to submit your formal resignation? Your status will be updated to Resigned, your account will be offboarded, and your active session will terminate.
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsResignConfirmOpen(false)}
+                      className="px-3 py-1 rounded-[4px] border border-amber-300 bg-white dark:bg-[#201F1E] text-xs font-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResign}
+                      disabled={actionLoading}
+                      className="px-3 py-1 rounded-[4px] bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold flex items-center gap-1"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>{actionLoading ? "Processing..." : "Yes, Submit Resignation"}</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

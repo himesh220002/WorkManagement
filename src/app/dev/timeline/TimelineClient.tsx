@@ -11,6 +11,7 @@ interface Options { projects: Option[], teams: Option[], tasks: Option[], users:
 import PipelineCard from "@/components/PipelineCard";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import { PREDEFINED_PIPELINE_TASKS } from "@/utils/taskConstants";
+import { ArrowDown, ArrowUp } from "lucide-react";
 
 export default function TimelineClient({ tasks, options, projectMetrics = [] }: { tasks: any[], options?: Options, projectMetrics?: any[] }) {
   const ganttWrapperRef = useRef<HTMLDivElement>(null);
@@ -256,11 +257,11 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
     class Dev,Sales,Fin highlight;`;
 
   return (
-    <main className="flex flex-col min-w-0 p-4 flex-1 max-w-[1600px] mx-auto w-full">
+    <main className="flex flex-col min-w-0 p-0 sm:p-4 flex-1 max-w-[1600px] mx-auto w-full">
       {/* Page Header */}
-      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex justify-between items-center">
+      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col sm:flex-row justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">Parallel Pipeline Timeline</h1>
+          <h1 className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">Parallel Pipeline Timeline</h1>
           <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">Interactive Gantt chart, dependency tracking, and modular pipeline cards.</p>
         </div>
         <div className="px-3 py-1 bg-[#DFF6DD] text-[#107C10] dark:bg-[#0F3818] dark:text-[#54B054] rounded-full text-xs font-semibold flex items-center">
@@ -270,58 +271,26 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
       </header>
 
       {/* Controls & Form Section */}
-      <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
-        {/* Controls Bar */}
-        <div className="mb-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 pb-6 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-2">Category:</span>
-            {categories.map(cat => (
-              <button
-                key={cat}
-                type="button"
-                className={`px-2 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${activeCategory === cat
-                  ? 'bg-blue-600/90 text-white shadow-lg shadow-blue-500/30 neon-border-blue'
-                  : 'bg-white/50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200/50 dark:border-gray-700/50 hover:bg-white/80 dark:hover:bg-gray-700/80'
-                  }`}
-                onClick={() => setActiveCategory(cat)}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+      <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-2 sm:p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-2">Zoom:</span>
-            {dayZoomOptions.map((zoom) => (
-              <button
-                key={zoom.value}
-                type="button"
-                className={`px-2 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${dayZoom === zoom.value ? 'bg-blue-600/90 text-white shadow-lg shadow-blue-500/30 neon-border-blue' : 'bg-white/50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200/50 dark:border-gray-700/50 hover:bg-white/80 dark:hover:bg-gray-700/80'}`}
-                onClick={() => changeViewMode(zoom.value)}
-              >
-                {zoom.label}
-              </button>
-            ))}
-          </div>
-        </div>
 
         {/* Form to Add Detailed Pipeline */}
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-          <div className="flex items-center justify-between w-full hover:opacity-80 transition-opacity cursor-pointer border-b border-transparent">
+        <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
+          <div className="flex gap-2 items-center justify-between w-full hover:opacity-80 transition-opacity cursor-pointer border-b border-transparent">
             <button
               type="button"
               onClick={() => setIsFormOpen(!isFormOpen)}
-              className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 outline-none py-2 flex-1 text-left"
+              className="text-sm sm:text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 outline-none py-2 flex-1 text-left"
             >
               <i className="fa-solid fa-layer-group text-blue-600"></i> Initialize New Pipeline
-              <i className={`fa-solid fa-chevron-${isFormOpen ? 'up' : 'down'} text-gray-500 dark:text-gray-400 text-sm transition-transform ml-2`}></i>
+              {isFormOpen ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
             </button>
             <button
               type="button"
               onClick={() => setShowExamplesModal(true)}
               className="px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors shadow-sm"
             >
-              <i className="fa-solid fa-lightbulb text-amber-400"></i> View Examples
+              Examples
             </button>
           </div>
 
@@ -435,6 +404,40 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+
+        {/* Controls Bar */}
+        <div className="mt-4 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 ">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-2"></span> */}
+            {categories.map(cat => (
+              <button
+                key={cat}
+                type="button"
+                className={`px-2 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${activeCategory === cat
+                  ? 'bg-blue-600/90 text-white shadow-lg shadow-blue-500/30 neon-border-blue'
+                  : 'bg-white/50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200/50 dark:border-gray-700/50 hover:bg-white/80 dark:hover:bg-gray-700/80'
+                  }`}
+                onClick={() => setActiveCategory(cat)}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-2"></span> */}
+            {dayZoomOptions.map((zoom) => (
+              <button
+                key={zoom.value}
+                type="button"
+                className={`px-2 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${dayZoom === zoom.value ? 'bg-blue-600/90 text-white shadow-lg shadow-blue-500/30 neon-border-blue' : 'bg-white/50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200/50 dark:border-gray-700/50 hover:bg-white/80 dark:hover:bg-gray-700/80'}`}
+                onClick={() => changeViewMode(zoom.value)}
+              >
+                {zoom.label}
+              </button>
+            ))}
           </div>
         </div>
       </section>

@@ -1,9 +1,12 @@
 import connectToDatabase from "@/lib/mongodb";
 import { Pipeline, Project, Team, TaskNode, User } from "@/models";
+import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import TimelineClient from "@/app/dev/timeline/TimelineClient";
 
 export default async function TimelinePage() {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  const tenantFilter = getTenantQueryFilter(session);
 
   let tasks: any[] = [];
   let projects: any[] = [];
@@ -12,11 +15,11 @@ export default async function TimelinePage() {
   let users: any[] = [];
 
   try {
-    tasks = await Pipeline.find({}).populate("projectId teamId taskId").lean();
-    projects = await Project.find({}, { name: 1 }).lean();
-    teams = await Team.find({}, { name: 1 }).lean();
-    taskNodes = await TaskNode.find({}, { name: 1 }).lean();
-    users = await User.find({}, { name: 1, role: 1, position: 1, rank: 1 }).lean();
+    tasks = await Pipeline.find(tenantFilter).populate("projectId teamId taskId").lean();
+    projects = await Project.find(tenantFilter, { name: 1 }).lean();
+    teams = await Team.find(tenantFilter, { name: 1 }).lean();
+    taskNodes = await TaskNode.find(tenantFilter, { name: 1 }).lean();
+    users = await User.find(tenantFilter, { name: 1, role: 1, position: 1, rank: 1 }).lean();
   } catch (err) {
     console.error(err);
   }

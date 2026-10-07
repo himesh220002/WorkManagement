@@ -11,7 +11,7 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
         <i className="fa-solid fa-list-check text-blue-600"></i> Active Project Tasks
       </h3>
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
+        <table className="w-full text-left border-collapse min-w-[800px]">
           <thead>
             <tr className="border-b border-gray-200 dark:border-gray-700">
               <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Task Name</th>
@@ -29,10 +29,10 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                 <td className="p-2">
                   <form action={updateTaskNode} className="m-0">
                     <input type="hidden" name="taskId" value={task._id} />
-                    <input 
-                      type="text" 
-                      name="name" 
-                      defaultValue={task.name} 
+                    <input
+                      type="text"
+                      name="name"
+                      defaultValue={task.name}
                       className="w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 transition-colors"
                       onBlur={(e) => {
                         if (e.target.value !== task.name) e.target.form?.requestSubmit();
@@ -43,9 +43,9 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                 <td className="p-2">
                   <form action={updateTaskNode} className="m-0">
                     <input type="hidden" name="taskId" value={task._id} />
-                      <select 
-                      name="status" 
-                      defaultValue={task.status || "Todo"} 
+                    <select
+                      name="status"
+                      defaultValue={task.status || "Todo"}
                       className="w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 cursor-pointer"
                       onChange={(e) => e.target.form?.requestSubmit()}
                     >
@@ -61,9 +61,9 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                 <td className="p-2">
                   <form action={updateTaskNode} className="m-0">
                     <input type="hidden" name="taskId" value={task._id} />
-                    <select 
-                      name="severity" 
-                      defaultValue={task.severity?.toLowerCase() || "medium"} 
+                    <select
+                      name="severity"
+                      defaultValue={task.severity?.toLowerCase() || "medium"}
                       className="w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 cursor-pointer"
                       onChange={(e) => e.target.form?.requestSubmit()}
                     >
@@ -77,10 +77,10 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                 <td className="p-2">
                   <form action={updateTaskNode} className="m-0">
                     <input type="hidden" name="taskId" value={task._id} />
-                    <input 
-                      type="number" 
-                      name="estimatedHours" 
-                      defaultValue={task.estimatedHours || ""} 
+                    <input
+                      type="number"
+                      name="estimatedHours"
+                      defaultValue={task.estimatedHours || ""}
                       placeholder="0"
                       className="w-20 p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 transition-colors"
                       onBlur={(e) => {
@@ -92,10 +92,10 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                 <td className="p-2">
                   <form action={updateTaskNode} className="m-0">
                     <input type="hidden" name="taskId" value={task._id} />
-                    <input 
-                      type="number" 
-                      name="actualHours" 
-                      defaultValue={task.actualHours || ""} 
+                    <input
+                      type="number"
+                      name="actualHours"
+                      defaultValue={task.actualHours || ""}
                       placeholder="0"
                       className="w-20 p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 transition-colors"
                       onBlur={(e) => {
@@ -107,9 +107,9 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                 <td className="p-2">
                   <form action={updateTaskNode} className="m-0">
                     <input type="hidden" name="taskId" value={task._id} />
-                    <select 
-                      name="pipelineId" 
-                      defaultValue={task.pipelineId || "none"} 
+                    <select
+                      name="pipelineId"
+                      defaultValue={task.pipelineId || "none"}
                       className="w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 cursor-pointer"
                       onChange={(e) => e.target.form?.requestSubmit()}
                     >
@@ -121,9 +121,9 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                 <td className="p-2">
                   <form action={updateTaskNode} className="m-0">
                     <input type="hidden" name="taskId" value={task._id} />
-                    <select 
-                      name="cycleId" 
-                      defaultValue={task.cycleId || "none"} 
+                    <select
+                      name="cycleId"
+                      defaultValue={task.cycleId || "none"}
                       className="w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 cursor-pointer"
                       onChange={(e) => e.target.form?.requestSubmit()}
                     >

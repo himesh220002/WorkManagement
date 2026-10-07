@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import MemberProfileModal, { UserDetail } from "@/components/MemberProfileModal";
+import { updateMemberRoleTagAction } from "@/actions/member";
+import { normalizeRole } from "@/server/auth/rbac";
+import { useToast } from "@/components/ui/Toast";
 import {
   calculateMeritEvaluation,
   getPromotionBadgeInfo,
@@ -26,22 +29,66 @@ import {
   Target,
   ArrowUpRight,
   ShieldCheck,
+  Shield,
   CheckCircle2,
+  Lock,
+  Tag,
 } from "lucide-react";
 
 interface GlobalMemberDirectoryProps {
   users: UserDetail[];
+  currentRole?: string;
+  currentUserId?: string;
 }
 
 type FilterOption = "all" | "ready" | "contender" | "rank1" | "rank2" | "rank3" | "rank4" | "rank5";
 
-export default function GlobalMemberDirectory({ users = [] }: GlobalMemberDirectoryProps) {
+export default function GlobalMemberDirectory({
+  users = [],
+  currentRole,
+  currentUserId,
+}: GlobalMemberDirectoryProps) {
+  const { success, error } = useToast();
   const [selectedUser, setSelectedUser] = useState<UserDetail | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterOption>("all");
   const [isOpenWorking, setIsOpenWorking] = useState(true);
   const [isOpenQuit, setIsOpenQuit] = useState(false);
   const [isOpenDropped, setIsOpenDropped] = useState(false);
+
+  const canMutateTags = ["owner", "manager", "superuser"].includes(
+    (currentRole || "manager").toLowerCase()
+  );
+
+  const handleQuickRoleChange = async (
+    e: React.MouseEvent,
+    userId: string,
+    userName: string,
+    currentRoleStr?: string
+  ) => {
+    e.stopPropagation();
+    const current = normalizeRole(currentRoleStr);
+
+    if (current === "owner" || current === "superuser") {
+      error("Owner and Developer tags are protected and cannot be altered by Managers.");
+      return;
+    }
+
+    const nextRole = current === "teamlead" ? "employee" : "teamlead";
+    try {
+      const fd = new FormData();
+      fd.set("userId", userId);
+      fd.set("newRole", nextRole);
+      const res = await updateMemberRoleTagAction(fd);
+      if (res.success) {
+        success(res.message || `Updated ${userName}'s tag to ${nextRole.toUpperCase()}`);
+      } else {
+        error(res.error || "Permission denied to alter tag");
+      }
+    } catch (err: any) {
+      error(err.message);
+    }
+  };
 
   // Compute merit evaluations for each user
   const usersWithMerit = users.map((u) => {
@@ -82,8 +129,12 @@ export default function GlobalMemberDirectory({ users = [] }: GlobalMemberDirect
   const working = filtered.filter(
     (item) => item.user.status === "Working" || !item.user.status
   );
-  const quit = filtered.filter((item) => item.user.status === "Quit");
-  const dropped = filtered.filter((item) => item.user.status === "Dropped");
+  const quit = filtered.filter(
+    (item) => item.user.status === "Quit" || item.user.status === "Resigned"
+  );
+  const dropped = filtered.filter(
+    (item) => item.user.status === "Dropped" || item.user.status === "Archived"
+  );
 
   const renderMemberCard = ({
     user: u,
@@ -115,10 +166,62 @@ export default function GlobalMemberDirectory({ users = [] }: GlobalMemberDirect
                 {u.name.substring(0, 2)}
               </div>
               <div className="min-w-0 flex-1">
-                <h4 className="font-bold text-xs sm:text-sm text-[#242424] dark:text-[#FFFFFF] truncate group-hover:text-[#0078D4] transition-colors">
-                  {u.name}
-                </h4>
-                <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] truncate">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <h4 className="font-bold text-xs sm:text-sm text-[#242424] dark:text-[#FFFFFF] truncate group-hover:text-[#0078D4] transition-colors">
+                    {u.name}
+                  </h4>
+                  {u._id === currentUserId && (
+                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#EBF3FC] dark:bg-[#1C2B3D] text-[#0078D4] dark:text-[#479EF5] border border-[#0078D4]/30">
+                      You
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  {/* Corporate Role Tag */}
+                  <span
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                      normalizeRole(u.role) === "owner" || normalizeRole(u.role) === "superuser"
+                        ? "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-700"
+                        : normalizeRole(u.role) === "manager"
+                        ? "bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/60 dark:text-blue-200 dark:border-blue-700"
+                        : normalizeRole(u.role) === "teamlead"
+                        ? "bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-950/60 dark:text-purple-200 dark:border-purple-700"
+                        : "bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600"
+                    }`}
+                  >
+                    {normalizeRole(u.role) === "owner" ? (
+                      <Crown className="w-2.5 h-2.5 text-amber-600" />
+                    ) : normalizeRole(u.role) === "teamlead" ? (
+                      <Sparkles className="w-2.5 h-2.5 text-purple-600" />
+                    ) : (
+                      <UserCheck className="w-2.5 h-2.5 text-slate-600" />
+                    )}
+                    <span>{normalizeRole(u.role).toUpperCase()}</span>
+                    {(normalizeRole(u.role) === "owner" || normalizeRole(u.role) === "superuser") && (
+                      <span title="Protected: Owner tag cannot be changed by Managers">
+                        <Lock className="w-2.5 h-2.5 text-amber-700 ml-0.5" />
+                      </span>
+                    )}
+                  </span>
+
+                  {/* Manager Tag Mutation: Change TL <-> Employee (Only visible to Managers & Owners) */}
+                  {canMutateTags && !(normalizeRole(u.role) === "owner" || normalizeRole(u.role) === "superuser") && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleQuickRoleChange(e, u._id, u.name, u.role)}
+                      className="px-1.5 py-0.5 text-[9px] rounded font-semibold border border-dashed border-[#0078D4]/40 hover:border-[#0078D4] text-[#0078D4] dark:text-[#479EF5] bg-white dark:bg-[#201F1E] hover:bg-[#EBF3FC] dark:hover:bg-[#1C2B3D] transition-colors cursor-pointer"
+                      title="Manager permission: Toggle between Team Lead and Employee tag"
+                    >
+                      Make {normalizeRole(u.role) === "teamlead" ? "Employee" : "Team Lead"}
+                    </button>
+                  )}
+                  {canMutateTags && (normalizeRole(u.role) === "owner" || normalizeRole(u.role) === "superuser") && (
+                    <span className="text-[9px] text-amber-700 dark:text-amber-400 font-medium">
+                      (Owner Protected)
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-[#605E5C] dark:text-[#C8C6C4] truncate mt-0.5">
                   {u.position || u.role}
                 </p>
               </div>
@@ -151,11 +254,10 @@ export default function GlobalMemberDirectory({ users = [] }: GlobalMemberDirect
               <span>Rank {merit.currentRank} Seniority</span>
             </span>
             <span
-              className={`font-bold ${
-                merit.isPromotionReady
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-[#0078D4]"
-              }`}
+              className={`font-bold ${merit.isPromotionReady
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-[#0078D4]"
+                }`}
             >
               {merit.overallMeritScore}% Merit Index
             </span>
@@ -227,13 +329,12 @@ export default function GlobalMemberDirectory({ users = [] }: GlobalMemberDirect
               </div>
               <div className="w-full bg-[#EDEBE9] dark:bg-[#3B3A39] h-2 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    merit.isPromotionReady
-                      ? "bg-emerald-500 shadow-sm"
-                      : merit.progressPercent >= 80
+                  className={`h-full rounded-full transition-all duration-500 ${merit.isPromotionReady
+                    ? "bg-emerald-500 shadow-sm"
+                    : merit.progressPercent >= 80
                       ? "bg-amber-500"
                       : "bg-[#0078D4]"
-                  }`}
+                    }`}
                   style={{ width: `${merit.progressPercent}%` }}
                 />
               </div>
@@ -277,16 +378,18 @@ export default function GlobalMemberDirectory({ users = [] }: GlobalMemberDirect
   };
 
   return (
-    <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] w-full">
+    <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 sm:p-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] w-full">
       {/* Directory Header with Search & Merit Summary */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-5 pb-4 border-b border-[#E1DFDD] dark:border-[#3B3A39]">
         <div>
-          <div className="flex items-center gap-2.5">
-            <Users className="w-5 h-5 text-[#0078D4]" />
-            <h2 className="text-base font-bold text-[#242424] dark:text-[#FFFFFF]">
-              Global Personnel &amp; Merit Progression Directory
-            </h2>
-            <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-full text-[11px] font-semibold">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5">
+            <div className="flex gap-2">
+              <Users className="w-5 h-5 text-[#0078D4]" />
+              <h2 className="text-xs sm:text-base font-bold text-[#242424] dark:text-[#FFFFFF]">
+                Global Personnel &amp; Merit Progression Directory
+              </h2>
+            </div>
+            <span className="text-center px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-full text-[11px] font-semibold">
               Anti-Bias Objective Meritocracy
             </span>
           </div>
@@ -313,34 +416,30 @@ export default function GlobalMemberDirectory({ users = [] }: GlobalMemberDirect
       <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-5 border-b border-[#F3F2F1] dark:border-[#292827] text-xs">
         <button
           onClick={() => setActiveFilter("all")}
-          className={`px-3 py-1.5 rounded-[4px] font-medium transition-colors shrink-0 ${
-            activeFilter === "all"
-              ? "bg-[#0078D4] text-white"
-              : "bg-[#FAF9F8] dark:bg-[#1B1A19] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#F3F2F1]"
-          }`}
+          className={`px-3 py-1.5 rounded-[4px] font-medium transition-colors shrink-0 ${activeFilter === "all"
+            ? "bg-[#0078D4] text-white"
+            : "bg-[#FAF9F8] dark:bg-[#1B1A19] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#F3F2F1]"
+            }`}
         >
           All Members ({users.length})
         </button>
 
         <button
           onClick={() => setActiveFilter("ready")}
-          className={`px-3 py-1.5 rounded-[4px] font-medium transition-colors shrink-0 flex items-center gap-1.5 ${
-            activeFilter === "ready"
-              ? "bg-emerald-600 text-white"
-              : "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800"
-          }`}
+          className={`px-3 py-1.5 rounded-[4px] font-medium transition-colors shrink-0 flex items-center gap-1.5 ${activeFilter === "ready"
+            ? "bg-emerald-600 text-white"
+            : "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800"
+            }`}
         >
-          <Sparkles className="w-3.5 h-3.5" />
           <span>✨ Promotion Ready ({readyCount})</span>
         </button>
 
         <button
           onClick={() => setActiveFilter("contender")}
-          className={`px-3 py-1.5 rounded-[4px] font-medium transition-colors shrink-0 flex items-center gap-1.5 ${
-            activeFilter === "contender"
-              ? "bg-amber-600 text-white"
-              : "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 border border-amber-200 dark:border-amber-800"
-          }`}
+          className={`px-3 py-1.5 rounded-[4px] font-medium transition-colors shrink-0 flex items-center gap-1.5 ${activeFilter === "contender"
+            ? "bg-amber-600 text-white"
+            : "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 border border-amber-200 dark:border-amber-800"
+            }`}
         >
           <Star className="w-3.5 h-3.5 fill-amber-500" />
           <span>Strong Contenders ({contenderCount})</span>
@@ -352,11 +451,10 @@ export default function GlobalMemberDirectory({ users = [] }: GlobalMemberDirect
           <button
             key={r}
             onClick={() => setActiveFilter(r)}
-            className={`px-2.5 py-1 rounded-[4px] font-medium transition-colors shrink-0 ${
-              activeFilter === r
-                ? "bg-[#242424] text-white dark:bg-white dark:text-[#242424]"
-                : "bg-[#FAF9F8] dark:bg-[#1B1A19] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#F3F2F1]"
-            }`}
+            className={`px-2.5 py-1 rounded-[4px] font-medium transition-colors shrink-0 ${activeFilter === r
+              ? "bg-[#242424] text-white dark:bg-white dark:text-[#242424]"
+              : "bg-[#FAF9F8] dark:bg-[#1B1A19] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#F3F2F1]"
+              }`}
           >
             Rank {i + 1}
           </button>
@@ -453,6 +551,8 @@ export default function GlobalMemberDirectory({ users = [] }: GlobalMemberDirect
       {selectedUser && (
         <MemberProfileModal
           user={selectedUser}
+          currentRole={currentRole}
+          currentUserId={currentUserId}
           onClose={() => setSelectedUser(null)}
         />
       )}

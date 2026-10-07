@@ -95,4 +95,26 @@ describe("Merit-Based Automatic Progression System", () => {
       )
     ).toBe(true);
   });
+
+  it("handles newly onboarded staff with 0 ratings without fabricated points", () => {
+    const evaluation = calculateMeritEvaluation({
+      rank: "1",
+      joinedDate: new Date().toISOString(),
+      performanceScore: 0,
+      completedProjectsCount: 0,
+      currentProjectsCount: 1,
+      relevancyScore: 0,
+      supervisorRating: 0,
+      teamLeadRating: 0,
+    });
+
+    expect(evaluation.performanceComponent).toBe(0);
+    expect(evaluation.ratingsComponent).toBe(0);
+    expect(evaluation.supervisorRating).toBe(0);
+    expect(evaluation.teamLeadRating).toBe(0);
+    expect(evaluation.isPromotionReady).toBe(false);
+    expect(evaluation.readinessStatus).toBe("Newly Onboarded: Pending Review");
+    const badge = getPromotionBadgeInfo(evaluation);
+    expect(badge.shortLabel).toContain("Pending Review");
+  });
 });

@@ -23,7 +23,7 @@ export function Card({
 }: CardProps) {
   return (
     <div
-      className={`bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.14),0_0_2px_rgba(0,0,0,0.12)] hover:shadow-[0_2px_4px_rgba(0,0,0,0.14),0_0_2px_rgba(0,0,0,0.12)] transition-shadow duration-200 ${className}`}
+      className={`bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-2 sm:p-5 shadow-[0_1px_2px_rgba(0,0,0,0.14),0_0_2px_rgba(0,0,0,0.12)] hover:shadow-[0_2px_4px_rgba(0,0,0,0.14),0_0_2px_rgba(0,0,0,0.12)] transition-shadow duration-200 ${className}`}
     >
       {(title || seeAllHref || headerAction) && (
         <div className="flex items-center justify-between gap-4 mb-4 pb-3 border-b border-[#F3F2F1] dark:border-[#292827]">

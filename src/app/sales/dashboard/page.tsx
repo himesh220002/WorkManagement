@@ -1,9 +1,12 @@
 import connectToDatabase from "@/lib/mongodb";
 import { Lead, Campaign, Pipeline, Project, Team, TaskNode, User } from "@/models";
+import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import SalesDashboardClient from "@/app/sales/dashboard/SalesDashboardClient";
 
 export default async function SalesDashboardPage() {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  const tenantFilter = getTenantQueryFilter(session);
 
   let leads: any[] = [];
   let campaigns: any[] = [];
@@ -14,13 +17,13 @@ export default async function SalesDashboardPage() {
   let users: any[] = [];
 
   try {
-    leads = await Lead.find({}).lean();
-    campaigns = await Campaign.find({}).lean();
-    pipelines = await Pipeline.find({ category: "Sales" }).populate("projectId teamId taskId").sort({ progress: -1 }).lean();
-    projects = await Project.find({}, { name: 1 }).lean();
-    teams = await Team.find({}, { name: 1 }).lean();
-    taskNodes = await TaskNode.find({}, { name: 1 }).lean();
-    users = await User.find({}, { name: 1 }).lean();
+    leads = await Lead.find(tenantFilter).lean();
+    campaigns = await Campaign.find(tenantFilter).lean();
+    pipelines = await Pipeline.find({ ...tenantFilter, category: "Sales" }).populate("projectId teamId taskId").sort({ progress: -1 }).lean();
+    projects = await Project.find(tenantFilter, { name: 1 }).lean();
+    teams = await Team.find(tenantFilter, { name: 1 }).lean();
+    taskNodes = await TaskNode.find(tenantFilter, { name: 1 }).lean();
+    users = await User.find(tenantFilter, { name: 1 }).lean();
   } catch (err) {
     console.error(err);
   }
@@ -79,5 +82,15 @@ export default async function SalesDashboardPage() {
     users: users.map(u => ({ id: u._id.toString(), name: u.name })),
   };
 
-  return <SalesDashboardClient leads={cleanLeads} campaigns={cleanCampaigns} pipelines={cleanPipelines} options={options} />;
+  return (
+    <SalesDashboardClient
+      leads={cleanLeads}
+      campaigns={cleanCampaigns}
+      pipelines={cleanPipelines}
+      options={options}
+      currentRole={session.role}
+      currentUserId={session.userId}
+      currentUserName={session.name}
+    />
+  );
 }

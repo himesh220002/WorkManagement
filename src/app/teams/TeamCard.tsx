@@ -47,12 +47,21 @@ interface TeamData {
 interface TeamCardProps {
   team: TeamData;
   allUsers: UserDetail[];
+  currentRole?: string;
+  currentUserId?: string;
 }
 
-export default function TeamCard({ team, allUsers }: TeamCardProps) {
+export default function TeamCard({ team, allUsers, currentRole, currentUserId }: TeamCardProps) {
   const [selectedMember, setSelectedMember] = useState<UserDetail | null>(null);
   const [isRotateModalOpen, setIsRotateModalOpen] = useState(false);
   const [selectedAddUserId, setSelectedAddUserId] = useState("");
+
+  const role = (currentRole || "manager").toLowerCase();
+  const isManagement = ["owner", "manager", "superuser"].includes(role);
+  const isTeamLead = role === "teamlead";
+  const isMemberOrLead = team.members.some((m) => m._id === currentUserId);
+  const canManage = isManagement || (isTeamLead && isMemberOrLead);
+  const canDelete = isManagement;
 
   const currentMemberIds = new Set(team.members.map((m) => m._id));
   const availableUsersToRotate = allUsers.filter(
@@ -78,35 +87,39 @@ export default function TeamCard({ team, allUsers }: TeamCardProps) {
         </div>
 
         <div className="flex items-center gap-1.5">
-          {/* Rotate/Manage Team Action */}
-          <button
-            type="button"
-            onClick={() => setIsRotateModalOpen(true)}
-            className="flex items-center gap-1 px-2.5 py-1 text-xs bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#0078D4] hover:bg-[#F3F2F1] font-medium transition-colors"
-            title="Rotate & Manage Team Members"
-          >
-            <Settings2 className="w-3.5 h-3.5" />
-            <span>Manage &amp; Rotate</span>
-          </button>
-
-          {/* Delete Team */}
-          <form
-            action={deleteTeam}
-            onSubmit={(e) => {
-              if (!window.confirm(`Delete team "${team.name}"? Members will remain in company directory.`)) {
-                e.preventDefault();
-              }
-            }}
-          >
-            <input type="hidden" name="teamId" value={team._id} />
+          {/* Rotate/Manage Team Action: Restricted to Managers, Owners & Lead of this squad */}
+          {canManage && (
             <button
-              type="submit"
-              className="p-1.5 text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#D13438] transition-colors rounded-[4px]"
-              title="Delete Team"
+              type="button"
+              onClick={() => setIsRotateModalOpen(true)}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#0078D4] hover:bg-[#F3F2F1] font-medium transition-colors cursor-pointer"
+              title="Rotate & Manage Team Members"
             >
-              <Trash2 className="w-4 h-4" />
+              <Settings2 className="w-3.5 h-3.5" />
+              <span>Manage &amp; Rotate</span>
             </button>
-          </form>
+          )}
+
+          {/* Delete Team: Restricted strictly to Managers & Owners */}
+          {canDelete && (
+            <form
+              action={deleteTeam}
+              onSubmit={(e) => {
+                if (!window.confirm(`Delete team "${team.name}"? Members will remain in company directory.`)) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              <input type="hidden" name="teamId" value={team._id} />
+              <button
+                type="submit"
+                className="p-1.5 text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#D13438] transition-colors rounded-[4px] cursor-pointer"
+                title="Delete Team"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </form>
+          )}
         </div>
       </div>
 
@@ -297,6 +310,7 @@ export default function TeamCard({ team, allUsers }: TeamCardProps) {
       {selectedMember && (
         <MemberProfileModal
           user={selectedMember}
+          currentRole={currentRole}
           onClose={() => setSelectedMember(null)}
         />
       )}

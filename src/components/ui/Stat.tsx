@@ -38,14 +38,13 @@ export function Stat({
       </div>
 
       <div className="flex items-baseline gap-2 mb-1">
-        <span className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+        <span className="text-lg lg:text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
           {value}
         </span>
         {change && (
           <span
-            className={`inline-flex items-center text-xs font-semibold ${
-              change.positive ? "text-[#107C10]" : "text-[#D13438]"
-            }`}
+            className={`inline-flex items-center text-xs font-semibold ${change.positive ? "text-[#107C10]" : "text-[#D13438]"
+              }`}
           >
             {change.positive ? (
               <ArrowUpRight className="w-3.5 h-3.5 mr-0.5" />

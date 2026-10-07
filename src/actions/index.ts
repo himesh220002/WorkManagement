@@ -3,6 +3,7 @@
 import connectToDatabase from "@/lib/mongodb";
 import { Pipeline, TaskNode, Lead, Campaign, Deal, Target, Goal, Team, User, Project, ResourceAllocation, Cycle } from "@/models";
 import { revalidatePath } from "next/cache";
+import { getCurrentSession } from "@/server/auth/session";
 
 export async function getAssigneeOptions() {
   await connectToDatabase();
@@ -17,6 +18,7 @@ export async function getAssigneeOptions() {
 
 export async function addPipeline(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
   const name = formData.get("name") as string;
   const category = formData.get("category") as string;
   const owner = formData.get("owner") as string;
@@ -50,7 +52,7 @@ export async function addPipeline(formData: FormData) {
 
     // Generate Team on the fly if provided
     if (newTeamName) {
-      const newTeam = await Team.create({ name: newTeamName, members: memberIds });
+      const newTeam = await Team.create({ name: newTeamName, members: memberIds, companyId: session.companyId });
       teamId = newTeam._id.toString();
     }
 
@@ -66,6 +68,7 @@ export async function addPipeline(formData: FormData) {
         name: createTaskName,
         description: `Auto-generated task from pipeline: ${name}`,
         projectId: projectId,
+        companyId: session.companyId,
         assignee: memberIds.length > 0 ? memberIds[0] : "Unassigned", // Legacy string
         assignees: assigneeArray, // Real ID reference
         status: "Todo",
@@ -78,7 +81,8 @@ export async function addPipeline(formData: FormData) {
     await Pipeline.create({ 
       name, category, owner, status, priority, startDate, endDate, progress, objectives, budget, kpis, riskLevel, dependencies, outcome,
       projectId, teamId, taskId: finalTaskId, memberIds,
-      cashFlowProjectionUSD, expensesUSD, roiPercent
+      cashFlowProjectionUSD, expensesUSD, roiPercent,
+      companyId: session.companyId,
     } as any);
     
     revalidatePath("/dev/timeline");
@@ -90,30 +94,33 @@ export async function addPipeline(formData: FormData) {
 
 export async function addLead(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
   const name = formData.get("name") as string;
   const owner = formData.get("owner") as string;
   const status = formData.get("status") as string;
 
   if (name) {
-    await Lead.create({ name, owner, status, source: "Manual Entry" });
+    await Lead.create({ name, owner, status, source: "Manual Entry", companyId: session.companyId });
     revalidatePath("/sales/dashboard");
   }
 }
 
 export async function addCampaign(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
   const name = formData.get("name") as string;
   const leadsGenerated = Number(formData.get("leadsGenerated")) || 0;
   const expectedRevenue = Number(formData.get("expectedRevenue")) || 0;
 
   if (name) {
-    await Campaign.create({ name, leadsGenerated, expectedRevenue });
+    await Campaign.create({ name, leadsGenerated, expectedRevenue, companyId: session.companyId });
     revalidatePath("/sales/dashboard");
   }
 }
 
 export async function addDeal(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
   const name = formData.get("name") as string;
   const amount = Number(formData.get("amount")) || 0;
   const stage = formData.get("stage") as string;
@@ -138,7 +145,8 @@ export async function addDeal(formData: FormData) {
       metadata: {
         priority,
         riskLevel
-      }
+      },
+      companyId: session.companyId,
     };
     if (formData.get("projectId")) data.projectId = formData.get("projectId");
     if (formData.get("pipelineId")) data.pipelineId = formData.get("pipelineId");
@@ -254,21 +262,23 @@ export async function deleteCampaign(formData: FormData) {
 
 export async function addGoal(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
   const title = formData.get("title") as string;
   const description = formData.get("description") as string;
-  const category = formData.get("category") as string || "Company";
+  const category = (formData.get("category") as string) || "Company";
 
   if (title) {
-    await Goal.create({ title, description, category });
+    await Goal.create({ title, description, category, companyId: session.companyId });
     revalidatePath("/exec/dashboard");
   }
 }
 
 export async function addTeam(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
   const name = formData.get("name") as string;
   if (name) {
-    await Team.create({ name });
+    await Team.create({ name, companyId: session.companyId });
     revalidatePath("/projects");
     revalidatePath("/teams");
     revalidatePath("/diagrams");
@@ -298,18 +308,26 @@ export async function addUser(formData: FormData) {
 
 export async function addProject(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;
-  const category = formData.get("category") as string || "Internal";
+  const category = (formData.get("category") as string) || "Internal";
 
   if (name) {
-    await Project.create({ name, description, category } as any);
+    await Project.create({
+      name,
+      description,
+      category,
+      companyId: session.companyId,
+      ownerId: session.userId,
+    } as any);
     revalidatePath("/projects");
   }
 }
 
 export async function addTarget(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
   const name = formData.get("name") as string;
   const industry = formData.get("industry") as string;
   const region = formData.get("region") as string;
@@ -318,7 +336,7 @@ export async function addTarget(formData: FormData) {
   const actualValue = Number(formData.get("actualValue")) || 0;
 
   if (name) {
-    const data: any = { name, industry, region, expectedValue, actualValue };
+    const data: any = { name, industry, region, expectedValue, actualValue, companyId: session.companyId };
     if (goalId) data.goalId = goalId;
     await Target.create(data);
     revalidatePath("/revenue/dashboard");
@@ -354,6 +372,34 @@ export async function updateTargetChecklist(formData: FormData) {
       await target.save();
     }
     revalidatePath("/revenue/targets");
+  }
+}
+
+export async function updatePipeline(formData: FormData) {
+  await connectToDatabase();
+  const pipelineId = formData.get("pipelineId") as string;
+  const name = formData.get("name") as string;
+  const category = formData.get("category") as string;
+  const priority = formData.get("priority") as string;
+  const status = formData.get("status") as string;
+  const riskLevel = formData.get("riskLevel") as string;
+  const budget = Number(formData.get("budget")) || 0;
+  const objectives = formData.get("objectives") as string;
+
+  if (pipelineId) {
+    await Pipeline.findByIdAndUpdate(pipelineId, {
+      name,
+      category,
+      priority,
+      status,
+      riskLevel,
+      budget,
+      objectives,
+    });
+    revalidatePath("/sales/dashboard");
+    revalidatePath("/revenue/dashboard");
+    revalidatePath("/dev/timeline");
+    revalidatePath("/projects");
   }
 }
 
@@ -427,16 +473,17 @@ export async function deletePipeline(formData: FormData) {
 
 export async function addResourceAllocation(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
   const name = formData.get("name") as string;
-  const type = formData.get("type") as string || "Budget";
+  const type = (formData.get("type") as string) || "Budget";
   const totalAllocated = Number(formData.get("totalAllocated")) || 0;
   const totalUsed = Number(formData.get("totalUsed")) || 0;
-  const riskLevel = formData.get("riskLevel") as string || "Low";
+  const riskLevel = (formData.get("riskLevel") as string) || "Low";
   const assignedToProjectId = formData.get("assignedToProjectId") as string;
   const linkedDealId = formData.get("linkedDealId") as string;
 
   if (name) {
-    const data: any = { name, type, totalAllocated, totalUsed, riskLevel };
+    const data: any = { name, type, totalAllocated, totalUsed, riskLevel, companyId: session.companyId };
     if (assignedToProjectId) data.assignedToProjectId = assignedToProjectId;
     if (linkedDealId) data.linkedDealId = linkedDealId;
     
@@ -448,20 +495,21 @@ export async function addResourceAllocation(formData: FormData) {
 
 export async function addTaskNode(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
   const rawName = formData.get("name") as string;
   const predefinedTask = formData.get("predefinedTask") as string;
   const name = predefinedTask ? (rawName ? `${predefinedTask} - ${rawName}` : predefinedTask) : rawName;
   const projectId = formData.get("projectId") as string;
-  const status = formData.get("status") as string || "open";
-  const severity = formData.get("severity") as string || "medium";
-  const module = formData.get("module") as string || "General";
+  const status = (formData.get("status") as string) || "open";
+  const severity = (formData.get("severity") as string) || "medium";
+  const module = (formData.get("module") as string) || "General";
   const estimatedHours = Number(formData.get("estimatedHours")) || 0;
   const actualHours = Number(formData.get("actualHours")) || 0;
   const pipelineId = formData.get("pipelineId") as string;
   const cycleId = formData.get("cycleId") as string;
   
   if (name && projectId && projectId !== "all") {
-    const data: any = { name, projectId, status, severity, module, estimatedHours, actualHours };
+    const data: any = { name, projectId, status, severity, module, estimatedHours, actualHours, companyId: session.companyId };
     if (pipelineId && pipelineId !== "none") data.pipelineId = pipelineId;
     if (cycleId && cycleId !== "none") data.cycleId = cycleId;
     
@@ -498,6 +546,7 @@ export async function updateTaskNode(formData: FormData) {
 
 export async function addCycle(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
   const name = formData.get("name") as string;
   const project = formData.get("projectId") as string;
   const startDate = formData.get("startDate") as string;
@@ -672,4 +721,50 @@ export async function promoteMemberByMerit(formData: FormData) {
   }
 }
 
+import {
+  provisionMemberAction as _provisionMemberAction,
+  updateMemberRoleTagAction as _updateMemberRoleTagAction,
+  assignProjectStaffAction as _assignProjectStaffAction,
+  updateProjectAgendasAction as _updateProjectAgendasAction,
+  submitProjectChangeRequestAction as _submitProjectChangeRequestAction,
+  reviewProjectChangeRequestAction as _reviewProjectChangeRequestAction,
+  archiveMemberAction as _archiveMemberAction,
+  restoreMemberAction as _restoreMemberAction,
+  resignMemberAction as _resignMemberAction,
+} from "./member";
 
+export async function provisionMemberAction(formData: FormData) {
+  return _provisionMemberAction(formData);
+}
+
+export async function updateMemberRoleTagAction(formData: FormData) {
+  return _updateMemberRoleTagAction(formData);
+}
+
+export async function assignProjectStaffAction(formData: FormData) {
+  return _assignProjectStaffAction(formData);
+}
+
+export async function updateProjectAgendasAction(formData: FormData) {
+  return _updateProjectAgendasAction(formData);
+}
+
+export async function submitProjectChangeRequestAction(formData: FormData) {
+  return _submitProjectChangeRequestAction(formData);
+}
+
+export async function reviewProjectChangeRequestAction(formData: FormData) {
+  return _reviewProjectChangeRequestAction(formData);
+}
+
+export async function archiveMemberAction(formData: FormData) {
+  return _archiveMemberAction(formData);
+}
+
+export async function restoreMemberAction(formData: FormData) {
+  return _restoreMemberAction(formData);
+}
+
+export async function resignMemberAction(formData: FormData) {
+  return _resignMemberAction(formData);
+}

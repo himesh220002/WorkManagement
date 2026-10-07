@@ -1,11 +1,14 @@
 import connectToDatabase from "@/lib/mongodb";
 import { Pipeline, Goal, Target, Lead, Deal, Task, User, Project, Team } from "@/models";
+import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import ExecDashboardClient from "./ExecDashboardClient";
 
 export default async function ExecDashboard() {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  const tenantFilter = getTenantQueryFilter(session);
 
-  // Fetch all core entities to guarantee 100% comprehensive data coverage across all projects
+  // Fetch entities scoped strictly to the active tenant organization
   const [
     projectsRaw,
     tasksRaw,
@@ -17,21 +20,21 @@ export default async function ExecDashboard() {
     usersRaw,
     teamsRaw,
   ] = await Promise.all([
-    Project.find({}).lean(),
-    Task.find({})
+    Project.find(tenantFilter).lean(),
+    Task.find(tenantFilter)
       .populate("projectId", "name status health")
       .populate("assigneeIds", "name role email")
       .lean(),
-    Pipeline.find({})
+    Pipeline.find(tenantFilter)
       .populate("projectId teamId taskId")
       .sort({ progress: -1 })
       .lean(),
-    Goal.find({}).populate("projectId", "name").lean(),
-    Target.find({}).lean(),
-    Lead.find({}).populate("projectId", "name").lean(),
-    Deal.find({}).populate("projectId", "name").lean(),
-    User.find({}).lean(),
-    Team.find({}).populate("projectId", "name").lean(),
+    Goal.find(tenantFilter).populate("projectId", "name").lean(),
+    Target.find(tenantFilter).lean(),
+    Lead.find(tenantFilter).populate("projectId", "name").lean(),
+    Deal.find(tenantFilter).populate("projectId", "name").lean(),
+    User.find(tenantFilter).lean(),
+    Team.find(tenantFilter).populate("projectId", "name").lean(),
   ]);
 
   // Clean and normalize tasks across all projects

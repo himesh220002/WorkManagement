@@ -7,6 +7,7 @@ import TeamCard from "@/app/teams/TeamCard";
 import { Badge } from "@/components/ui/Badge";
 import { calculateMeritEvaluation } from "@/utils/meritEvaluation";
 import { revalidatePath } from "next/cache";
+import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import {
   Users,
   Plus,
@@ -21,11 +22,12 @@ import {
 async function addTeam(formData: FormData) {
   "use server";
   await connectToDatabase();
+  const session = await getCurrentSession();
   const name = formData.get("teamName") as string;
   const memberIds = formData.getAll("memberIds") as string[];
 
   if (name) {
-    await Team.create({ name, members: memberIds });
+    await Team.create({ name, members: memberIds, companyId: session.companyId });
     revalidatePath("/teams");
     revalidatePath("/diagrams");
   }
@@ -33,8 +35,11 @@ async function addTeam(formData: FormData) {
 
 export default async function TeamsPage() {
   await connectToDatabase();
-  const teamsRaw = await Team.find({}).populate("members").lean();
-  const allUsersData = await User.find({}).lean();
+  const session = await getCurrentSession();
+  const tenantFilter = getTenantQueryFilter(session);
+
+  const teamsRaw = await Team.find(tenantFilter).populate("members").lean();
+  const allUsersData = await User.find(tenantFilter).lean();
 
   // Sanitize for client components
   const allUsers = allUsersData.map((u: any) => ({
@@ -48,12 +53,12 @@ export default async function TeamsPage() {
     joinedDate: u.joinedDate ? new Date(u.joinedDate).toISOString() : null,
     leftDate: u.leftDate ? new Date(u.leftDate).toISOString() : null,
     details: u.details || "",
-    performanceScore: u.performanceScore ?? 82,
+    performanceScore: u.performanceScore ?? 0,
     completedProjectsCount: u.completedProjectsCount ?? 0,
-    currentProjectsCount: u.currentProjectsCount ?? 1,
-    relevancyScore: u.relevancyScore ?? 85,
-    supervisorRating: u.supervisorRating ?? 4.2,
-    teamLeadRating: u.teamLeadRating ?? 4.3,
+    currentProjectsCount: u.currentProjectsCount ?? 0,
+    relevancyScore: u.relevancyScore ?? 0,
+    supervisorRating: u.supervisorRating ?? 0,
+    teamLeadRating: u.teamLeadRating ?? 0,
     remarks: u.remarks || "",
   }));
 
@@ -67,23 +72,23 @@ export default async function TeamsPage() {
     name: t.name,
     members: Array.isArray(t.members)
       ? t.members.map((m: any) => ({
-          _id: (m._id || m).toString(),
-          name: m.name || "Member",
-          role: m.role || "Member",
-          position: m.position || "",
-          rank: m.rank || "1",
-          status: m.status || "Working",
-          joinedDate: m.joinedDate ? new Date(m.joinedDate).toISOString() : null,
-          leftDate: m.leftDate ? new Date(m.leftDate).toISOString() : null,
-          details: m.details || "",
-          performanceScore: m.performanceScore ?? 82,
-          completedProjectsCount: m.completedProjectsCount ?? 0,
-          currentProjectsCount: m.currentProjectsCount ?? 1,
-          relevancyScore: m.relevancyScore ?? 85,
-          supervisorRating: m.supervisorRating ?? 4.2,
-          teamLeadRating: m.teamLeadRating ?? 4.3,
-          remarks: m.remarks || "",
-        }))
+        _id: (m._id || m).toString(),
+        name: m.name || "Member",
+        role: m.role || "Member",
+        position: m.position || "",
+        rank: m.rank || "1",
+        status: m.status || "Working",
+        joinedDate: m.joinedDate ? new Date(m.joinedDate).toISOString() : null,
+        leftDate: m.leftDate ? new Date(m.leftDate).toISOString() : null,
+        details: m.details || "",
+        performanceScore: m.performanceScore ?? 82,
+        completedProjectsCount: m.completedProjectsCount ?? 0,
+        currentProjectsCount: m.currentProjectsCount ?? 1,
+        relevancyScore: m.relevancyScore ?? 85,
+        supervisorRating: m.supervisorRating ?? 4.2,
+        teamLeadRating: m.teamLeadRating ?? 4.3,
+        remarks: m.remarks || "",
+      }))
       : [],
   }));
 
@@ -95,20 +100,20 @@ export default async function TeamsPage() {
   const avgMeritScore =
     activeStaff.length > 0
       ? Math.round(
-          activeStaff.reduce(
-            (acc, u) => acc + calculateMeritEvaluation(u).overallMeritScore,
-            0
-          ) / activeStaff.length
-        )
+        activeStaff.reduce(
+          (acc, u) => acc + calculateMeritEvaluation(u).overallMeritScore,
+          0
+        ) / activeStaff.length
+      )
       : 80;
 
   return (
-    <main className="flex flex-col min-w-0 p-4 flex-1 max-w-[1600px] mx-auto w-full">
+    <main className="flex flex-col min-w-0 p-0 sm:p-4 flex-1 max-w-[1600px] mx-auto w-full">
       {/* Header */}
       <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-5 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+            <h1 className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
               Teams, Squads &amp; Member Directory
             </h1>
             <Badge tone="brand" size="sm">
@@ -141,17 +146,17 @@ export default async function TeamsPage() {
       {/* Anti-Bias Meritocracy Architecture Ribbon */}
       <div className="bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
         <div className="flex items-start sm:items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
+          <div className="hidden md:block w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
             <ShieldCheck className="w-5 h-5" />
           </div>
-          <div>
-            <h2 className="text-xs font-bold text-[#242424] dark:text-[#FFFFFF] uppercase tracking-wider flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xs font-bold text-[#242424] dark:text-[#FFFFFF] uppercase tracking-wider flex items-center gap-2 flex-wrap mb-1">
               <span>Automated Merit Progression Engine</span>
               <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
                 Anti-Office Politics Active
               </span>
             </h2>
-            <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-0.5">
+            <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4]">
               Promotions are computed dynamically: <strong>Performance Index (25%)</strong> + <strong>Tenure Working Days (10%)</strong> + <strong>Deliverables (25%)</strong> + <strong>Team Lead &amp; Supervisor Reviews (30%)</strong> + <strong>Skill Relevancy (10%)</strong>. Transparent criteria guarantee dedication is recognized automatically.
             </p>
           </div>
@@ -169,68 +174,95 @@ export default async function TeamsPage() {
         </div>
       </div>
 
-      {/* Forms Ribbon: Register Global Member + Create Team */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Register Global Member */}
-        <RegisterMemberForm />
+      {/* Forms Ribbon: Register Global Member + Create Team (Restricted to Management) */}
+      {["owner", "manager", "superuser"].includes((session.role || "").toLowerCase()) ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* Register Global Member */}
+          <RegisterMemberForm defaultCompanyCode={session.companyCode} />
 
-        {/* Create Team Form with Multi-Select initial members */}
-        <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex-1 flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-[#F3F2F1] dark:border-[#292827]">
-            <Building2 className="w-4 h-4 text-[#107C10]" />
-            <h2 className="text-sm font-semibold text-[#242424] dark:text-[#FFFFFF]">
-              Establish New Operational Team
-            </h2>
-          </div>
-
-          <form action={addTeam} className="space-y-3 text-xs">
-            <div>
-              <label className="block font-medium text-[#242424] dark:text-[#FFFFFF] mb-1">
-                Team / Squad Name *
-              </label>
-              <input
-                type="text"
-                name="teamName"
-                placeholder="e.g. Core Engineering, Growth Squad"
-                className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
-                required
-              />
+          {/* Create Team Form with Multi-Select initial members */}
+          <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex-1 flex flex-col justify-between">
+            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-[#F3F2F1] dark:border-[#292827]">
+              <Building2 className="w-4 h-4 text-[#107C10]" />
+              <h2 className="text-sm font-semibold text-[#242424] dark:text-[#FFFFFF]">
+                Establish New Operational Team
+              </h2>
             </div>
 
-            <div>
-              <label className="block font-medium text-[#242424] dark:text-[#FFFFFF] mb-1">
-                Initial Team Members (Optional)
-              </label>
-              <div className="overflow-visible relative z-20">
-                <MultiSelectDropdown
-                  name="memberIds"
-                  options={userOptions}
-                  placeholder="Select initial company members..."
+            <form action={addTeam} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-medium text-[#242424] dark:text-[#FFFFFF] mb-1">
+                  Team / Squad Name *
+                </label>
+                <input
+                  type="text"
+                  name="teamName"
+                  placeholder="e.g. Core Engineering, Growth Squad"
+                  className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                  required
                 />
               </div>
-            </div>
 
-            <div className="flex justify-end pt-2">
-              <button
-                type="submit"
-                className="px-4 py-2 bg-[#107C10] hover:bg-[#0E6A0E] text-white rounded-[4px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Create Team</span>
-              </button>
-            </div>
-          </form>
+              <div>
+                <label className="block font-medium text-[#242424] dark:text-[#FFFFFF] mb-1">
+                  Initial Team Members (Optional)
+                </label>
+                <div className="overflow-visible relative z-20">
+                  <MultiSelectDropdown
+                    name="memberIds"
+                    options={userOptions}
+                    placeholder="Select initial company members..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#107C10] hover:bg-[#0E6A0E] text-white rounded-[4px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Create Team</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-slate-50 dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 mb-6 flex items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-[#EBF3FC] dark:bg-[#1C2B3D] text-[#0078D4] dark:text-[#479EF5] flex items-center justify-center font-bold shrink-0">
+              <Users className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-xs text-[#242424] dark:text-white">
+                  Active Role: {session.role.toUpperCase()} (View Only Governance)
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] bg-[#EBF3FC] dark:bg-[#1C2B3D] text-[#0078D4] dark:text-[#479EF5] font-semibold border border-[#0078D4]/20">
+                  Protected Organization
+                </span>
+              </div>
+              <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-0.5">
+                Staff registration, squad establishment, and promotions are restricted to Operations Managers and Owners. You have full access to inspect squads and merit telemetry below.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Global Directory */}
       <div className="mb-6">
-        <GlobalMemberDirectory users={allUsers} />
+        <GlobalMemberDirectory
+          users={allUsers}
+          currentRole={session.role}
+          currentUserId={session.userId}
+        />
       </div>
 
       {/* Active Squads Cards Grid */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row gap-2 items-start p-4 sm:items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-[#0078D4]" />
             <h3 className="font-bold text-sm text-[#242424] dark:text-[#FFFFFF] uppercase tracking-wider">
@@ -244,7 +276,13 @@ export default async function TeamsPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {cleanTeams.map((t) => (
-            <TeamCard key={t._id} team={t} allUsers={allUsers} />
+            <TeamCard
+              key={t._id}
+              team={t}
+              allUsers={allUsers}
+              currentRole={session.role}
+              currentUserId={session.userId}
+            />
           ))}
 
           {cleanTeams.length === 0 && (

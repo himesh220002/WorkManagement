@@ -29,6 +29,9 @@ export interface ICompany {
   _id: string | Types.ObjectId;
   name: string;
   slug: string;
+  subdomain?: string;
+  companyCode?: string;
+  plan?: string;
   logoUrl?: string;
   industry?: string;
   fiscalYearStart?: string;
@@ -42,6 +45,21 @@ export interface ICompany {
   updatedAt?: Date;
 }
 
+export interface IProjectChangeRequest {
+  _id?: string | Types.ObjectId;
+  title: string;
+  description?: string;
+  type?: "agenda" | "timeline" | "scope" | "deadline";
+  requestedBy?: Types.ObjectId | string;
+  requesterName?: string;
+  status: "Pending" | "Approved" | "Rejected";
+  reviewedBy?: Types.ObjectId | string;
+  reviewerName?: string;
+  reviewNote?: string;
+  createdAt?: Date;
+  reviewedAt?: Date;
+}
+
 export interface IProject {
   _id: string | Types.ObjectId;
   companyId?: Types.ObjectId | string;
@@ -49,6 +67,10 @@ export interface IProject {
   description?: string;
   category: ProjectCategoryType;
   ownerId?: Types.ObjectId | string;
+  leadId?: Types.ObjectId | string;
+  memberIds?: (Types.ObjectId | string)[];
+  agendas?: string[];
+  changeRequests?: IProjectChangeRequest[];
   teams: (Types.ObjectId | string)[];
   startDate?: Date;
   deadline?: Date;
@@ -79,6 +101,8 @@ export interface IUser {
   companyId?: Types.ObjectId | string;
   name: string;
   email?: string;
+  passwordHash?: string;
+  isActive?: boolean;
   avatarUrl?: string;
   role?: UserRoleType | string;
   teamIds?: (Types.ObjectId | string)[];
@@ -99,7 +123,20 @@ export interface IUser {
   remarks?: string;
   createdAt?: Date;
   updatedAt?: Date;
+  comparePassword?(candidatePassword: string): Promise<boolean>;
 }
+
+export interface JWTPayload {
+  userId: string;
+  companyId?: string | null;
+  companyCode?: string | null;
+  role: "superuser" | "owner" | "manager" | "teamlead" | "employee" | string;
+  email: string;
+  name: string;
+  iat?: number;
+  exp?: number;
+}
+
 
 export interface ITask {
   _id: string | Types.ObjectId;

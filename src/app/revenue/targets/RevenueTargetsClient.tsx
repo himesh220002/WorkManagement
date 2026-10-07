@@ -57,12 +57,12 @@ export default function RevenueTargetsClient({
   const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
 
   return (
-    <main className="flex flex-col min-w-0 p-4 flex-1 max-w-[1600px] mx-auto w-full">
+    <main className="flex flex-col min-w-0 p-0 sm:p-4 flex-1 max-w-[1600px] mx-auto w-full">
       {/* Header */}
-      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 sm:p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+            <h1 className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
               Revenue Target Customization &amp; Goals
             </h1>
             <Badge tone="brand" size="sm">
@@ -395,13 +395,12 @@ export default function RevenueTargetsClient({
 
                     <div className="flex items-center gap-1.5">
                       <span
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-[3px] ${
-                          target.status === "Completed"
-                            ? "bg-[#DFF6DD] text-[#107C10]"
-                            : target.status === "Rejected"
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-[3px] ${target.status === "Completed"
+                          ? "bg-[#DFF6DD] text-[#107C10]"
+                          : target.status === "Rejected"
                             ? "bg-[#FDE7E9] text-[#D13438]"
                             : "bg-[#FFF4CE] text-[#8F6B00]"
-                        }`}
+                          }`}
                       >
                         {target.status}
                       </span>
@@ -467,11 +466,10 @@ export default function RevenueTargetsClient({
                           )}
                         </button>
                         <span
-                          className={`text-xs ${
-                            task.isCompleted
-                              ? "line-through text-[#8A8886]"
-                              : "text-[#242424] dark:text-[#FFFFFF]"
-                          }`}
+                          className={`text-xs ${task.isCompleted
+                            ? "line-through text-[#8A8886]"
+                            : "text-[#242424] dark:text-[#FFFFFF]"
+                            }`}
                         >
                           {task.name}
                         </span>

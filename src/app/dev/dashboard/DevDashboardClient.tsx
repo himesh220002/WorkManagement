@@ -110,12 +110,12 @@ export default function DevDashboardClient({
   const activeProject = projects.find((p) => p._id === selectedProjectId);
 
   return (
-    <main className="flex flex-col min-w-0 p-4 flex-1 max-w-[1600px] mx-auto w-full">
+    <main className="flex flex-col min-w-0 p-0 sm:p-4 flex-1 max-w-[1600px] mx-auto w-full">
       {/* Header */}
-      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 sm:p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+            <h1 className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
               Engineering & Development Hub
             </h1>
             <Badge tone="brand" size="sm">
@@ -148,7 +148,7 @@ export default function DevDashboardClient({
       </header>
 
       {/* Engineering Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Stat
           label="Total Tasks"
           value={`${tasks.length} Tasks`}
@@ -254,7 +254,7 @@ export default function DevDashboardClient({
           </h3>
           <form action={addTaskNode} className="space-y-3">
             <input type="hidden" name="projectId" value={selectedProjectId} />
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <select
                 name="pipelineId"
                 className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"

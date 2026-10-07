@@ -1,5 +1,6 @@
 import connectToDatabase from "@/lib/mongodb";
 import { Project, TaskNode, Pipeline, Cycle } from "@/models";
+import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import DevDashboardClient from "@/app/dev/dashboard/DevDashboardClient";
 
 export default async function DevDashboardPage(
@@ -7,6 +8,8 @@ export default async function DevDashboardPage(
 ) {
   const searchParams = await props.searchParams;
   await connectToDatabase();
+  const session = await getCurrentSession();
+  const tenantFilter = getTenantQueryFilter(session);
 
   const selectedProjectId = searchParams?.projectId || "all";
 
@@ -16,24 +19,22 @@ export default async function DevDashboardPage(
   let cycles: any[] = [];
 
   try {
-    projects = await Project.find({}).lean();
+    projects = await Project.find(tenantFilter).lean();
     
     if (projects.length > 0) {
-      // If ANY projects exist, NEVER show unlinked dummy data.
       const projectIds = projects.map(p => p._id);
       
-      pipelines = await Pipeline.find({ projectId: { $in: projectIds } }).sort({ progress: -1 }).lean();
+      pipelines = await Pipeline.find({ ...tenantFilter, projectId: { $in: projectIds } }).sort({ progress: -1 }).lean();
       
       if (selectedProjectId && selectedProjectId !== "all") {
-        tasks = await TaskNode.find({ projectId: selectedProjectId }).lean();
-        cycles = await Cycle.find({ project: selectedProjectId }).lean();
+        tasks = await TaskNode.find({ ...tenantFilter, projectId: selectedProjectId }).lean();
+        cycles = await Cycle.find({ ...tenantFilter, project: selectedProjectId }).lean();
       } else {
-        // Global View: only aggregate tasks/cycles belonging to real projects
-        tasks = await TaskNode.find({ projectId: { $in: projectIds } }).lean();
-        cycles = await Cycle.find({ project: { $in: projectIds } }).lean();
+        tasks = await TaskNode.find({ ...tenantFilter, projectId: { $in: projectIds } }).lean();
+        cycles = await Cycle.find({ ...tenantFilter, project: { $in: projectIds } }).lean();
       }
-    } else {
-      // If NO projects exist, show the dummy records for demonstration
+    } else if (session.role === "superuser" && !session.companyId) {
+      // Global superuser fallback when no tenant is selected
       pipelines = await Pipeline.find({}).sort({ progress: -1 }).lean();
       tasks = await TaskNode.find({}).lean();
       cycles = await Cycle.find({}).lean();

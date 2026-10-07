@@ -29,9 +29,19 @@ import {
   ArrowUpDown,
   Calendar,
   AlertTriangle,
+  Lock,
+  ShieldCheck,
 } from "lucide-react";
 
-export default function PipelineCard({ pipeline }: { pipeline: any }) {
+export default function PipelineCard({
+  pipeline,
+  currentRole,
+}: {
+  pipeline: any;
+  currentRole?: string;
+}) {
+  const role = (currentRole || "manager").toLowerCase();
+  const canManagePipeline = ["owner", "manager", "superuser"].includes(role);
   const [todos, setTodos] = useState(pipeline.todos || []);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isReorderMode, setIsReorderMode] = useState(false);
@@ -106,13 +116,12 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
             </h4>
             <div className="flex items-center gap-1.5 shrink-0">
               <span
-                className={`px-2 py-0.5 text-[11px] rounded font-semibold ${
-                  pipeline.priority === "High"
+                className={`px-2 py-0.5 text-[11px] rounded font-semibold ${pipeline.priority === "High"
                     ? "bg-[#FDE7E9] text-[#D13438]"
                     : pipeline.priority === "Low"
-                    ? "bg-[#DFF6DD] text-[#107C10]"
-                    : "bg-[#FFF4CE] text-[#8F6B00]"
-                }`}
+                      ? "bg-[#DFF6DD] text-[#107C10]"
+                      : "bg-[#FFF4CE] text-[#8F6B00]"
+                  }`}
               >
                 {pipeline.priority || "Medium"}
               </span>
@@ -177,13 +186,12 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
             </span>
 
             <span
-              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                pipeline.riskLevel === "High"
+              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${pipeline.riskLevel === "High"
                   ? "bg-[#FDE7E9] text-[#D13438]"
                   : pipeline.riskLevel === "Medium"
-                  ? "bg-[#FFF4CE] text-[#8F6B00]"
-                  : "bg-[#DFF6DD] text-[#107C10]"
-              }`}
+                    ? "bg-[#FFF4CE] text-[#8F6B00]"
+                    : "bg-[#DFF6DD] text-[#107C10]"
+                }`}
             >
               Risk: {pipeline.riskLevel || "Low"}
             </span>
@@ -223,18 +231,17 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
                   </span>
                   <StatusBadge status={pipeline.status || "Active"} />
                   <span
-                    className={`px-2 py-0.5 text-xs rounded font-semibold ${
-                      pipeline.priority === "High"
+                    className={`px-2 py-0.5 text-xs rounded font-semibold ${pipeline.priority === "High"
                         ? "bg-[#FDE7E9] text-[#D13438]"
                         : pipeline.priority === "Low"
-                        ? "bg-[#DFF6DD] text-[#107C10]"
-                        : "bg-[#FFF4CE] text-[#8F6B00]"
-                    }`}
+                          ? "bg-[#DFF6DD] text-[#107C10]"
+                          : "bg-[#FFF4CE] text-[#8F6B00]"
+                      }`}
                   >
                     Priority: {pipeline.priority || "Medium"}
                   </span>
                 </div>
-                <h2 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+                <h2 className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
                   {pipeline.name}
                 </h2>
               </div>
@@ -305,8 +312,8 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
                           pipeline.riskLevel === "High"
                             ? "text-[#D13438]"
                             : pipeline.riskLevel === "Medium"
-                            ? "text-[#8F6B00]"
-                            : "text-[#107C10]"
+                              ? "text-[#8F6B00]"
+                              : "text-[#107C10]"
                         }
                       >
                         {pipeline.riskLevel || "Low"}
@@ -389,11 +396,10 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
                     <button
                       type="button"
                       onClick={() => setIsReorderMode(!isReorderMode)}
-                      className={`text-xs px-2.5 py-1 rounded font-semibold transition-colors flex items-center gap-1 ${
-                        isReorderMode
+                      className={`text-xs px-2.5 py-1 rounded font-semibold transition-colors flex items-center gap-1 ${isReorderMode
                           ? "bg-[#0078D4] text-white"
                           : "bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#EDEBE9]"
-                      }`}
+                        }`}
                     >
                       <ArrowUpDown className="w-3.5 h-3.5" />
                       <span>{isReorderMode ? "Done Reordering" : "Reorder"}</span>
@@ -409,11 +415,10 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
                         onDragStart={(e) => handleDragStart(e, index)}
                         onDragOver={(e) => handleDragOver(e, index)}
                         onDrop={handleDrop}
-                        className={`flex items-center gap-2.5 p-3 rounded-[6px] border transition-all text-xs ${
-                          isReorderMode
+                        className={`flex items-center gap-2.5 p-3 rounded-[6px] border transition-all text-xs ${isReorderMode
                             ? "cursor-grab border-dashed border-[#0078D4] bg-[#EBF3FC]/40 dark:bg-[#1C2B3D]/40"
                             : "border-[#E1DFDD] dark:border-[#3B3A39] bg-white dark:bg-[#201F1E] hover:border-[#0078D4]"
-                        }`}
+                          }`}
                       >
                         {!isReorderMode && (
                           <input
@@ -430,11 +435,10 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
                           />
                         )}
                         <span
-                          className={`flex-1 break-words ${
-                            todo.completed
+                          className={`flex-1 break-words ${todo.completed
                               ? "line-through text-[#A19F9D]"
                               : "text-[#242424] dark:text-[#FFFFFF] font-medium"
-                          }`}
+                            }`}
                         >
                           {todo.text}
                         </span>
@@ -548,23 +552,30 @@ export default function PipelineCard({ pipeline }: { pipeline: any }) {
 
                 {/* Modal Footer Actions */}
                 <div className="flex justify-between items-center mt-6 pt-4 border-t border-[#E1DFDD] dark:border-[#3B3A39]">
-                  <form
-                    action={deletePipeline}
-                    onSubmit={(e) => {
-                      if (!window.confirm(`Are you sure you want to delete pipeline "${pipeline.name}"?`)) {
-                        e.preventDefault();
-                      }
-                    }}
-                  >
-                    <input type="hidden" name="pipelineId" value={pipeline._id.toString()} />
-                    <button
-                      type="submit"
-                      className="text-xs text-[#D13438] hover:underline flex items-center gap-1 font-medium"
+                  {canManagePipeline ? (
+                    <form
+                      action={deletePipeline}
+                      onSubmit={(e) => {
+                        if (!window.confirm(`Are you sure you want to delete pipeline "${pipeline.name}"?`)) {
+                          e.preventDefault();
+                        }
+                      }}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Delete Pipeline</span>
-                    </button>
-                  </form>
+                      <input type="hidden" name="pipelineId" value={pipeline._id.toString()} />
+                      <button
+                        type="submit"
+                        className="text-xs text-[#D13438] hover:underline flex items-center gap-1 font-medium cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete Pipeline</span>
+                      </button>
+                    </form>
+                  ) : (
+                    <span className="text-[11px] text-[#8A8886] flex items-center gap-1">
+                      <Lock className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Pipeline Deletion Restricted to Management</span>
+                    </span>
+                  )}
 
                   <button
                     type="button"

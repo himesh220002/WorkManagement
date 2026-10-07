@@ -129,9 +129,8 @@ export default function DiagramsClient({
             pTasks.slice(0, 10).forEach((t: any) => {
               const isDone = ["done", "completed"].includes(t.status.toLowerCase());
               const tId = `T_${t._id}`;
-              code += `  ${tId}["${isDone ? "✅" : "📋"} ${sanitize(t.name)} [${t.status}]"]:::${
-                isDone ? "taskDone" : "task"
-              }\n`;
+              code += `  ${tId}["${isDone ? "✅" : "📋"} ${sanitize(t.name)} [${t.status}]"]:::${isDone ? "taskDone" : "task"
+                }\n`;
               code += `  ${pId} -.-> ${tId}\n`;
             });
             if (pTasks.length > 10) {
@@ -355,12 +354,12 @@ export default function DiagramsClient({
   };
 
   return (
-    <main className="flex flex-col min-w-0 p-4 flex-1 max-w-[1600px] mx-auto w-full">
+    <main className="flex flex-col min-w-0 p-0 sm:p-4 flex-1 max-w-[1600px] mx-auto w-full">
       {/* Header */}
-      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 sm:p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+            <h1 className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
               System Architecture &amp; Flow Diagrams
             </h1>
             <Badge tone="success" size="sm">
@@ -374,7 +373,7 @@ export default function DiagramsClient({
       </header>
 
       {/* Live Ecosystem Rollup Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Stat
           label="Strategic Objectives"
           value={`${stats.totalGoals} Goals Active`}
@@ -402,16 +401,15 @@ export default function DiagramsClient({
       </div>
 
       {/* Flow Diagram Tabs & Controls */}
-      <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
+      <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-2 sm:p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pb-4 border-b border-[#E1DFDD] dark:border-[#3B3A39] mb-4">
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setActiveDiagram("architecture")}
-              className={`px-3 py-2 rounded-[4px] text-xs font-semibold transition-colors flex items-center gap-1.5 ${
-                activeDiagram === "architecture"
-                  ? "bg-[#0078D4] text-white"
-                  : "bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#EDEBE9]"
-              }`}
+              className={`px-3 py-2 rounded-[4px] text-xs font-semibold transition-colors flex items-center gap-1.5 ${activeDiagram === "architecture"
+                ? "bg-[#0078D4] text-white"
+                : "bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#EDEBE9]"
+                }`}
             >
               <FolderKanban className="w-3.5 h-3.5" />
               <span>1. Live Entity Hierarchy</span>
@@ -419,11 +417,10 @@ export default function DiagramsClient({
 
             <button
               onClick={() => setActiveDiagram("pipelines")}
-              className={`px-3 py-2 rounded-[4px] text-xs font-semibold transition-colors flex items-center gap-1.5 ${
-                activeDiagram === "pipelines"
-                  ? "bg-[#0078D4] text-white"
-                  : "bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#EDEBE9]"
-              }`}
+              className={`px-3 py-2 rounded-[4px] text-xs font-semibold transition-colors flex items-center gap-1.5 ${activeDiagram === "pipelines"
+                ? "bg-[#0078D4] text-white"
+                : "bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#EDEBE9]"
+                }`}
             >
               <Workflow className="w-3.5 h-3.5" />
               <span>2. Parallel Pipeline Interconnectivity</span>
@@ -431,11 +428,10 @@ export default function DiagramsClient({
 
             <button
               onClick={() => setActiveDiagram("lifecycle")}
-              className={`px-3 py-2 rounded-[4px] text-xs font-semibold transition-colors flex items-center gap-1.5 ${
-                activeDiagram === "lifecycle"
-                  ? "bg-[#0078D4] text-white"
-                  : "bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#EDEBE9]"
-              }`}
+              className={`px-3 py-2 rounded-[4px] text-xs font-semibold transition-colors flex items-center gap-1.5 ${activeDiagram === "lifecycle"
+                ? "bg-[#0078D4] text-white"
+                : "bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4] hover:bg-[#EDEBE9]"
+                }`}
             >
               <GitGraph className="w-3.5 h-3.5" />
               <span>3. Work Management Lifecycle</span>

@@ -115,7 +115,7 @@ export default async function TodoListPage({ params }: { params: Promise<{ custo
       <header className="glass-card p-6 mb-6 flex justify-between items-center neon-border-blue">
         <div>
           <h1 className="text-3xl font-bold glow-text">{customListName}</h1>
-          <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
+          <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2" suppressHydrationWarning>
             <i className="fa-regular fa-calendar-alt"></i>
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
           </div>

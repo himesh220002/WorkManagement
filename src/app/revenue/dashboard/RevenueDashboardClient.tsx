@@ -47,6 +47,9 @@ import {
   ArrowUpRight,
   GripVertical,
   SlidersHorizontal,
+  Shield,
+  ShieldCheck,
+  Lock,
 } from "lucide-react";
 
 ChartJS.register(
@@ -169,6 +172,9 @@ interface RevenueDashboardClientProps {
     tasks: { id: string; name: string }[];
     users: { id: string; name: string }[];
   };
+  currentRole?: string;
+  currentUserId?: string;
+  currentUserName?: string;
 }
 
 export default function RevenueDashboardClient({
@@ -177,7 +183,13 @@ export default function RevenueDashboardClient({
   pipelines = [],
   resources = [],
   options = { projects: [], teams: [], tasks: [], users: [] },
+  currentRole,
+  currentUserId,
+  currentUserName,
 }: RevenueDashboardClientProps) {
+  const role = (currentRole || "manager").toLowerCase();
+  const canManageRevenue = ["owner", "manager", "superuser"].includes(role);
+
   // Navigation & View State
   const [activeTab, setActiveTab] = useState<"kanban" | "analytics" | "resources" | "pipelines">("kanban");
   const [searchQuery, setSearchQuery] = useState("");
@@ -420,20 +432,22 @@ export default function RevenueDashboardClient({
   };
 
   return (
-    <main className="flex flex-col min-w-0 p-4 flex-1 max-w-[1600px] mx-auto w-full">
+    <main className="flex flex-col min-w-0 p-0 sm:p-4 flex-1 max-w-[1600px] mx-auto w-full">
       {/* Fluent 2 Header */}
       <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <h1 className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
               Revenue Management &amp; Financial Architecture
             </h1>
-            <Badge tone="brand" size="sm">
-              Enterprise Finance
-            </Badge>
-            <Badge tone="success" size="sm">
-              Live Verified Ledger
-            </Badge>
+            <div className="flex gap-2">
+              <Badge tone="brand" size="sm">
+                Enterprise Finance
+              </Badge>
+              <Badge tone="success" size="sm">
+                Live Verified Ledger
+              </Badge>
+            </div>
           </div>
           <p className="text-sm text-[#605E5C] dark:text-[#C8C6C4] mt-1">
             Complete strategic revenue tracking, deals pipeline Kanban, resource envelopes, and operational financial telemetry.
@@ -472,7 +486,7 @@ export default function RevenueDashboardClient({
             </span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+            <span className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
               ${totalPipelineRevenue.toLocaleString()}
             </span>
             <span className="text-xs font-medium text-[#107C10] inline-flex items-center">
@@ -519,7 +533,7 @@ export default function RevenueDashboardClient({
             </span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+            <span className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
               {targetAttainment}%
             </span>
             <span className="text-xs text-[#605E5C] dark:text-[#C8C6C4]">
@@ -545,7 +559,7 @@ export default function RevenueDashboardClient({
             </span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+            <span className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
               ${averageDealSize.toLocaleString()}
             </span>
           </div>
@@ -585,11 +599,10 @@ export default function RevenueDashboardClient({
       <div className="flex border-b border-[#E1DFDD] dark:border-[#3B3A39] mb-6 gap-2 overflow-x-auto pb-px">
         <button
           onClick={() => setActiveTab("kanban")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === "kanban"
-              ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-              : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-          }`}
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 shrink-0 ${activeTab === "kanban"
+            ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+            : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+            }`}
         >
           <Columns3 className="w-4 h-4" />
           <span>Deals Pipeline (Kanban)</span>
@@ -600,11 +613,10 @@ export default function RevenueDashboardClient({
 
         <button
           onClick={() => setActiveTab("analytics")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === "analytics"
-              ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-              : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-          }`}
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 shrink-0 ${activeTab === "analytics"
+            ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+            : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+            }`}
         >
           <BarChart3 className="w-4 h-4" />
           <span>Financial Analytics &amp; Intelligence</span>
@@ -612,11 +624,10 @@ export default function RevenueDashboardClient({
 
         <button
           onClick={() => setActiveTab("resources")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === "resources"
-              ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-              : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-          }`}
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 shrink-0 ${activeTab === "resources"
+            ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+            : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+            }`}
         >
           <Scale className="w-4 h-4" />
           <span>Resource Allocations &amp; Budgets</span>
@@ -627,11 +638,10 @@ export default function RevenueDashboardClient({
 
         <button
           onClick={() => setActiveTab("pipelines")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
-            activeTab === "pipelines"
-              ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-              : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-          }`}
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 shrink-0 ${activeTab === "pipelines"
+            ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+            : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+            }`}
         >
           <Layers className="w-4 h-4" />
           <span>Financial Pipelines</span>
@@ -702,7 +712,7 @@ export default function RevenueDashboardClient({
       {/* ===================== TAB 1: KANBAN BOARD ===================== */}
       {activeTab === "kanban" && (
         <section className="flex flex-col min-w-0">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-[#605E5C] dark:text-[#C8C6C4] uppercase tracking-wider">
                 Deals Pipeline Flow (Drag cards across stages)
@@ -732,11 +742,10 @@ export default function RevenueDashboardClient({
                   onDragOver={(e) => handleDragOver(e, stage)}
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, stage)}
-                  className={`flex-1 min-w-[280px] max-w-[320px] bg-[#FAF9F8] dark:bg-[#1B1A19] rounded-[8px] border transition-all duration-150 flex flex-col ${
-                    isOver
-                      ? "border-[#0078D4] ring-2 ring-[#0078D4]/40 bg-[#EBF3FC]/60 dark:bg-[#1C2B3D]/60"
-                      : "border-[#E1DFDD] dark:border-[#3B3A39]"
-                  }`}
+                  className={`flex-1 min-w-[280px] max-w-[320px] bg-[#FAF9F8] dark:bg-[#1B1A19] rounded-[8px] border transition-all duration-150 flex flex-col ${isOver
+                    ? "border-[#0078D4] ring-2 ring-[#0078D4]/40 bg-[#EBF3FC]/60 dark:bg-[#1C2B3D]/60"
+                    : "border-[#E1DFDD] dark:border-[#3B3A39]"
+                    }`}
                 >
                   {/* Column Header */}
                   <div className="p-3 border-b border-[#E1DFDD] dark:border-[#3B3A39] flex items-center justify-between bg-white dark:bg-[#201F1E] rounded-t-[8px]">
@@ -779,9 +788,8 @@ export default function RevenueDashboardClient({
                           draggable
                           onDragStart={(e) => handleDragStart(e, deal._id)}
                           onDragEnd={handleDragEnd}
-                          className={`bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] p-3 shadow-sm hover:shadow-md hover:border-[#0078D4] transition-all cursor-grab active:cursor-grabbing group ${
-                            isDragging ? "opacity-40 scale-95" : ""
-                          }`}
+                          className={`bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] p-3 shadow-sm hover:shadow-md hover:border-[#0078D4] transition-all cursor-grab active:cursor-grabbing group ${isDragging ? "opacity-40 scale-95" : ""
+                            }`}
                         >
                           <div className="flex items-start justify-between gap-2 mb-1.5">
                             <span className="font-semibold text-xs text-[#242424] dark:text-[#FFFFFF] leading-snug line-clamp-2">
@@ -789,29 +797,38 @@ export default function RevenueDashboardClient({
                             </span>
                             <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 shrink-0">
                               <button
-                                onClick={() => setEditingDeal(deal)}
-                                className="p-1 text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#0078D4] transition-colors rounded"
-                                title="Edit Deal"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              <form
-                                action={deleteDeal}
-                                onSubmit={(e) => {
-                                  if (!window.confirm(`Delete deal "${deal.name}"?`)) {
-                                    e.preventDefault();
-                                  }
+                                type="button"
+                                draggable={false}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setEditingDeal(deal);
                                 }}
+                                className="p-1 text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#0078D4] transition-colors rounded cursor-pointer"
+                                title={canManageRevenue ? "Edit Deal" : "Inspect / Advance Deal Stage"}
                               >
-                                <input type="hidden" name="dealId" value={deal._id} />
-                                <button
-                                  type="submit"
-                                  className="p-1 text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#D13438] transition-colors rounded"
-                                  title="Delete Deal"
+                                <Edit3 className="w-3.5 h-3.5 pointer-events-none" />
+                              </button>
+                              {canManageRevenue && (
+                                <form
+                                  action={deleteDeal}
+                                  onSubmit={(e) => {
+                                    if (!window.confirm(`Delete deal "${deal.name}"?`)) {
+                                      e.preventDefault();
+                                    }
+                                  }}
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </form>
+                                  <input type="hidden" name="dealId" value={deal._id} />
+                                  <button
+                                    type="submit"
+                                    className="p-1 text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#D13438] transition-colors rounded cursor-pointer"
+                                    title="Delete Deal"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </form>
+                              )}
                             </div>
                           </div>
 
@@ -821,13 +838,12 @@ export default function RevenueDashboardClient({
                               ${(deal.amount || 0).toLocaleString()}
                             </span>
                             <span
-                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-[3px] ${
-                                priority === "High"
-                                  ? "bg-[#FDE7E9] text-[#D13438] dark:bg-[#44171A] dark:text-[#F1707B]"
-                                  : priority === "Low"
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-[3px] ${priority === "High"
+                                ? "bg-[#FDE7E9] text-[#D13438] dark:bg-[#44171A] dark:text-[#F1707B]"
+                                : priority === "Low"
                                   ? "bg-[#DFF6DD] text-[#107C10] dark:bg-[#0F3818] dark:text-[#54B054]"
                                   : "bg-[#FFF4CE] text-[#8F6B00] dark:bg-[#4A3E09] dark:text-[#FFD335]"
-                              }`}
+                                }`}
                             >
                               {priority}
                             </span>
@@ -1071,8 +1087,8 @@ export default function RevenueDashboardClient({
                 utilPercent > 90
                   ? "bg-[#D13438]"
                   : utilPercent > 75
-                  ? "bg-[#F7630C]"
-                  : "bg-[#107C10]";
+                    ? "bg-[#F7630C]"
+                    : "bg-[#107C10]";
 
               return (
                 <div
@@ -1085,13 +1101,12 @@ export default function RevenueDashboardClient({
                         {resource.name}
                       </h4>
                       <span
-                        className={`text-[10px] px-2 py-0.5 rounded-[3px] font-semibold ${
-                          resource.riskLevel === "High"
-                            ? "bg-[#FDE7E9] text-[#D13438]"
-                            : resource.riskLevel === "Medium"
+                        className={`text-[10px] px-2 py-0.5 rounded-[3px] font-semibold ${resource.riskLevel === "High"
+                          ? "bg-[#FDE7E9] text-[#D13438]"
+                          : resource.riskLevel === "Medium"
                             ? "bg-[#FFF4CE] text-[#8F6B00]"
                             : "bg-[#DFF6DD] text-[#107C10]"
-                        }`}
+                          }`}
                       >
                         {resource.riskLevel} Risk
                       </span>
@@ -1180,7 +1195,7 @@ export default function RevenueDashboardClient({
       {/* ===================== MODAL: CREATE DEAL ===================== */}
       {isAddDealOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col">
+          <div className="mt-10 sm:mt-0 bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#1B1A19]">
               <div className="flex items-center gap-2">
                 <DollarSign className="w-5 h-5 text-[#0078D4]" />

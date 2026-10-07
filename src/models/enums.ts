@@ -31,18 +31,32 @@ export const ProjectCategory = {
 export type ProjectCategoryType = (typeof ProjectCategory)[keyof typeof ProjectCategory];
 
 export const UserRole = {
-  Owner: "Owner",
-  Admin: "Admin",
-  Manager: "Manager",
-  Member: "Member",
-  Viewer: "Viewer",
+  Superuser: "superuser",
+  Owner: "owner",
+  Manager: "manager",
+  TeamLead: "teamlead",
+  Employee: "employee",
+  // Legacy aliases
+  Admin: "owner",
+  Member: "employee",
+  Viewer: "employee",
 } as const;
 export type UserRoleType = (typeof UserRole)[keyof typeof UserRole];
+
+export const ROLE_HIERARCHY: Record<string, number> = {
+  superuser: 100,
+  owner: 80,
+  manager: 60,
+  teamlead: 40,
+  employee: 20,
+};
 
 export const UserStatus = {
   Working: "Working",
   Quit: "Quit",
   Dropped: "Dropped",
+  Archived: "Archived",
+  Resigned: "Resigned",
 } as const;
 export type UserStatusType = (typeof UserStatus)[keyof typeof UserStatus];
 

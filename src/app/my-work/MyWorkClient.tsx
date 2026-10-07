@@ -5,6 +5,7 @@ import { CheckSquare, Clock, DollarSign, Filter, CheckCircle2, Circle, AlertCirc
 import { Card, Button, Badge, StatusBadge, EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { updateTaskStatusAction } from "@/actions/task";
+import { formatDate } from "@/utils/dateUtils";
 
 interface MyWorkClientProps {
   initialTasks: any[];
@@ -151,7 +152,7 @@ export default function MyWorkClient({
                             </span>
                           )}
                           {task.dueDate && (
-                            <span>Due {new Date(task.dueDate).toLocaleDateString()}</span>
+                            <span suppressHydrationWarning>Due {formatDate(task.dueDate)}</span>
                           )}
                           {task.estimatedHours > 0 && (
                             <span>{task.estimatedHours}h est</span>
@@ -214,8 +215,8 @@ export default function MyWorkClient({
                       <span className="text-xs font-semibold text-[#242424] dark:text-white truncate">
                         {d.name}
                       </span>
-                      <span className="text-xs font-bold text-[#107C10]">
-                        ${Number(d.amount || d.revenue || 0).toLocaleString()}
+                      <span className="text-xs font-bold text-[#107C10]" suppressHydrationWarning>
+                        ${Number(d.amount || d.revenue || 0).toLocaleString("en-US")}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-[#605E5C] dark:text-[#C8C6C4] mt-1">

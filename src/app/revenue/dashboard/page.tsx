@@ -1,9 +1,12 @@
 import connectToDatabase from "@/lib/mongodb";
 import { Deal, Target, Pipeline, Project, Team, TaskNode, User, ResourceAllocation } from "@/models";
+import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import RevenueDashboardClient from "@/app/revenue/dashboard/RevenueDashboardClient";
 
 export default async function RevenueDashboardPage() {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  const tenantFilter = getTenantQueryFilter(session);
 
   let deals: any[] = [];
   let targets: any[] = [];
@@ -16,14 +19,14 @@ export default async function RevenueDashboardPage() {
 
   try {
     // @ts-ignore
-    deals = await Deal.find({}).lean();
-    targets = await Target.find({}).lean();
-    pipelines = await Pipeline.find({ category: "Finance" }).populate("projectId teamId taskId").sort({ progress: -1 }).lean();
-    projects = await Project.find({}, { name: 1 }).lean();
-    teams = await Team.find({}, { name: 1 }).lean();
-    taskNodes = await TaskNode.find({}, { name: 1 }).lean();
-    users = await User.find({}, { name: 1 }).lean();
-    resources = await ResourceAllocation.find({}).populate("assignedToProjectId").lean();
+    deals = await Deal.find(tenantFilter).lean();
+    targets = await Target.find(tenantFilter).lean();
+    pipelines = await Pipeline.find({ ...tenantFilter, category: "Finance" }).populate("projectId teamId taskId").sort({ progress: -1 }).lean();
+    projects = await Project.find(tenantFilter, { name: 1 }).lean();
+    teams = await Team.find(tenantFilter, { name: 1 }).lean();
+    taskNodes = await TaskNode.find(tenantFilter, { name: 1 }).lean();
+    users = await User.find(tenantFilter, { name: 1 }).lean();
+    resources = await ResourceAllocation.find(tenantFilter).populate("assignedToProjectId").lean();
   } catch (err) {
     console.error(err);
   }
@@ -104,5 +107,16 @@ export default async function RevenueDashboardPage() {
     assignedToProjectId: r.assignedToProjectId ? { _id: r.assignedToProjectId._id.toString(), name: r.assignedToProjectId.name } : null
   }));
 
-  return <RevenueDashboardClient deals={cleanDeals} targets={cleanTargets} pipelines={cleanPipelines} resources={cleanResources} options={options} />;
+  return (
+    <RevenueDashboardClient
+      deals={cleanDeals}
+      targets={cleanTargets}
+      pipelines={cleanPipelines}
+      resources={cleanResources}
+      options={options}
+      currentRole={session.role}
+      currentUserId={session.userId}
+      currentUserName={session.name}
+    />
+  );
 }

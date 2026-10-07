@@ -40,6 +40,9 @@ import {
   Workflow,
   Search,
   Columns3,
+  Shield,
+  ShieldCheck,
+  Lock,
 } from "lucide-react";
 
 ChartJS.register(
@@ -59,11 +62,17 @@ export default function SalesDashboardClient({
   campaigns = [],
   pipelines = [],
   options = { projects: [], teams: [], tasks: [], users: [] },
+  currentRole,
+  currentUserId,
+  currentUserName,
 }: {
   leads: any[];
   campaigns: any[];
   pipelines?: any[];
   options?: { projects: any[]; teams: any[]; tasks: any[]; users: any[] };
+  currentRole?: string;
+  currentUserId?: string;
+  currentUserName?: string;
 }) {
   const [activeTab, setActiveTab] = useState<"kanban" | "campaigns" | "pipelines" | "analytics">("kanban");
   const [searchQuery, setSearchQuery] = useState("");
@@ -71,6 +80,24 @@ export default function SalesDashboardClient({
   const [isAddCampaignOpen, setIsAddCampaignOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<any | null>(null);
   const [editingCampaign, setEditingCampaign] = useState<any | null>(null);
+
+  const role = (currentRole || "manager").toLowerCase();
+  const canManageSales = ["owner", "manager", "superuser"].includes(role);
+
+  // Who is considered the owner of this lead?
+  const isLeadOwner = (lead: any) =>
+    Boolean(currentUserName && lead?.owner && lead.owner.toLowerCase() === currentUserName.toLowerCase());
+  const isLeadUnassigned = (lead: any) =>
+    !lead?.owner || lead.owner === "Unassigned" || lead.owner === "TBD";
+
+  // Can the user edit this lead?
+  // Management can edit any lead.
+  // Employees can edit leads assigned to their profile or unassigned inbound leads.
+  const canEditLead = (lead: any) =>
+    canManageSales || isLeadOwner(lead) || isLeadUnassigned(lead);
+
+  const canDeleteLead = canManageSales;
+  const canManageCampaigns = canManageSales;
 
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
@@ -150,20 +177,22 @@ export default function SalesDashboardClient({
   };
 
   return (
-    <main className="flex flex-col min-w-0 p-4 flex-1 max-w-[1600px] mx-auto w-full">
+    <main className="flex flex-col min-w-0 p-0 sm:p-4 flex-1 max-w-[1600px] mx-auto w-full">
       {/* Header */}
-      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 sm:p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <h1 className="text-xl lg:text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
               Commercial Sales &amp; Growth Pipeline
             </h1>
-            <Badge tone="brand" size="sm">
-              Inbound &amp; Outbound
-            </Badge>
-            <Badge tone="success" size="sm">
-              Live Conversion
-            </Badge>
+            <div className="flex gap-2">
+              <Badge tone="brand" size="sm">
+                Inbound &amp; Outbound
+              </Badge>
+              <Badge tone="success" size="sm">
+                Live Conversion
+              </Badge>
+            </div>
           </div>
           <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">
             Top-of-funnel lead qualification, marketing campaigns telemetry, and commercial pipeline velocity.
@@ -173,18 +202,20 @@ export default function SalesDashboardClient({
         <div className="flex items-center gap-3 flex-wrap">
           <button
             onClick={() => setIsAddLeadOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[6px] text-xs font-semibold shadow-sm transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[6px] text-xs font-semibold shadow-sm transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Lead</span>
           </button>
-          <button
-            onClick={() => setIsAddCampaignOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] hover:bg-[#F3F2F1] text-[#242424] dark:text-[#FFFFFF] rounded-[6px] text-xs font-semibold shadow-sm transition-colors"
-          >
-            <Megaphone className="w-3.5 h-3.5 text-[#107C10]" />
-            <span>New Campaign</span>
-          </button>
+          {canManageCampaigns && (
+            <button
+              onClick={() => setIsAddCampaignOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] hover:bg-[#F3F2F1] text-[#242424] dark:text-[#FFFFFF] rounded-[6px] text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+            >
+              <Megaphone className="w-3.5 h-3.5 text-[#107C10]" />
+              <span>New Campaign</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -200,7 +231,7 @@ export default function SalesDashboardClient({
             </span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">{totalLeads}</span>
+            <span className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">{totalLeads}</span>
             <span className="text-xs font-medium text-[#107C10]">{qualifiedLeads} Qualified</span>
           </div>
           <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-2">Active funnel prospects</p>
@@ -232,7 +263,7 @@ export default function SalesDashboardClient({
             </span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+            <span className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
               ${expectedRevenue.toLocaleString()}
             </span>
           </div>
@@ -249,7 +280,7 @@ export default function SalesDashboardClient({
             </span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">{conversionRate}%</span>
+            <span className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">{conversionRate}%</span>
           </div>
           <div className="w-full bg-[#EDEBE9] dark:bg-[#323130] h-2 rounded-full mt-2 overflow-hidden">
             <div
@@ -264,11 +295,10 @@ export default function SalesDashboardClient({
       <div className="flex border-b border-[#E1DFDD] dark:border-[#3B3A39] mb-6 gap-2 overflow-x-auto pb-px">
         <button
           onClick={() => setActiveTab("kanban")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === "kanban"
-              ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-              : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-          }`}
+          className={`pb-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 shrink-0 ${activeTab === "kanban"
+            ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+            : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+            }`}
         >
           <Columns3 className="w-4 h-4" />
           <span>Leads Kanban Board ({filteredLeads.length})</span>
@@ -276,11 +306,10 @@ export default function SalesDashboardClient({
 
         <button
           onClick={() => setActiveTab("campaigns")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === "campaigns"
-              ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-              : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-          }`}
+          className={`pb-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 shrink-0 ${activeTab === "campaigns"
+            ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+            : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+            }`}
         >
           <Megaphone className="w-4 h-4" />
           <span>Active Campaigns ({campaigns.length})</span>
@@ -288,11 +317,10 @@ export default function SalesDashboardClient({
 
         <button
           onClick={() => setActiveTab("analytics")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === "analytics"
-              ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-              : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-          }`}
+          className={`pb-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 shrink-0 ${activeTab === "analytics"
+            ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+            : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+            }`}
         >
           <BarChart3 className="w-4 h-4" />
           <span>Funnel Performance Analytics</span>
@@ -300,11 +328,10 @@ export default function SalesDashboardClient({
 
         <button
           onClick={() => setActiveTab("pipelines")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === "pipelines"
-              ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-              : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-          }`}
+          className={`pb-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 shrink-0 ${activeTab === "pipelines"
+            ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+            : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+            }`}
         >
           <Layers className="w-4 h-4" />
           <span>Sales Pipelines ({pipelines.length})</span>
@@ -338,11 +365,10 @@ export default function SalesDashboardClient({
                   onDragOver={(e) => handleDragOver(e, stage)}
                   onDragLeave={() => setDragOverStage(null)}
                   onDrop={(e) => handleDrop(e, stage)}
-                  className={`flex-1 min-w-[260px] max-w-[300px] bg-[#FAF9F8] dark:bg-[#1B1A19] rounded-[8px] border transition-all ${
-                    isOver
-                      ? "border-[#0078D4] ring-2 ring-[#0078D4]/40 bg-[#EBF3FC]/60"
-                      : "border-[#E1DFDD] dark:border-[#3B3A39]"
-                  }`}
+                  className={`flex-1 min-w-[260px] max-w-[300px] bg-[#FAF9F8] dark:bg-[#1B1A19] rounded-[8px] border transition-all ${isOver
+                    ? "border-[#0078D4] ring-2 ring-[#0078D4]/40 bg-[#EBF3FC]/60"
+                    : "border-[#E1DFDD] dark:border-[#3B3A39]"
+                    }`}
                 >
                   <div className="p-3 border-b border-[#E1DFDD] dark:border-[#3B3A39] flex items-center justify-between bg-white dark:bg-[#201F1E] rounded-t-[8px]">
                     <span className="font-semibold text-xs text-[#242424] dark:text-[#FFFFFF]">
@@ -360,9 +386,8 @@ export default function SalesDashboardClient({
                         draggable
                         onDragStart={(e) => handleDragStart(e, lead._id)}
                         onDragEnd={handleDragEnd}
-                        className={`bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] p-3 shadow-sm hover:border-[#0078D4] transition-all cursor-grab active:cursor-grabbing group ${
-                          draggedLeadId === lead._id ? "opacity-40" : ""
-                        }`}
+                        className={`bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] p-3 shadow-sm hover:border-[#0078D4] transition-all cursor-grab active:cursor-grabbing group ${draggedLeadId === lead._id ? "opacity-40" : ""
+                          }`}
                       >
                         <div className="flex justify-between items-start mb-1">
                           <span className="font-semibold text-xs text-[#242424] dark:text-[#FFFFFF]">
@@ -370,27 +395,36 @@ export default function SalesDashboardClient({
                           </span>
                           <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
                             <button
-                              onClick={() => setEditingLead(lead)}
-                              className="p-1 text-[#605E5C] hover:text-[#0078D4] transition-colors"
-                              title="Edit Lead"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <form
-                              action={deleteLead}
-                              onSubmit={(e) => {
-                                if (!window.confirm(`Delete lead "${lead.name}"?`)) e.preventDefault();
+                              type="button"
+                              draggable={false}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                setEditingLead(lead);
                               }}
+                              className="p-1 text-[#605E5C] hover:text-[#0078D4] transition-colors cursor-pointer rounded"
+                              title={canEditLead(lead) ? "Edit Lead" : "Inspect Lead Record (Colleague Lead)"}
                             >
-                              <input type="hidden" name="leadId" value={lead._id} />
-                              <button
-                                type="submit"
-                                className="p-1 text-[#605E5C] hover:text-[#D13438] transition-colors"
-                                title="Delete Lead"
+                              <Edit3 className="w-3.5 h-3.5 pointer-events-none" />
+                            </button>
+                            {canDeleteLead && (
+                              <form
+                                action={deleteLead}
+                                onSubmit={(e) => {
+                                  if (!window.confirm(`Delete lead "${lead.name}"?`)) e.preventDefault();
+                                }}
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </form>
+                                <input type="hidden" name="leadId" value={lead._id} />
+                                <button
+                                  type="submit"
+                                  className="p-1 text-[#605E5C] hover:text-[#D13438] transition-colors cursor-pointer rounded"
+                                  title="Delete Lead"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </form>
+                            )}
                           </div>
                         </div>
 
@@ -438,27 +472,36 @@ export default function SalesDashboardClient({
                   </h4>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => setEditingCampaign(c)}
-                      className="p-1 text-[#605E5C] hover:text-[#0078D4] transition-colors"
-                      title="Edit Campaign"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                    <form
-                      action={deleteCampaign}
-                      onSubmit={(e) => {
-                        if (!window.confirm(`Delete campaign "${c.name}"?`)) e.preventDefault();
+                      type="button"
+                      draggable={false}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setEditingCampaign(c);
                       }}
+                      className="p-1 text-[#605E5C] hover:text-[#0078D4] transition-colors cursor-pointer rounded"
+                      title={canManageCampaigns ? "Edit Campaign" : "Inspect Campaign (Management Protected)"}
                     >
-                      <input type="hidden" name="campaignId" value={c._id} />
-                      <button
-                        type="submit"
-                        className="p-1 text-[#605E5C] hover:text-[#D13438] transition-colors"
-                        title="Delete Campaign"
+                      <Edit3 className="w-3.5 h-3.5 pointer-events-none" />
+                    </button>
+                    {canManageCampaigns && (
+                      <form
+                        action={deleteCampaign}
+                        onSubmit={(e) => {
+                          if (!window.confirm(`Delete campaign "${c.name}"?`)) e.preventDefault();
+                        }}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </form>
+                        <input type="hidden" name="campaignId" value={c._id} />
+                        <button
+                          type="submit"
+                          className="p-1 text-[#605E5C] hover:text-[#D13438] transition-colors cursor-pointer rounded"
+                          title="Delete Campaign"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </form>
+                    )}
                   </div>
                 </div>
 
@@ -512,7 +555,8 @@ export default function SalesDashboardClient({
             <h3 className="font-semibold text-xs text-[#242424] dark:text-[#FFFFFF] mb-3">
               Top Campaigns by Leads Generated
             </h3>
-            <div className="h-64">
+
+            <div className="block overflow-x-auto">
               <Bar data={campaignsData} options={{ indexAxis: "y", responsive: true, maintainAspectRatio: false }} />
             </div>
           </div>
@@ -532,7 +576,7 @@ export default function SalesDashboardClient({
       {activeTab === "pipelines" && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pipelines.map((pipeline: any) => (
-            <PipelineCard key={pipeline._id} pipeline={pipeline} />
+            <PipelineCard key={pipeline._id} pipeline={pipeline} currentRole={role} />
           ))}
           {pipelines.length === 0 && (
             <div className="col-span-full py-12 text-center text-xs text-[#8A8886] bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px]">
@@ -678,6 +722,306 @@ export default function SalesDashboardClient({
           </div>
         </div>
       )}
+
+      {/* ===================== MODAL: EDIT LEAD ===================== */}
+      {editingLead && (() => {
+        const isOwnerOrUnassigned = isLeadOwner(editingLead) || isLeadUnassigned(editingLead);
+        const hasFullAccess = canManageSales;
+        const isEmployeeEditor = !canManageSales && isOwnerOrUnassigned;
+        const isReadOnlyColleague = !canManageSales && !isOwnerOrUnassigned;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150">
+            <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] max-w-md w-full shadow-2xl p-6">
+              <div className="flex justify-between items-center mb-3 pb-2 border-b border-[#E1DFDD] dark:border-[#3B3A39]">
+                <div className="flex items-center gap-2">
+                  <Edit3 className="w-4 h-4 text-[#0078D4]" />
+                  <h3 className="font-bold text-sm text-[#242424] dark:text-[#FFFFFF]">
+                    {isReadOnlyColleague ? "Protected Lead Record" : "Edit Lead"}: {editingLead.name}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingLead(null)}
+                  className="text-[#8A8886] hover:text-[#242424] dark:hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Security Restriction Banners */}
+              {isReadOnlyColleague && (
+                <div className="p-3 mb-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-[6px] text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>Protected Record (Profile Restricted)</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed">
+                    This lead is owned by <strong>{editingLead.owner}</strong>. As an employee ({currentUserName || "Employee"}), modifying colleague records without ownership or management clearance is restricted to maintain workflow integrity.
+                  </p>
+                </div>
+              )}
+
+              {isEmployeeEditor && (
+                <div className="p-2.5 mb-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-[6px] text-[11px] text-blue-900 dark:text-blue-200 flex items-start gap-2">
+                  <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Employee Execution Clearance:</strong> You can advance funnel status and acquisition details. Reassigning ownership to other personnel is restricted to Operations Managers.
+                  </span>
+                </div>
+              )}
+
+              {hasFullAccess && (
+                <div className="p-2 mb-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-[6px] text-[11px] text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span><strong>Operations Management:</strong> Full edit and ownership reassignment clearance active.</span>
+                </div>
+              )}
+
+              <form
+                action={async (formData) => {
+                  if (isReadOnlyColleague) return;
+                  await updateLead(formData);
+                  setEditingLead(null);
+                }}
+                className="space-y-3 text-xs"
+              >
+                <input type="hidden" name="leadId" value={editingLead._id} />
+
+                <div>
+                  <label className="block font-medium mb-1 text-[#242424] dark:text-white">
+                    Lead / Company Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    defaultValue={editingLead.name}
+                    required
+                    disabled={isReadOnlyColleague}
+                    className={`w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none text-[#242424] dark:text-white focus:border-[#0078D4] ${
+                      isReadOnlyColleague ? "opacity-60 cursor-not-allowed" : ""
+                    }`}
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block font-medium text-[#242424] dark:text-white">
+                      Lead Owner *
+                    </label>
+                    {isEmployeeEditor && (
+                      <span className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] flex items-center gap-1">
+                        <Lock className="w-3 h-3 text-amber-500" />
+                        <span>Manager Governed</span>
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    name="owner"
+                    defaultValue={editingLead.owner || currentUserName || "Unassigned"}
+                    required
+                    readOnly={!hasFullAccess}
+                    disabled={isReadOnlyColleague}
+                    className={`w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none text-[#242424] dark:text-white focus:border-[#0078D4] ${
+                      !hasFullAccess ? "opacity-75 bg-[#F3F2F1] cursor-not-allowed" : ""
+                    }`}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-medium mb-1 text-[#242424] dark:text-white">
+                      Funnel Stage
+                    </label>
+                    <select
+                      name="status"
+                      defaultValue={editingLead.status || "New"}
+                      disabled={isReadOnlyColleague}
+                      className={`w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none text-[#242424] dark:text-white cursor-pointer ${
+                        isReadOnlyColleague ? "opacity-60 cursor-not-allowed" : ""
+                      }`}
+                    >
+                      {LEAD_STAGES.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-medium mb-1 text-[#242424] dark:text-white">
+                      Acquisition Source
+                    </label>
+                    <input
+                      type="text"
+                      name="source"
+                      defaultValue={editingLead.source || "Manual Entry"}
+                      disabled={isReadOnlyColleague}
+                      className={`w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none text-[#242424] dark:text-white ${
+                        isReadOnlyColleague ? "opacity-60 cursor-not-allowed" : ""
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-medium mb-1 text-[#242424] dark:text-white">
+                    Linked Marketing Campaign
+                  </label>
+                  <select
+                    name="campaignId"
+                    defaultValue={editingLead.campaignId || ""}
+                    disabled={isReadOnlyColleague}
+                    className={`w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none text-[#242424] dark:text-white cursor-pointer ${
+                      isReadOnlyColleague ? "opacity-60 cursor-not-allowed" : ""
+                    }`}
+                  >
+                    <option value="">None / Direct Inbound</option>
+                    {campaigns.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditingLead(null)}
+                    className="px-3.5 py-1.5 border border-[#E1DFDD] dark:border-[#3B3A39] text-[#605E5C] dark:text-[#C8C6C4] rounded-[4px] font-medium cursor-pointer"
+                  >
+                    {isReadOnlyColleague ? "Close" : "Cancel"}
+                  </button>
+                  {!isReadOnlyColleague && (
+                    <button
+                      type="submit"
+                      className="px-4 py-1.5 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] font-semibold transition-colors cursor-pointer"
+                    >
+                      Save Changes
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ===================== MODAL: EDIT CAMPAIGN ===================== */}
+      {editingCampaign && (() => {
+        const isManager = canManageCampaigns;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150">
+            <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] max-w-md w-full shadow-2xl p-6">
+              <div className="flex justify-between items-center mb-3 pb-2 border-b border-[#E1DFDD] dark:border-[#3B3A39]">
+                <div className="flex items-center gap-2">
+                  <Megaphone className="w-4 h-4 text-[#107C10]" />
+                  <h3 className="font-bold text-sm text-[#242424] dark:text-[#FFFFFF]">
+                    {isManager ? "Edit Campaign" : "Campaign Overview"}: {editingCampaign.name}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingCampaign(null)}
+                  className="text-[#8A8886] hover:text-[#242424] dark:hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {!isManager && (
+                <div className="p-3 mb-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-[6px] text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>Financial Model Protection</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed">
+                    Marketing budget allocations (${(editingCampaign.expectedRevenue || 0).toLocaleString()} expected revenue) and campaign targets are strictly governed by Operations Managers and Company Owners to prevent financial distortion.
+                  </p>
+                </div>
+              )}
+
+              <form
+                action={async (formData) => {
+                  if (!isManager) return;
+                  await updateCampaign(formData);
+                  setEditingCampaign(null);
+                }}
+                className="space-y-3 text-xs"
+              >
+                <input type="hidden" name="campaignId" value={editingCampaign._id} />
+
+                <div>
+                  <label className="block font-medium mb-1 text-[#242424] dark:text-white">
+                    Campaign Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    defaultValue={editingCampaign.name}
+                    required
+                    disabled={!isManager}
+                    className={`w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none text-[#242424] dark:text-white focus:border-[#0078D4] ${
+                      !isManager ? "opacity-60 cursor-not-allowed" : ""
+                    }`}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-medium mb-1 text-[#242424] dark:text-white">
+                      Target Leads
+                    </label>
+                    <input
+                      type="number"
+                      name="leadsGenerated"
+                      defaultValue={editingCampaign.leadsGenerated || 0}
+                      disabled={!isManager}
+                      className={`w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none text-[#242424] dark:text-white ${
+                        !isManager ? "opacity-60 cursor-not-allowed" : ""
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium mb-1 text-[#242424] dark:text-white">
+                      Est. Revenue ($)
+                    </label>
+                    <input
+                      type="number"
+                      name="expectedRevenue"
+                      defaultValue={editingCampaign.expectedRevenue || 0}
+                      disabled={!isManager}
+                      className={`w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none text-[#242424] dark:text-white ${
+                        !isManager ? "opacity-60 cursor-not-allowed" : ""
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditingCampaign(null)}
+                    className="px-3.5 py-1.5 border border-[#E1DFDD] dark:border-[#3B3A39] text-[#605E5C] dark:text-[#C8C6C4] rounded-[4px] font-medium cursor-pointer"
+                  >
+                    {isManager ? "Cancel" : "Close"}
+                  </button>
+                  {isManager && (
+                    <button
+                      type="submit"
+                      className="px-4 py-1.5 bg-[#107C10] hover:bg-[#0E6A0E] text-white rounded-[4px] font-semibold transition-colors cursor-pointer"
+                    >
+                      Update Campaign
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
     </main>
   );
 }

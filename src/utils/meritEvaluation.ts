@@ -41,7 +41,8 @@ export interface MeritEvaluationResult {
     | "Promotion Ready: Merit Eligible"
     | "Strong Contender"
     | "On Track"
-    | "Growth Focus Required";
+    | "Growth Focus Required"
+    | "Newly Onboarded: Pending Review";
   progressPercent: number;      // 0 - 100% towards the next rank
   actionableFeedback: string[];
 }
@@ -51,10 +52,10 @@ export function calculateMeritEvaluation(user: UserMeritData): MeritEvaluationRe
   const nextRank = currentRank < 5 ? currentRank + 1 : null;
 
   // 1. Calculate active working days / tenure
-  const joinedTime = user.joinedDate ? new Date(user.joinedDate).getTime() : Date.now() - 60 * 24 * 60 * 60 * 1000;
+  const joinedTime = user.joinedDate ? new Date(user.joinedDate).getTime() : Date.now();
   const now = Date.now();
   const diffDays = Math.max(1, Math.floor((now - joinedTime) / (1000 * 60 * 60 * 24)));
-  const workingDays = isNaN(diffDays) ? 30 : diffDays;
+  const workingDays = isNaN(diffDays) ? 1 : diffDays;
 
   // Thresholds based on target next rank
   const TENURE_REQUIREMENTS: Record<number, number> = {
@@ -75,26 +76,26 @@ export function calculateMeritEvaluation(user: UserMeritData): MeritEvaluationRe
   const promotionThreshold = nextRank ? PROMOTION_THRESHOLDS[nextRank] || 80 : 100;
   const tenureSatisfied = workingDays >= minTenureRequired;
 
-  // Normalized Base Attributes
-  const performanceScore = Math.min(100, Math.max(0, user.performanceScore ?? 82));
-  const relevancyScore = Math.min(100, Math.max(0, user.relevancyScore ?? 85));
-  const supervisorRating = Math.min(5, Math.max(1, Number(user.supervisorRating ?? 4.2)));
-  const teamLeadRating = Math.min(5, Math.max(1, Number(user.teamLeadRating ?? 4.3)));
-  const completedProjects = Math.max(0, Number(user.completedProjectsCount ?? 1));
-  const currentProjects = Math.max(0, Number(user.currentProjectsCount ?? 1));
+  // Normalized Base Attributes (Default to 0 for unreviewed new hires)
+  const performanceScore = Math.min(100, Math.max(0, Number(user.performanceScore ?? 0)));
+  const relevancyScore = Math.min(100, Math.max(0, Number(user.relevancyScore ?? 0)));
+  const rawSupervisor = Number(user.supervisorRating ?? 0);
+  const supervisorRating = rawSupervisor > 0 ? Math.min(5, Math.max(1, rawSupervisor)) : 0;
+  const rawTeamLead = Number(user.teamLeadRating ?? 0);
+  const teamLeadRating = rawTeamLead > 0 ? Math.min(5, Math.max(1, rawTeamLead)) : 0;
+  const completedProjects = Math.max(0, Number(user.completedProjectsCount ?? 0));
+  const currentProjects = Math.max(0, Number(user.currentProjectsCount ?? 0));
   const remarks = user.remarks || "";
 
   // 1. Performance component (Weight: 25%)
   const performanceComponent = Math.round((performanceScore / 100) * 25);
 
   // 2. Supervisor + Team Lead Ratings component (Weight: 30%)
-  const supervisorPts = (supervisorRating / 5) * 15;
-  const leadPts = (teamLeadRating / 5) * 15;
+  const supervisorPts = supervisorRating > 0 ? (supervisorRating / 5) * 15 : 0;
+  const leadPts = teamLeadRating > 0 ? (teamLeadRating / 5) * 15 : 0;
   const ratingsComponent = Math.round(supervisorPts + leadPts);
 
   // 3. Project Delivery track record (Weight: 25%)
-  // Completed projects provide up to 20 pts (5 pts per completed project, capped at 20)
-  // Current active projects provide up to 5 pts (proves active engagement)
   const completedPts = Math.min(20, completedProjects * 5);
   const currentPts = Math.min(5, currentProjects >= 1 ? 5 : 0);
   const projectComponent = Math.round(completedPts + currentPts);
@@ -118,6 +119,8 @@ export function calculateMeritEvaluation(user: UserMeritData): MeritEvaluationRe
   let readinessStatus: MeritEvaluationResult["readinessStatus"] = "On Track";
   if (currentRank === 5) {
     readinessStatus = "Max Seniority (Principal)";
+  } else if (supervisorRating === 0 && teamLeadRating === 0 && performanceScore === 0) {
+    readinessStatus = "Newly Onboarded: Pending Review";
   } else if (isPromotionReady) {
     readinessStatus = "Promotion Ready: Merit Eligible";
   } else if (overallMeritScore >= promotionThreshold - 8) {
@@ -200,10 +203,19 @@ export interface PromotionBadgeInfo {
   shortLabel: string;
   badgeStyle: string;
   dotColor: string;
-  statusType: "ready" | "contender" | "on-track" | "growth" | "principal";
+  statusType: "ready" | "contender" | "on-track" | "growth" | "principal" | "pending";
 }
 
 export function getPromotionBadgeInfo(merit: MeritEvaluationResult): PromotionBadgeInfo {
+  if (merit.readinessStatus === "Newly Onboarded: Pending Review") {
+    return {
+      label: "🌱 Newly Onboarded (Pending Review)",
+      shortLabel: "Pending Review",
+      badgeStyle: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800",
+      dotColor: "bg-blue-500",
+      statusType: "pending",
+    };
+  }
   if (merit.currentRank >= 5) {
     return {
       label: "👑 Principal Seniority (Rank 5)",

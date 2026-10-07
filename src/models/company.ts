@@ -4,8 +4,11 @@ import { CompanyStatus } from "./enums";
 
 const companySchema = new Schema<ICompany>(
   {
-    name: { type: String, required: true },
-    slug: { type: String, required: true, unique: true, index: true },
+    name: { type: String, required: true, trim: true },
+    slug: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
+    subdomain: { type: String, unique: true, sparse: true, lowercase: true, trim: true, index: true },
+    companyCode: { type: String, unique: true, sparse: true, uppercase: true, trim: true, index: true },
+    plan: { type: String, default: "Pro" },
     logoUrl: { type: String },
     industry: { type: String },
     fiscalYearStart: { type: String, default: "01-01" },
