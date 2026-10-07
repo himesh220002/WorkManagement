@@ -26,6 +26,7 @@ import {
   LogOut,
   User,
   ExternalLink,
+  FileText,
 } from "lucide-react";
 import { PERSONAS } from "./PersonaSwitcher";
 
@@ -55,6 +56,7 @@ export const NAV_GROUPS = [
       { label: "My Work", href: "/my-work", icon: Briefcase },
       { label: "Dev Dashboard", href: "/dev/dashboard", icon: CheckSquare },
       { label: "Timeline & Pipelines", href: "/dev/timeline", icon: Clock },
+      { label: "Documentation Upload", href: "/docs", icon: FileText },
     ],
   },
   {
@@ -71,6 +73,7 @@ export const NAV_GROUPS = [
   {
     group: "Admin & Security",
     items: [
+      { label: "Document Vault (S3)", href: "/docs", icon: FileText },
       { label: "Resource Allocation", href: "/exec/resources", icon: Cpu },
       { label: "Documentation", href: "/about", icon: BookOpen },
       { label: "Tenant Auth & RBAC", href: "/auth/login", icon: ShieldCheck },
@@ -275,7 +278,7 @@ export function MobileNavDrawer({
           </div>
 
           {/* Corporate Role Persona Simulator Accordion */}
-          <div className="p-3 border-b border-[#F3F2F1] dark:border-[#292827]">
+          {/* <div className="p-3 border-b border-[#F3F2F1] dark:border-[#292827]">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#8A8886]">
                 Role Persona Simulator
@@ -287,10 +290,10 @@ export function MobileNavDrawer({
               >
                 {isPersonaExpanded ? "Collapse" : "Change Role"}
               </button>
-            </div>
+            </div> */}
 
-            {/* Current Active Persona Summary Button */}
-            <button
+          {/* Current Active Persona Summary Button */}
+          {/* <button
               type="button"
               onClick={() => setIsPersonaExpanded(!isPersonaExpanded)}
               className={`w-full text-left p-2 rounded-[4px] border text-xs font-semibold flex items-center justify-between transition-all ${activePersona.style}`}
@@ -302,14 +305,13 @@ export function MobileNavDrawer({
                 </span>
               </div>
               <ChevronDown
-                className={`w-3.5 h-3.5 transition-transform shrink-0 ${
-                  isPersonaExpanded ? "rotate-180" : ""
-                }`}
+                className={`w-3.5 h-3.5 transition-transform shrink-0 ${isPersonaExpanded ? "rotate-180" : ""
+                  }`}
               />
-            </button>
+            </button> */}
 
-            {/* Expandable Persona List */}
-            {isPersonaExpanded && (
+          {/* Expandable Persona List */}
+          {/* {isPersonaExpanded && (
               <div className="mt-2 space-y-1.5 animate-in slide-in-from-top-2 duration-150">
                 <p className="text-[10px] text-[#8A8886] mb-1">
                   Switch persona to test permissions across blueprints, pipelines &amp; agendas:
@@ -346,48 +348,73 @@ export function MobileNavDrawer({
                   );
                 })}
               </div>
-            )}
-          </div>
+            )} */}
+          {/* </div> */}
 
           {/* Navigation Links List */}
-          <nav className="p-3 flex flex-col gap-4">
-            {NAV_GROUPS.map((group, gIdx) => (
-              <div key={gIdx} className="flex flex-col gap-0.5">
-                <span className="px-2 text-[10px] font-bold uppercase tracking-wider text-[#8A8886]">
-                  {group.group}
-                </span>
-                {group.items.map((item, iIdx) => {
-                  const Icon = item.icon;
-                  const isActive =
-                    item.href === "/exec/dashboard"
-                      ? pathname === "/exec/dashboard" || pathname === "/"
-                      : pathname.startsWith(item.href);
+          {(() => {
+            const segments = (pathname || "").split("/").filter(Boolean);
+            const PROTECTED_ROOTS = [
+              "exec",
+              "projects",
+              "teams",
+              "sales",
+              "revenue",
+              "diagrams",
+              "my-work",
+              "dev",
+              "about",
+              "docs",
+              "auth",
+            ];
+            const orgPrefix =
+              segments.length > 0 && !PROTECTED_ROOTS.includes(segments[0])
+                ? `/${segments[0]}`
+                : "";
 
-                  return (
-                    <Link
-                      key={iIdx}
-                      href={item.href}
-                      onClick={onClose}
-                      className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-[4px] text-xs font-medium transition-colors relative ${
-                        isActive
-                          ? "bg-[#EBF3FC] dark:bg-[#1C2B3D] text-[#0078D4] dark:text-[#479EF5] font-semibold before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[3px] before:bg-[#0078D4] before:rounded-r"
-                          : "text-[#242424] dark:text-[#C8C6C4] hover:bg-[#F3F2F1] dark:hover:bg-[#292827]"
-                      }`}
-                    >
-                      <Icon
-                        className={`w-3.5 h-3.5 shrink-0 ${
-                          isActive
-                            ? "text-[#0078D4] dark:text-[#479EF5]"
-                            : "text-[#605E5C] dark:text-[#C8C6C4]"
-                        }`}
-                      />
-                      <span className="truncate">{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            ))}
-          </nav>
+            return (
+              <nav className="p-3 flex flex-col gap-4">
+                {NAV_GROUPS.map((group, gIdx) => (
+                  <div key={gIdx} className="flex flex-col gap-0.5">
+                    <span className="px-2 text-[10px] font-bold uppercase tracking-wider text-[#8A8886]">
+                      {group.group}
+                    </span>
+                    {group.items.map((item, iIdx) => {
+                      const Icon = item.icon;
+                      const targetHref = item.href.startsWith("/auth")
+                        ? item.href
+                        : `${orgPrefix}${item.href}`;
+                      const isActive =
+                        item.href === "/exec/dashboard"
+                          ? pathname === targetHref || pathname === `${orgPrefix}` || pathname === "/"
+                          : pathname === targetHref || pathname.startsWith(`${targetHref}/`);
+
+                      return (
+                        <Link
+                          key={iIdx}
+                          href={targetHref}
+                          prefetch={true}
+                          onClick={onClose}
+                          className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-[4px] text-xs font-medium transition-colors relative ${isActive
+                            ? "bg-[#EBF3FC] dark:bg-[#1C2B3D] text-[#0078D4] dark:text-[#479EF5] font-semibold before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[3px] before:bg-[#0078D4] before:rounded-r"
+                            : "text-[#242424] dark:text-[#C8C6C4] hover:bg-[#F3F2F1] dark:hover:bg-[#292827]"
+                            }`}
+                        >
+                          <Icon
+                            className={`w-3.5 h-3.5 shrink-0 ${isActive
+                              ? "text-[#0078D4] dark:text-[#479EF5]"
+                              : "text-[#605E5C] dark:text-[#C8C6C4]"
+                              }`}
+                          />
+                          <span className="truncate">{item.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ))}
+              </nav>
+            );
+          })()}
         </div>
 
         {/* Footer / Tenant Auth Link */}

@@ -21,6 +21,7 @@ import {
   CustomerFeedback,
   List,
   Item,
+  Document,
 } from "@/models";
 
 export interface TenantModels {
@@ -44,6 +45,7 @@ export interface TenantModels {
   CustomerFeedback: Model<any>;
   List: Model<any>;
   Item: Model<any>;
+  Document: Model<any>;
 }
 
 /**
@@ -104,6 +106,7 @@ export async function getTenantModels(companyCode: string): Promise<TenantModels
     CustomerFeedback: getOrCompile("CustomerFeedback", CustomerFeedback),
     List: getOrCompile("List", List),
     Item: getOrCompile("Item", Item),
+    Document: getOrCompile("Document", Document),
   };
 
   tenantModelsCache.set(dbName, models);
@@ -137,6 +140,7 @@ export async function migrateCompanyToDedicatedDb(companyCode: string, companyId
     { name: "CustomerFeedback", source: CustomerFeedback, target: tenantModels.CustomerFeedback },
     { name: "List", source: List, target: tenantModels.List },
     { name: "Item", source: Item, target: tenantModels.Item },
+    { name: "Document", source: Document, target: tenantModels.Document },
   ];
 
   const results: Record<string, number> = {};

@@ -10,6 +10,7 @@ import { StatusBadge, Badge } from "@/components/ui/Badge";
 import { Stat } from "@/components/ui/Stat";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { addProject } from "@/actions";
+import { fetchWithCache, invalidateCachePrefix } from "@/lib/cache";
 import {
   FolderKanban,
   Plus,
@@ -33,6 +34,8 @@ async function deleteProjectAction(formData: FormData) {
 
   if (id) {
     await Project.findByIdAndDelete(id);
+    invalidateCachePrefix("projects_");
+    invalidateCachePrefix("exec_");
     revalidatePath("/projects");
     revalidatePath("/exec/dashboard");
   }
@@ -42,13 +45,24 @@ export default async function ProjectsPage() {
   await connectToDatabase();
   const session = await getCurrentSession();
   const tenantFilter = getTenantQueryFilter(session);
+  const cId = session.companyId || "default";
 
   const [projectsData, allTeams, allPipelines, allTasks, allUsersData] = await Promise.all([
-    Project.find(tenantFilter).lean(),
-    Team.find(tenantFilter).populate("members leadId").lean(),
-    Pipeline.find(tenantFilter).lean(),
-    Task.find(tenantFilter).lean(),
-    User.find(tenantFilter).select("name role position").lean(),
+    fetchWithCache(`projects_data:${cId}`, 30, () =>
+      Project.find(tenantFilter).lean()
+    ),
+    fetchWithCache(`projects_teams:${cId}`, 30, () =>
+      Team.find(tenantFilter).populate("members leadId").lean()
+    ),
+    fetchWithCache(`projects_pipelines:${cId}`, 30, () =>
+      Pipeline.find(tenantFilter).lean()
+    ),
+    fetchWithCache(`projects_tasks:${cId}`, 20, () =>
+      Task.find(tenantFilter).lean()
+    ),
+    fetchWithCache(`projects_users:${cId}`, 30, () =>
+      User.find(tenantFilter).select("name role position").lean()
+    ),
   ]);
 
   const cleanUsers = serializeDocs<any>(

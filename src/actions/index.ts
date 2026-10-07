@@ -2,8 +2,14 @@
 
 import connectToDatabase from "@/lib/mongodb";
 import { Pipeline, TaskNode, Lead, Campaign, Deal, Target, Goal, Team, User, Project, ResourceAllocation, Cycle } from "@/models";
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
 import { getCurrentSession } from "@/server/auth/session";
+import { invalidateAllAppCaches } from "@/lib/cache";
+
+function revalidatePath(path: string) {
+  invalidateAllAppCaches();
+  nextRevalidatePath(path);
+}
 
 export async function getAssigneeOptions() {
   await connectToDatabase();

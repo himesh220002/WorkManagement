@@ -19,7 +19,27 @@ import {
 } from "lucide-react";
 
 export default function Sidebar() {
-  const pathname = usePathname();
+  const pathname = usePathname() || "";
+
+  // Extract tenant prefix if present (e.g. /ORGTTV/docs -> /ORGTTV) to prevent 307 redirects
+  const segments = pathname.split("/").filter(Boolean);
+  const PROTECTED_ROOTS = [
+    "exec",
+    "projects",
+    "teams",
+    "sales",
+    "revenue",
+    "diagrams",
+    "my-work",
+    "dev",
+    "about",
+    "docs",
+    "auth",
+  ];
+  const orgPrefix =
+    segments.length > 0 && !PROTECTED_ROOTS.includes(segments[0])
+      ? `/${segments[0]}`
+      : "";
 
   const navGroups = [
     {
@@ -36,6 +56,7 @@ export default function Sidebar() {
         { label: "My Work", href: "/my-work", icon: Briefcase },
         { label: "Dev Dashboard", href: "/dev/dashboard", icon: CheckSquare },
         { label: "Timeline & Pipelines", href: "/dev/timeline", icon: Clock },
+        { label: "Documentation Upload", href: "/docs", icon: BookOpen },
       ],
     },
     {
@@ -71,20 +92,23 @@ export default function Sidebar() {
             </span>
             {group.items.map((item, iIdx) => {
               const Icon = item.icon;
+              const targetHref = item.href.startsWith("/auth")
+                ? item.href
+                : `${orgPrefix}${item.href}`;
               const isActive =
                 item.href === "/exec/dashboard"
-                  ? pathname === "/exec/dashboard" || pathname === "/"
-                  : pathname.startsWith(item.href);
+                  ? pathname === targetHref || pathname === `${orgPrefix}` || pathname === "/"
+                  : pathname === targetHref || pathname.startsWith(`${targetHref}/`);
 
               return (
                 <Link
                   key={iIdx}
-                  href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-[4px] text-xs font-medium transition-colors relative ${
-                    isActive
+                  href={targetHref}
+                  prefetch={true}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-[4px] text-xs font-medium transition-colors relative ${isActive
                       ? "bg-[#EBF3FC] dark:bg-[#1C2B3D] text-[#0078D4] dark:text-[#479EF5] font-semibold before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[3px] before:bg-[#0078D4] before:rounded-r"
                       : "text-[#242424] dark:text-[#C8C6C4] hover:bg-[#F3F2F1] dark:hover:bg-[#292827] hover:text-black dark:hover:text-white"
-                  }`}
+                    }`}
                 >
                   <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-[#0078D4] dark:text-[#479EF5]" : "text-[#605E5C] dark:text-[#C8C6C4]"}`} />
                   <span className="truncate">{item.label}</span>

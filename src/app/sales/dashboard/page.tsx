@@ -2,11 +2,13 @@ import connectToDatabase from "@/lib/mongodb";
 import { Lead, Campaign, Pipeline, Project, Team, TaskNode, User } from "@/models";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import SalesDashboardClient from "@/app/sales/dashboard/SalesDashboardClient";
+import { fetchWithCache } from "@/lib/cache";
 
 export default async function SalesDashboardPage() {
   await connectToDatabase();
   const session = await getCurrentSession();
   const tenantFilter = getTenantQueryFilter(session);
+  const cId = session.companyId || "default";
 
   let leads: any[] = [];
   let campaigns: any[] = [];
@@ -17,13 +19,20 @@ export default async function SalesDashboardPage() {
   let users: any[] = [];
 
   try {
-    leads = await Lead.find(tenantFilter).lean();
-    campaigns = await Campaign.find(tenantFilter).lean();
-    pipelines = await Pipeline.find({ ...tenantFilter, category: "Sales" }).populate("projectId teamId taskId").sort({ progress: -1 }).lean();
-    projects = await Project.find(tenantFilter, { name: 1 }).lean();
-    teams = await Team.find(tenantFilter, { name: 1 }).lean();
-    taskNodes = await TaskNode.find(tenantFilter, { name: 1 }).lean();
-    users = await User.find(tenantFilter, { name: 1 }).lean();
+    [leads, campaigns, pipelines, projects, teams, taskNodes, users] = await Promise.all([
+      fetchWithCache(`sales_leads:${cId}`, 30, () => Lead.find(tenantFilter).lean()),
+      fetchWithCache(`sales_campaigns:${cId}`, 30, () => Campaign.find(tenantFilter).lean()),
+      fetchWithCache(`sales_pipelines:${cId}`, 30, () =>
+        Pipeline.find({ ...tenantFilter, category: "Sales" })
+          .populate("projectId teamId taskId")
+          .sort({ progress: -1 })
+          .lean()
+      ),
+      fetchWithCache(`sales_projects:${cId}`, 30, () => Project.find(tenantFilter, { name: 1 }).lean()),
+      fetchWithCache(`sales_teams:${cId}`, 30, () => Team.find(tenantFilter, { name: 1 }).lean()),
+      fetchWithCache(`sales_tasknodes:${cId}`, 30, () => TaskNode.find(tenantFilter, { name: 1 }).lean()),
+      fetchWithCache(`sales_users:${cId}`, 30, () => User.find(tenantFilter, { name: 1 }).lean()),
+    ]);
   } catch (err) {
     console.error(err);
   }

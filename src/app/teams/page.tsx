@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { calculateMeritEvaluation } from "@/utils/meritEvaluation";
 import { revalidatePath } from "next/cache";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
+import { fetchWithCache, invalidateCachePrefix } from "@/lib/cache";
 import {
   Users,
   Plus,
@@ -28,6 +29,8 @@ async function addTeam(formData: FormData) {
 
   if (name) {
     await Team.create({ name, members: memberIds, companyId: session.companyId });
+    invalidateCachePrefix("teams_");
+    invalidateCachePrefix("exec_");
     revalidatePath("/teams");
     revalidatePath("/diagrams");
   }
@@ -37,9 +40,16 @@ export default async function TeamsPage() {
   await connectToDatabase();
   const session = await getCurrentSession();
   const tenantFilter = getTenantQueryFilter(session);
+  const cId = session.companyId || "default";
 
-  const teamsRaw = await Team.find(tenantFilter).populate("members").lean();
-  const allUsersData = await User.find(tenantFilter).lean();
+  const [teamsRaw, allUsersData] = await Promise.all([
+    fetchWithCache(`teams_list:${cId}`, 30, () =>
+      Team.find(tenantFilter).populate("members").lean()
+    ),
+    fetchWithCache(`teams_users:${cId}`, 30, () =>
+      User.find(tenantFilter).lean()
+    ),
+  ]);
 
   // Sanitize for client components
   const allUsers = allUsersData.map((u: any) => ({

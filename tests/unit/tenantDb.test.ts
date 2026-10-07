@@ -49,5 +49,6 @@ describe("Database-per-Tenant Architecture", () => {
     expect(models.CustomerFeedback).toBeDefined();
     expect(models.List).toBeDefined();
     expect(models.Item).toBeDefined();
+    expect(models.Document).toBeDefined();
   });
 });

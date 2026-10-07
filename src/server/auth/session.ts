@@ -4,6 +4,7 @@ import { JWTPayload } from "@/models/types";
 import { User, Company } from "@/models";
 import connectToDatabase from "@/lib/mongodb";
 import { normalizeRole, RoleName } from "./rbac";
+import { getCached, setCached } from "@/lib/cache";
 
 export interface SessionContext {
   userId?: string;
@@ -32,6 +33,12 @@ export async function getCurrentSession(): Promise<SessionContext> {
 
   // If valid token found
   if (payload && payload.userId) {
+    const sessionCacheKey = `session:${payload.userId}`;
+    const cachedSession = getCached<SessionContext>(sessionCacheKey);
+    if (cachedSession) {
+      return cachedSession;
+    }
+
     const user = await User.findById(payload.userId).lean();
     if (user) {
       let companyCode = payload.companyCode || undefined;
@@ -39,7 +46,7 @@ export async function getCurrentSession(): Promise<SessionContext> {
         const company = await Company.findById(user.companyId).select("companyCode").lean();
         if (company) companyCode = company.companyCode;
       }
-      return {
+      const sessionCtx: SessionContext = {
         userId: user._id.toString(),
         companyId: user.companyId ? user.companyId.toString() : undefined,
         companyCode: companyCode || undefined,
@@ -48,6 +55,8 @@ export async function getCurrentSession(): Promise<SessionContext> {
         name: user.name || payload.name,
         userDoc: user,
       };
+      setCached(sessionCacheKey, sessionCtx, 30);
+      return sessionCtx;
     }
   }
 

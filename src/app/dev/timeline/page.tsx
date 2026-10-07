@@ -2,11 +2,13 @@ import connectToDatabase from "@/lib/mongodb";
 import { Pipeline, Project, Team, TaskNode, User } from "@/models";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import TimelineClient from "@/app/dev/timeline/TimelineClient";
+import { fetchWithCache } from "@/lib/cache";
 
 export default async function TimelinePage() {
   await connectToDatabase();
   const session = await getCurrentSession();
   const tenantFilter = getTenantQueryFilter(session);
+  const cId = session.companyId || "default";
 
   let tasks: any[] = [];
   let projects: any[] = [];
@@ -15,11 +17,23 @@ export default async function TimelinePage() {
   let users: any[] = [];
 
   try {
-    tasks = await Pipeline.find(tenantFilter).populate("projectId teamId taskId").lean();
-    projects = await Project.find(tenantFilter, { name: 1 }).lean();
-    teams = await Team.find(tenantFilter, { name: 1 }).lean();
-    taskNodes = await TaskNode.find(tenantFilter, { name: 1 }).lean();
-    users = await User.find(tenantFilter, { name: 1, role: 1, position: 1, rank: 1 }).lean();
+    [tasks, projects, teams, taskNodes, users] = await Promise.all([
+      fetchWithCache(`timeline_tasks:${cId}`, 25, () =>
+        Pipeline.find(tenantFilter).populate("projectId teamId taskId").lean()
+      ),
+      fetchWithCache(`timeline_projects:${cId}`, 30, () =>
+        Project.find(tenantFilter, { name: 1 }).lean()
+      ),
+      fetchWithCache(`timeline_teams:${cId}`, 30, () =>
+        Team.find(tenantFilter, { name: 1 }).lean()
+      ),
+      fetchWithCache(`timeline_tasknodes:${cId}`, 30, () =>
+        TaskNode.find(tenantFilter, { name: 1 }).lean()
+      ),
+      fetchWithCache(`timeline_users:${cId}`, 30, () =>
+        User.find(tenantFilter, { name: 1, role: 1, position: 1, rank: 1 }).lean()
+      ),
+    ]);
   } catch (err) {
     console.error(err);
   }

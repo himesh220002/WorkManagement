@@ -395,3 +395,24 @@ export interface ICustomerFeedback {
   createdAt?: Date;
   updatedAt?: Date;
 }
+
+export type DocumentCategory = "EMPLOYEE" | "PROJECT" | "SALES" | "SALARY_FINANCE";
+
+export interface IDocument {
+  _id: string | Types.ObjectId;
+  companyId: Types.ObjectId | string;
+  category: DocumentCategory;
+  subType?: string;
+  entityId?: Types.ObjectId | string | null;
+  title: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  s3Key: string;
+  uploadedBy: Types.ObjectId | string;
+  isArchived?: boolean;
+  archivedAt?: Date | null;
+  archivedBy?: Types.ObjectId | string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+}

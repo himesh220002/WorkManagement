@@ -31,6 +31,7 @@ const PROTECTED_ROOT_ROUTES = new Set([
   "my-work",
   "dev",
   "about",
+  "docs",
 ]);
 
 export function middleware(req: NextRequest) {

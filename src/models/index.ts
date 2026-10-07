@@ -20,3 +20,4 @@ export { Cycle } from "./cycle";
 export { ResourceAllocation } from "./resourceAllocation";
 export { CustomerFeedback } from "./customerFeedback";
 export { List, Item } from "./list";
+export { Document } from "./document";

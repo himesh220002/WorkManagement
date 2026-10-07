@@ -2,11 +2,13 @@ import connectToDatabase from "@/lib/mongodb";
 import { Deal, Target, Pipeline, Project, Team, TaskNode, User, ResourceAllocation } from "@/models";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import RevenueDashboardClient from "@/app/revenue/dashboard/RevenueDashboardClient";
+import { fetchWithCache } from "@/lib/cache";
 
 export default async function RevenueDashboardPage() {
   await connectToDatabase();
   const session = await getCurrentSession();
   const tenantFilter = getTenantQueryFilter(session);
+  const cId = session.companyId || "default";
 
   let deals: any[] = [];
   let targets: any[] = [];
@@ -18,15 +20,23 @@ export default async function RevenueDashboardPage() {
   let resources: any[] = [];
 
   try {
-    // @ts-ignore
-    deals = await Deal.find(tenantFilter).lean();
-    targets = await Target.find(tenantFilter).lean();
-    pipelines = await Pipeline.find({ ...tenantFilter, category: "Finance" }).populate("projectId teamId taskId").sort({ progress: -1 }).lean();
-    projects = await Project.find(tenantFilter, { name: 1 }).lean();
-    teams = await Team.find(tenantFilter, { name: 1 }).lean();
-    taskNodes = await TaskNode.find(tenantFilter, { name: 1 }).lean();
-    users = await User.find(tenantFilter, { name: 1 }).lean();
-    resources = await ResourceAllocation.find(tenantFilter).populate("assignedToProjectId").lean();
+    [deals, targets, pipelines, projects, teams, taskNodes, users, resources] = await Promise.all([
+      fetchWithCache(`rev_deals:${cId}`, 30, () => Deal.find(tenantFilter).lean()),
+      fetchWithCache(`rev_targets:${cId}`, 30, () => Target.find(tenantFilter).lean()),
+      fetchWithCache(`rev_pipelines:${cId}`, 30, () =>
+        Pipeline.find({ ...tenantFilter, category: "Finance" })
+          .populate("projectId teamId taskId")
+          .sort({ progress: -1 })
+          .lean()
+      ),
+      fetchWithCache(`rev_projects:${cId}`, 30, () => Project.find(tenantFilter, { name: 1 }).lean()),
+      fetchWithCache(`rev_teams:${cId}`, 30, () => Team.find(tenantFilter, { name: 1 }).lean()),
+      fetchWithCache(`rev_tasknodes:${cId}`, 30, () => TaskNode.find(tenantFilter, { name: 1 }).lean()),
+      fetchWithCache(`rev_users:${cId}`, 30, () => User.find(tenantFilter, { name: 1 }).lean()),
+      fetchWithCache(`rev_resources:${cId}`, 30, () =>
+        ResourceAllocation.find(tenantFilter).populate("assignedToProjectId").lean()
+      ),
+    ]);
   } catch (err) {
     console.error(err);
   }

@@ -2,6 +2,7 @@ import connectToDatabase from "@/lib/mongodb";
 import { Project, TaskNode, Pipeline, Cycle } from "@/models";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import DevDashboardClient from "@/app/dev/dashboard/DevDashboardClient";
+import { fetchWithCache } from "@/lib/cache";
 
 export default async function DevDashboardPage(
   props: { searchParams: Promise<{ projectId?: string }> }
@@ -10,6 +11,7 @@ export default async function DevDashboardPage(
   await connectToDatabase();
   const session = await getCurrentSession();
   const tenantFilter = getTenantQueryFilter(session);
+  const cId = session.companyId || "default";
 
   const selectedProjectId = searchParams?.projectId || "all";
 
@@ -19,19 +21,31 @@ export default async function DevDashboardPage(
   let cycles: any[] = [];
 
   try {
-    projects = await Project.find(tenantFilter).lean();
+    projects = await fetchWithCache(`dev_projects:${cId}`, 30, () =>
+      Project.find(tenantFilter).lean()
+    );
     
     if (projects.length > 0) {
       const projectIds = projects.map(p => p._id);
       
-      pipelines = await Pipeline.find({ ...tenantFilter, projectId: { $in: projectIds } }).sort({ progress: -1 }).lean();
+      pipelines = await fetchWithCache(`dev_pipelines:${cId}`, 25, () =>
+        Pipeline.find({ ...tenantFilter, projectId: { $in: projectIds } }).sort({ progress: -1 }).lean()
+      );
       
       if (selectedProjectId && selectedProjectId !== "all") {
-        tasks = await TaskNode.find({ ...tenantFilter, projectId: selectedProjectId }).lean();
-        cycles = await Cycle.find({ ...tenantFilter, project: selectedProjectId }).lean();
+        tasks = await fetchWithCache(`dev_tasks:${cId}:${selectedProjectId}`, 20, () =>
+          TaskNode.find({ ...tenantFilter, projectId: selectedProjectId }).lean()
+        );
+        cycles = await fetchWithCache(`dev_cycles:${cId}:${selectedProjectId}`, 25, () =>
+          Cycle.find({ ...tenantFilter, project: selectedProjectId }).lean()
+        );
       } else {
-        tasks = await TaskNode.find({ ...tenantFilter, projectId: { $in: projectIds } }).lean();
-        cycles = await Cycle.find({ ...tenantFilter, project: { $in: projectIds } }).lean();
+        tasks = await fetchWithCache(`dev_tasks_all:${cId}`, 20, () =>
+          TaskNode.find({ ...tenantFilter, projectId: { $in: projectIds } }).lean()
+        );
+        cycles = await fetchWithCache(`dev_cycles_all:${cId}`, 25, () =>
+          Cycle.find({ ...tenantFilter, project: { $in: projectIds } }).lean()
+        );
       }
     } else if (session.role === "superuser" && !session.companyId) {
       // Global superuser fallback when no tenant is selected

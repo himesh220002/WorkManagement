@@ -1,18 +1,35 @@
 import connectToDatabase from "@/lib/mongodb";
 import { Project, Pipeline, Team, Task, Goal, Deal } from "@/models";
 import DiagramsClient from "@/app/diagrams/DiagramsClient";
+import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
+import { fetchWithCache } from "@/lib/cache";
 
 export default async function DiagramsPage() {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  const tenantFilter = getTenantQueryFilter(session);
+  const cId = session.companyId || "default";
 
   const [projectsRaw, pipelinesRaw, teamsRaw, tasksRaw, goalsRaw, dealsRaw] =
     await Promise.all([
-      Project.find({}).lean(),
-      Pipeline.find({}).populate("projectId teamId").lean(),
-      Team.find({}).populate("members leadId").lean(),
-      Task.find({}).populate("projectId", "name").lean(),
-      Goal.find({}).lean(),
-      Deal.find({}).lean(),
+      fetchWithCache(`diagrams_projects:${cId}`, 30, () =>
+        Project.find(tenantFilter).lean()
+      ),
+      fetchWithCache(`diagrams_pipelines:${cId}`, 30, () =>
+        Pipeline.find(tenantFilter).populate("projectId teamId").lean()
+      ),
+      fetchWithCache(`diagrams_teams:${cId}`, 30, () =>
+        Team.find(tenantFilter).populate("members leadId").lean()
+      ),
+      fetchWithCache(`diagrams_tasks:${cId}`, 20, () =>
+        Task.find(tenantFilter).populate("projectId", "name").lean()
+      ),
+      fetchWithCache(`diagrams_goals:${cId}`, 30, () =>
+        Goal.find(tenantFilter).lean()
+      ),
+      fetchWithCache(`diagrams_deals:${cId}`, 30, () =>
+        Deal.find(tenantFilter).lean()
+      ),
     ]);
 
   const cleanProjects = projectsRaw.map((p: any) => ({

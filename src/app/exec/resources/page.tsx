@@ -1,16 +1,27 @@
 import connectToDatabase from "@/lib/mongodb";
 import { ResourceAllocation, Project } from "@/models";
+import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import ResourceDashboardClient from "./ResourceDashboardClient";
+import { fetchWithCache } from "@/lib/cache";
 
 export default async function ResourceDashboardPage() {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  const tenantFilter = getTenantQueryFilter(session);
+  const cId = session.companyId || "default";
 
   let resources: any[] = [];
   let projects: any[] = [];
 
   try {
-    resources = await ResourceAllocation.find({}).populate("assignedToProjectId").lean();
-    projects = await Project.find({}).lean();
+    [resources, projects] = await Promise.all([
+      fetchWithCache(`resource_allocations:${cId}`, 30, () =>
+        ResourceAllocation.find(tenantFilter).populate("assignedToProjectId").lean()
+      ),
+      fetchWithCache(`resource_projects:${cId}`, 30, () =>
+        Project.find(tenantFilter).lean()
+      ),
+    ]);
   } catch (err) {
     console.error(err);
   }

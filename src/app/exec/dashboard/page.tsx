@@ -2,13 +2,15 @@ import connectToDatabase from "@/lib/mongodb";
 import { Pipeline, Goal, Target, Lead, Deal, Task, User, Project, Team } from "@/models";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import ExecDashboardClient from "./ExecDashboardClient";
+import { fetchWithCache } from "@/lib/cache";
 
 export default async function ExecDashboard() {
   await connectToDatabase();
   const session = await getCurrentSession();
   const tenantFilter = getTenantQueryFilter(session);
+  const cId = session.companyId || "default";
 
-  // Fetch entities scoped strictly to the active tenant organization
+  // Fetch entities scoped strictly to the active tenant organization (with high-speed TTL caching)
   const [
     projectsRaw,
     tasksRaw,
@@ -20,21 +22,39 @@ export default async function ExecDashboard() {
     usersRaw,
     teamsRaw,
   ] = await Promise.all([
-    Project.find(tenantFilter).lean(),
-    Task.find(tenantFilter)
-      .populate("projectId", "name status health")
-      .populate("assigneeIds", "name role email")
-      .lean(),
-    Pipeline.find(tenantFilter)
-      .populate("projectId teamId taskId")
-      .sort({ progress: -1 })
-      .lean(),
-    Goal.find(tenantFilter).populate("projectId", "name").lean(),
-    Target.find(tenantFilter).lean(),
-    Lead.find(tenantFilter).populate("projectId", "name").lean(),
-    Deal.find(tenantFilter).populate("projectId", "name").lean(),
-    User.find(tenantFilter).lean(),
-    Team.find(tenantFilter).populate("projectId", "name").lean(),
+    fetchWithCache(`exec_projects:${cId}`, 30, () =>
+      Project.find(tenantFilter).lean()
+    ),
+    fetchWithCache(`exec_tasks:${cId}`, 20, () =>
+      Task.find(tenantFilter)
+        .populate("projectId", "name status health")
+        .populate("assigneeIds", "name role email")
+        .lean()
+    ),
+    fetchWithCache(`exec_pipelines:${cId}`, 25, () =>
+      Pipeline.find(tenantFilter)
+        .populate("projectId teamId taskId")
+        .sort({ progress: -1 })
+        .lean()
+    ),
+    fetchWithCache(`exec_goals:${cId}`, 30, () =>
+      Goal.find(tenantFilter).populate("projectId", "name").lean()
+    ),
+    fetchWithCache(`exec_targets:${cId}`, 30, () =>
+      Target.find(tenantFilter).lean()
+    ),
+    fetchWithCache(`exec_leads:${cId}`, 25, () =>
+      Lead.find(tenantFilter).populate("projectId", "name").lean()
+    ),
+    fetchWithCache(`exec_deals:${cId}`, 25, () =>
+      Deal.find(tenantFilter).populate("projectId", "name").lean()
+    ),
+    fetchWithCache(`exec_users:${cId}`, 30, () =>
+      User.find(tenantFilter).lean()
+    ),
+    fetchWithCache(`exec_teams:${cId}`, 30, () =>
+      Team.find(tenantFilter).populate("projectId", "name").lean()
+    ),
   ]);
 
   // Clean and normalize tasks across all projects
