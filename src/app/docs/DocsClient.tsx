@@ -230,46 +230,81 @@ export default function DocsClient({
       setUploadProgress(40);
       setUploadStatusMsg("Uploading file securely to AWS S3 bucket...");
 
+      let savedRecord: any = null;
+
       // 2. Upload directly to S3 via PUT (or bypass if offline mock)
+      let directS3Success = false;
       if (!isMock) {
-        const s3UploadRes = await fetch(uploadUrl, {
-          method: "PUT",
-          body: selectedFile,
-          headers: {
-            "Content-Type": selectedFile.type || "application/octet-stream",
-          },
+        try {
+          const s3UploadRes = await fetch(uploadUrl, {
+            method: "PUT",
+            body: selectedFile,
+            headers: {
+              "Content-Type": selectedFile.type || "application/octet-stream",
+            },
+          });
+
+          if (s3UploadRes.ok) {
+            directS3Success = true;
+          } else {
+            console.warn(`Direct S3 upload returned HTTP ${s3UploadRes.status}. Attempting server upload fallback...`);
+          }
+        } catch (fetchErr) {
+          console.warn("Direct S3 upload encountered network/CORS error. Attempting server upload fallback...", fetchErr);
+        }
+      } else {
+        directS3Success = true;
+      }
+
+      if (directS3Success) {
+        setUploadProgress(80);
+        setUploadStatusMsg("Recording document metadata in database...");
+
+        // 3. Save metadata record in MongoDB
+        const saveRes = await fetch(`/api/${companyCode}/docs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category: selectedCategory,
+            subType: selectedSubtype,
+            entityId: selectedEntityId || null,
+            title: docTitle.trim(),
+            originalName: selectedFile.name,
+            mimeType: selectedFile.type || "application/octet-stream",
+            fileSize: selectedFile.size,
+            s3Key,
+          }),
         });
 
-        if (!s3UploadRes.ok) {
-          throw new Error(
-            `AWS S3 rejected the direct upload (HTTP ${s3UploadRes.status}). Check bucket CORS permissions.`
-          );
+        const saveData = await saveRes.json();
+        if (!saveRes.ok || !saveData.success) {
+          throw new Error(saveData.error || "Failed to record document metadata in database.");
         }
+        savedRecord = saveData.data;
+      } else {
+        // Fallback: Upload via server-side direct pipeline
+        setUploadProgress(65);
+        setUploadStatusMsg("Direct S3 upload restricted; utilizing secure server pipeline...");
+
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+        formData.append("category", selectedCategory);
+        formData.append("subType", selectedSubtype);
+        if (selectedEntityId) formData.append("entityId", selectedEntityId);
+        formData.append("title", docTitle.trim());
+
+        const serverUploadRes = await fetch(`/api/${companyCode}/docs/upload-direct`, {
+          method: "POST",
+          body: formData,
+        });
+
+        const serverData = await serverUploadRes.json();
+        if (!serverUploadRes.ok || !serverData.success) {
+          throw new Error(serverData.error || "Server upload fallback failed.");
+        }
+        savedRecord = serverData.data;
       }
 
-      setUploadProgress(80);
-      setUploadStatusMsg("Recording document metadata in database...");
-
-      // 3. Save metadata record in MongoDB
-      const saveRes = await fetch(`/api/${companyCode}/docs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category: selectedCategory,
-          subType: selectedSubtype,
-          entityId: selectedEntityId || null,
-          title: docTitle.trim(),
-          originalName: selectedFile.name,
-          mimeType: selectedFile.type || "application/octet-stream",
-          fileSize: selectedFile.size,
-          s3Key,
-        }),
-      });
-
-      const saveData = await saveRes.json();
-      if (!saveRes.ok || !saveData.success) {
-        throw new Error(saveData.error || "Failed to record document metadata in database.");
-      }
 
       setUploadProgress(100);
       setSuccessMessage(
@@ -296,16 +331,16 @@ export default function DocsClient({
 
       // Add to local state
       const newDoc: DocItem = {
-        _id: saveData.data._id,
-        title: saveData.data.title,
-        originalName: saveData.data.originalName,
-        category: saveData.data.category,
-        subType: selectedSubtype || saveData.data.subType || "General Document",
-        entityId: saveData.data.entityId,
+        _id: savedRecord._id,
+        title: savedRecord.title,
+        originalName: savedRecord.originalName,
+        category: savedRecord.category,
+        subType: selectedSubtype || savedRecord.subType || "General Document",
+        entityId: savedRecord.entityId,
         entityName: resolvedEntityName,
-        mimeType: saveData.data.mimeType,
-        fileSize: saveData.data.fileSize,
-        s3Key: saveData.data.s3Key,
+        mimeType: savedRecord.mimeType,
+        fileSize: savedRecord.fileSize,
+        s3Key: savedRecord.s3Key,
         uploadedByName: currentUser.name,
         uploadedByRole: currentUser.role,
         uploadedById: currentUser.id,

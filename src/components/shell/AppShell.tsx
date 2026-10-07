@@ -1,15 +1,26 @@
 "use client";
 
+import React, { createContext, useContext, useState } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { TopBar, Breadcrumbs } from "@/components/shell";
 
+export const ShellContext = createContext<{
+  isStandalone: boolean;
+  setStandalone: (val: boolean) => void;
+}>({
+  isStandalone: false,
+  setStandalone: () => {},
+});
+
+export function useShell() {
+  return useContext(ShellContext);
+}
+
 /**
  * Decides between the public marketing chrome (landing `/`, about us,
- * legal and contact pages) and the authenticated dashboard shell
+ * legal, contact, and error pages) and the authenticated dashboard shell
  * (TopBar + Sidebar + Breadcrumbs).
- * Keeps public pages free of dashboard chrome so they can mirror
- * developer.microsoft.com exactly and stay crawlable for AdSense/SEO.
  */
 const PUBLIC_MARKETING_PATHS = new Set([
   "/",
@@ -17,18 +28,26 @@ const PUBLIC_MARKETING_PATHS = new Set([
   "/privacy",
   "/terms",
   "/contact",
+  "/404",
+  "/500",
+  "/not-found",
 ]);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "";
+  const [isStandalone, setIsStandalone] = useState(false);
 
-  // Public marketing surface — no dashboard chrome.
-  if (PUBLIC_MARKETING_PATHS.has(pathname)) {
-    return <>{children}</>;
+  // Standalone public/error page surface — no dashboard chrome
+  if (isStandalone || PUBLIC_MARKETING_PATHS.has(pathname)) {
+    return (
+      <ShellContext.Provider value={{ isStandalone, setStandalone: setIsStandalone }}>
+        {children}
+      </ShellContext.Provider>
+    );
   }
 
   return (
-    <>
+    <ShellContext.Provider value={{ isStandalone, setStandalone: setIsStandalone }}>
       <TopBar />
       <div className="flex-1 flex flex-col xl:flex-row w-full max-w-[1920px] mx-auto min-h-[calc(100vh-48px)]">
         <Sidebar />
@@ -37,6 +56,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
-    </>
+    </ShellContext.Provider>
   );
 }

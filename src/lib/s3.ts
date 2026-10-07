@@ -154,3 +154,36 @@ export async function deleteS3Object(s3Key: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Direct server-side upload fallback to S3 in case direct browser PUT fails (e.g., due to client-side CORS or proxy blocks)
+ */
+export async function uploadFileToS3(
+  s3Key: string,
+  buffer: Buffer,
+  contentType: string
+): Promise<boolean> {
+  if (!isAwsConfigured()) return true;
+
+  try {
+    const putParams: any = {
+      Bucket: bucketName,
+      Key: s3Key,
+      Body: buffer,
+      ContentType: contentType,
+    };
+
+    if (kmsKeyId) {
+      putParams.ServerSideEncryption = "aws:kms";
+      putParams.SSEKMSKeyId = kmsKeyId;
+    }
+
+    const command = new PutObjectCommand(putParams);
+    await s3Client.send(command);
+    return true;
+  } catch (err) {
+    console.error("Failed to upload object to S3 directly from server:", err);
+    throw err;
+  }
+}
+

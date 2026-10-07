@@ -28,6 +28,9 @@ const PUBLIC_MARKETING_PATHS = new Set([
   "/privacy",
   "/terms",
   "/contact",
+  "/404",
+  "/500",
+  "/not-found",
 ]);
 
 // Known top-level standard routes

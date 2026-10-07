@@ -3,9 +3,7 @@
 import React, { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   ArrowRight,
   BadgeDollarSign,
   Briefcase,
@@ -14,14 +12,12 @@ import {
   Compass,
   FileText,
   FolderKanban,
-  GitGraph,
   HelpCircle,
   Home,
   LayoutDashboard,
   RotateCcw,
   ShieldCheck,
   TrendingUp,
-  Users,
 } from "lucide-react";
 import { useShell } from "@/components/shell/AppShell";
 
@@ -36,15 +32,23 @@ const quickLinks = [
   { icon: FileText, label: "Document Vault", href: "/docs", desc: "S3 presigned storage" },
 ];
 
-export default function NotFound() {
-  const router = useRouter();
+export default function RootErrorBoundary({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
   const { setStandalone } = useShell();
 
-  // Ensure standalone layout inside AppShell without double header or sidebar
   useEffect(() => {
     setStandalone(true);
     return () => setStandalone(false);
   }, [setStandalone]);
+
+  useEffect(() => {
+    console.error("Runtime error caught by root boundary:", error);
+  }, [error]);
 
   return (
     <div className="min-h-screen bg-[#f2f2f2] dark:bg-[#111214] text-[#242424] dark:text-[#E4E4E7] antialiased flex flex-col">
@@ -83,39 +87,38 @@ export default function NotFound() {
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-10">
           <div className="md:w-1/2 space-y-5">
             <span className="inline-block bg-[#005a9e] text-[11px] font-semibold px-2.5 py-1 uppercase tracking-wider rounded-sm">
-              Error 404 · Route Not Found
+              Error 500 · Server Processing Fault
             </span>
             <h1 className="text-4xl md:text-5xl font-light tracking-tight leading-[1.1]">
-              The page you are looking for is unavailable.
+              An unexpected execution fault occurred.
             </h1>
             <p className="text-base sm:text-lg text-blue-100 font-light max-w-xl leading-relaxed">
-              The link may be outdated, the resource moved to another workspace, or the URL contains a typo.
-              Your underlying tenant data and AWS S3 document vault remain completely secure and isolated.
+              A runtime fault was intercepted while rendering this view. Your underlying tenant database and AWS S3 document vault remain completely secure and isolated.
             </p>
             <div className="flex flex-wrap items-center gap-3 pt-1">
-              <Link
-                href="/"
-                className="bg-white text-[#004578] px-5 py-2.5 font-semibold hover:bg-gray-100 transition-colors shadow-sm rounded-sm inline-flex items-center gap-2 text-sm"
+              <button
+                type="button"
+                onClick={() => reset()}
+                className="bg-white text-[#004578] px-5 py-2.5 font-semibold hover:bg-gray-100 transition-colors shadow-sm rounded-sm inline-flex items-center gap-2 text-sm cursor-pointer"
               >
-                <Home className="w-4 h-4" /> Return to Homepage
-              </Link>
+                <RotateCcw className="w-4 h-4" /> Try Again
+              </button>
               <Link
                 href="/exec/dashboard"
                 className="text-white border border-white/40 px-5 py-2.5 font-medium hover:bg-white/10 transition-colors rounded-sm inline-flex items-center gap-2 text-sm"
               >
                 <Compass className="w-4 h-4" /> Open Executive Dashboard
               </Link>
-              <button
-                type="button"
-                onClick={() => router.back()}
+              <Link
+                href="/"
                 className="text-blue-100 hover:text-white border border-transparent hover:border-white/20 px-4 py-2.5 font-medium transition-colors rounded-sm inline-flex items-center gap-1.5 text-sm"
               >
-                <ArrowLeft className="w-4 h-4" /> Go Back
-              </button>
+                <Home className="w-4 h-4" /> Return to Homepage
+              </Link>
             </div>
             <p className="text-xs text-blue-200/90 flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
-              Tenant boundary active · Isolated MongoDB perimeters preserved
+              Tenant database perimeter intact · Isolated company partitions verified
             </p>
           </div>
 
@@ -126,24 +129,26 @@ export default function NotFound() {
                 <div className="w-3 h-3 rounded-full bg-red-500/80" />
                 <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
                 <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
-                <span className="text-zinc-400 text-[11px] ml-2">diagnostic_session.log</span>
+                <span className="text-zinc-400 text-[11px] ml-2">runtime_fault_telemetry.log</span>
               </div>
               <div className="space-y-2 text-blue-100">
-                <p className="text-emerald-400 font-semibold">$ check_route_status --verbose</p>
+                <p className="text-amber-400 font-semibold">$ inspect_runtime_exception</p>
                 <p className="text-zinc-300">
-                  <span className="text-zinc-400">STATUS:</span> <span className="text-amber-300 font-bold">404 NOT_FOUND</span>
+                  <span className="text-zinc-400">HTTP_FAULT:</span> <span className="text-rose-400 font-bold">500 INTERNAL_SERVER_ERROR</span>
+                </p>
+                {error.digest && (
+                  <p className="text-zinc-300">
+                    <span className="text-zinc-400">DIGEST:</span> <span className="text-amber-200 font-mono text-[11px]">{error.digest}</span>
+                  </p>
+                )}
+                <p className="text-zinc-300">
+                  <span className="text-zinc-400">DATABASE:</span> <span className="text-emerald-300">Tenant-isolated MongoDB OK</span>
                 </p>
                 <p className="text-zinc-300">
-                  <span className="text-zinc-400">PERIMETER:</span> <span className="text-emerald-300">Verified & Secure</span>
-                </p>
-                <p className="text-zinc-300">
-                  <span className="text-zinc-400">DATABASE:</span> <span className="text-emerald-300">Tenant-isolated MongoDB</span>
-                </p>
-                <p className="text-zinc-300">
-                  <span className="text-zinc-400">S3_VAULT:</span> <span className="text-emerald-300">Presigned Pipelines Online</span>
+                  <span className="text-zinc-400">S3_VAULT:</span> <span className="text-emerald-300">Encrypted Pipelines OK</span>
                 </p>
                 <div className="pt-2 border-t border-white/10 text-zinc-400 text-[11px]">
-                  💡 Tip: Use the breadcrumb bar or quick links below to jump directly to any active workspace module.
+                  💡 Clicking &apos;Try Again&apos; attempts to re-render this route without needing a full browser restart.
                 </div>
               </div>
             </div>
