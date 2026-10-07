@@ -20,6 +20,16 @@ function decodeJwtPayload(token: string): any {
   }
 }
 
+// Public marketing surface (crawlable, no auth): landing, about us,
+// legal pages and contact. Everything else stays behind tenant auth.
+const PUBLIC_MARKETING_PATHS = new Set([
+  "/",
+  "/about",
+  "/privacy",
+  "/terms",
+  "/contact",
+]);
+
 // Known top-level standard routes
 const PROTECTED_ROOT_ROUTES = new Set([
   "exec",
@@ -53,6 +63,11 @@ export function middleware(req: NextRequest) {
 
   // 2. Allow root `/auth/login` and `/auth/signup` to pass
   if (pathname === "/auth/login" || pathname === "/auth/signup") {
+    return NextResponse.next();
+  }
+
+  // 2b. Public marketing pages pass through (landing, about, legal, contact)
+  if (PUBLIC_MARKETING_PATHS.has(pathname)) {
     return NextResponse.next();
   }
 
@@ -112,11 +127,10 @@ export function middleware(req: NextRequest) {
   }
 
   // 5. Handle direct un-prefixed routes: /exec/dashboard, /projects, etc.
-  if (PROTECTED_ROOT_ROUTES.has(firstSegment) || pathname === "/") {
+  if (PROTECTED_ROOT_ROUTES.has(firstSegment)) {
     // If authenticated and has companyCode, attach the organization code to the URL!
     if (isTokenValid && decoded.companyCode) {
-      const orgPath = pathname === "/" ? "/exec/dashboard" : pathname;
-      const orgScopedUrl = new URL(`/${decoded.companyCode}${orgPath}`, req.url);
+      const orgScopedUrl = new URL(`/${decoded.companyCode}${pathname}`, req.url);
       return NextResponse.redirect(orgScopedUrl);
     }
 

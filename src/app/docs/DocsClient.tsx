@@ -1667,7 +1667,7 @@ export default function DocsClient({
                       </span>
                     </div>
                     <p className="text-[11px] text-gray-600 dark:text-zinc-400 mt-1">
-                      Removes the metadata reference and index from TaskFlow PM vault. The raw binary file remains safely archived in your AWS S3 bucket (<code className="text-[11px] font-mono">taskflow-pm-storage-prod</code>) for compliance backups.
+                      Removes the metadata reference and index from TaskPMS vault. The raw binary file remains safely archived in your AWS S3 bucket (<code className="text-[11px] font-mono">taskflow-pm-storage-prod</code>) for compliance backups.
                     </p>
                   </div>
                 </div>
@@ -1699,7 +1699,7 @@ export default function DocsClient({
                       </span>
                     </div>
                     <p className="text-[11px] text-gray-600 dark:text-zinc-400 mt-1">
-                      Permanently destroys the metadata in TaskFlow PM AND permanently wipes the binary file object directly from the AWS S3 bucket. <span className="font-bold text-red-600 dark:text-red-400">Recovery is completely impossible.</span>
+                      Permanently destroys the metadata in TaskPMS AND permanently wipes the binary file object directly from the AWS S3 bucket. <span className="font-bold text-red-600 dark:text-red-400">Recovery is completely impossible.</span>
                     </p>
                   </div>
                 </div>

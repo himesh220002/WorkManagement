@@ -1,4 +1,4 @@
-# TaskFlow PM (WorkManagement)
+# TaskPMS (WorkManagement)
 
 Enterprise-grade Work, Project, and Team Management Operating System built with Next.js 16 (App Router), React 19, TypeScript, and MongoDB (Mongoose 9). Designed according to the Microsoft Fluent 2 design language principles.
 

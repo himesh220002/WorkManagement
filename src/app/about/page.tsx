@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { Badge } from "@/components/ui/Badge";
 import {
   FolderKanban,
@@ -18,6 +19,13 @@ import {
   Database,
   Cpu,
 } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "About Us",
+  description:
+    "About TaskPMS: the enterprise operating system synchronizing engineering delivery, sales pipelines and revenue — multi-tenant architecture, 5-tier RBAC and S3 document vault.",
+  alternates: { canonical: "/about" },
+};
 
 export default function AboutPage() {
   return (

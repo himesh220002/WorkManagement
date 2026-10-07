@@ -175,7 +175,7 @@ export default function RegisterMemberForm({ defaultCompanyCode }: RegisterMembe
     const orgId = createdCredentials.companyCode || defaultCompanyCode || "ORG001";
     const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
     const loginPortal = `${origin}/${orgId}/auth/login`;
-    const text = `TaskFlow PM Login Credentials\nOrganization ID: ${orgId}\nName: ${createdCredentials.name}\nRole: ${createdCredentials.role.toUpperCase()}\nEmail: ${createdCredentials.email}\nInitial Password: ${createdCredentials.password}\nLogin Portal: ${loginPortal}`;
+    const text = `TaskPMS Login Credentials\nOrganization ID: ${orgId}\nName: ${createdCredentials.name}\nRole: ${createdCredentials.role.toUpperCase()}\nEmail: ${createdCredentials.email}\nInitial Password: ${createdCredentials.password}\nLogin Portal: ${loginPortal}`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);

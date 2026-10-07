@@ -1,6 +1,6 @@
 {
     "meta": {
-        "project": "WorkManagement (TaskFlow PM)",
+        "project": "WorkManagement (TaskPMS)",
         "stack": "Next.js 16 App Router, React 19, TypeScript, Tailwind v4, Mongoose 9 / MongoDB",
         "planVersion": "1.1.3",
         "createdAt": "2026-10-05",

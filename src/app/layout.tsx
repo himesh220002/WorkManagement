@@ -2,16 +2,66 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import "./frappe-gantt.css";
-import Sidebar from "@/components/Sidebar";
-import { TopBar, Breadcrumbs } from "@/components/shell";
+import { AppShell } from "@/components/shell/AppShell";
+import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import { ToastProvider } from "@/components/ui/Toast";
 import NextTopLoader from "nextjs-toploader";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-body" });
 
+const SITE_URL = "https://taskpms.com";
+
 export const metadata: Metadata = {
-  title: "TaskFlow PM - Enterprise Dashboard",
-  description: "Advanced Enterprise Task, Project & Resource Management Suite",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "TaskPMS — Task Project Management System for Modern Enterprises",
+    template: "%s · TaskPMS",
+  },
+  description:
+    "TaskPMS is a multi-tenant task project management system with isolated company databases, 5-tier permission management (RBAC), AWS S3 document vault, Gantt timelines and revenue pipelines.",
+  keywords: [
+    "task management system",
+    "task project management system",
+    "project management software",
+    "multi-tenant project management",
+    "permission management system",
+    "role based access control software",
+    "team task tracker",
+    "sales pipeline software",
+    "revenue dashboard",
+    "gantt chart online",
+    "document management system",
+    "enterprise work management",
+  ],
+  authors: [{ name: "TaskPMS" }],
+  creator: "TaskPMS",
+  alternates: { canonical: "/" },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large" },
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: SITE_URL,
+    siteName: "TaskPMS",
+    title: "TaskPMS — Task Project Management System for Modern Enterprises",
+    description:
+      "Isolated workspaces per company, 5-tier permission management, S3 document vault, Gantt timelines, sales and revenue pipelines. First month free.",
+    images: [{ url: "/logo.svg", width: 196, height: 40, alt: "TaskPMS logo" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TaskPMS — Task Project Management System for Modern Enterprises",
+    description:
+      "Multi-tenant task management with isolated databases, granular RBAC and a secure S3 document vault.",
+    images: ["/logo.svg"],
+  },
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icon.svg", type: "image/svg+xml" }],
+  },
 };
 
 const themeInitScript = `(function() {
@@ -45,15 +95,9 @@ export default function RootLayout({
         className={`${inter.variable} antialiased min-h-screen flex flex-col bg-[#FAF9F8] dark:bg-[#1B1A19]`}
       >
         <NextTopLoader color="#0078D4" height={2} showSpinner={false} />
+        <GoogleAnalytics />
         <ToastProvider>
-          <TopBar />
-          <div className="flex-1 flex flex-col xl:flex-row w-full max-w-[1920px] mx-auto min-h-[calc(100vh-48px)]">
-            <Sidebar />
-            <main className="flex-1 min-w-0 p-2 sm:p-4 lg:p-6 overflow-x-hidden">
-              <Breadcrumbs />
-              {children}
-            </main>
-          </div>
+          <AppShell>{children}</AppShell>
         </ToastProvider>
       </body>
     </html>

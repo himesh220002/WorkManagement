@@ -8,7 +8,7 @@ import MyWorkClient from "@/app/my-work/MyWorkClient";
 import { fetchWithCache } from "@/lib/cache";
 
 export const metadata = {
-  title: "My Work | TaskFlow PM",
+  title: "My Work | TaskPMS",
   description: "Personal workspace with assigned tasks, pipelines, and deals",
 };
 

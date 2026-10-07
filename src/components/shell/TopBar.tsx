@@ -76,13 +76,13 @@ export function TopBar() {
           </button>
 
           <Link
-            href="/exec/dashboard"
+            href="/"
             className="flex items-center gap-2 font-semibold text-xs sm:text-sm text-[#242424] dark:text-white hover:text-[#0078D4] dark:hover:text-[#479EF5] transition-colors shrink-0"
           >
             <div className="w-6 h-6 rounded-[4px] bg-[#0078D4] flex items-center justify-center text-white shadow-sm">
               <LayoutGrid className="w-3.5 h-3.5" />
             </div>
-            <span className="font-bold tracking-tight">TaskFlow PM</span>
+            <span className="font-bold tracking-tight">TaskPMS</span>
           </Link>
         </div>
 

@@ -153,7 +153,7 @@ export function MobileNavDrawer({
               <div className="w-6 h-6 rounded-[4px] bg-[#0078D4] flex items-center justify-center text-white shadow-sm">
                 <LayoutGrid className="w-3.5 h-3.5" />
               </div>
-              <span>TaskFlow PM</span>
+              <span>TaskPMS</span>
             </Link>
 
             <div className="flex items-center gap-1.5">

@@ -1,0 +1,5 @@
+# Prevent duplicate-content indexing on the Cloudflare Pages preview domain.
+# Replace `taskpms` with your actual Pages project subdomain after first deploy,
+# then redeploy so the header is served. The .com domain is unaffected.
+https://taskpms.pages.dev/*
+  X-Robots-Tag: noindex
