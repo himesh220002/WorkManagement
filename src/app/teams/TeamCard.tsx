@@ -403,7 +403,7 @@ export default function TeamCard({ team, allUsers, currentRole, currentUserId }:
                     value={selectedAddUserId}
                     onChange={(e) => setSelectedAddUserId(e.target.value)}
                     required
-                    className="flex-1 p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none cursor-pointer"
+                    className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none cursor-pointer"
                   >
                     <option value="">Select company member to assign...</option>
                     {availableUsersToRotate.map((u) => (

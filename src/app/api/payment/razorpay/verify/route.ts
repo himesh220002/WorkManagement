@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const planId: "monthly" | "annual" = plan === "annual" ? "annual" : "monthly";
+    const planId: "monthly" | "quarterly" | "annual" =
+      plan === "annual" ? "annual" : plan === "quarterly" ? "quarterly" : "monthly";
     const selectedPlan = PRICING_PLANS[planId];
 
     const isValid = verifyRazorpaySignature(orderId, paymentId, signature || "");

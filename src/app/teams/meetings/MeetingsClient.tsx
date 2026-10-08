@@ -1013,24 +1013,98 @@ export default function MeetingsClient({
                 </div>
               )}
 
-              {/* Custom Meeting Link / Override */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
-                  Direct Meeting Link (Leave empty to auto-generate)
-                </label>
-                <input
-                  type="text"
-                  value={formMeetingLink}
-                  onChange={(e) => setFormMeetingLink(e.target.value)}
-                  placeholder={
-                    formPlatform === "zoom"
-                      ? "https://zoom.us/j/..."
-                      : formPlatform === "discord"
-                      ? "https://discord.gg/..."
-                      : "https://meet.google.com/xxx-yyyy-zzz"
-                  }
-                  className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-xs text-gray-900 dark:text-white outline-none focus:border-[#0078D4]"
-                />
+              {/* Custom Direct Meeting Link with Live Generator Link & Paste */}
+              <div className="space-y-2 p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-[#FAF9F8] dark:bg-[#222120]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <label className="block text-xs font-semibold text-gray-800 dark:text-gray-200">
+                    Direct Meeting URL (Recommended for reliable attendance)
+                  </label>
+
+                  {/* Provider Direct Scheduler Launcher Button */}
+                  {(() => {
+                    const launcher =
+                      formPlatform === "google_meet"
+                        ? {
+                            url: "https://meet.google.com/new",
+                            label: "Create Google Meet Room ↗",
+                            color: "bg-emerald-600 hover:bg-emerald-700 text-white",
+                          }
+                        : formPlatform === "zoom"
+                        ? {
+                            url: "https://zoom.us/meeting/schedule",
+                            label: "Schedule on Zoom ↗",
+                            color: "bg-sky-600 hover:bg-sky-700 text-white",
+                          }
+                        : formPlatform === "slack"
+                        ? {
+                            url: "https://app.slack.com/",
+                            label: "Open Slack App ↗",
+                            color: "bg-purple-600 hover:bg-purple-700 text-white",
+                          }
+                        : formPlatform === "discord"
+                        ? {
+                            url: "https://discord.com/app",
+                            label: "Open Discord & Copy Channel Link ↗",
+                            color: "bg-[#5865F2] hover:bg-[#4752C4] text-white",
+                          }
+                        : null;
+
+                    if (!launcher) return null;
+                    return (
+                      <a
+                        href={launcher.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-semibold transition-colors shrink-0 ${launcher.color}`}
+                        title="Open official provider in a new tab to create and copy a real, permanent room URL"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>{launcher.label}</span>
+                      </a>
+                    );
+                  })()}
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={formMeetingLink}
+                    onChange={(e) => setFormMeetingLink(e.target.value)}
+                    placeholder={
+                      formPlatform === "google_meet"
+                        ? "https://meet.google.com/xxx-yyyy-zzz"
+                        : formPlatform === "zoom"
+                        ? "https://zoom.us/j/94827103819"
+                        : formPlatform === "slack"
+                        ? "https://app.slack.com/client/T000/C000"
+                        : formPlatform === "discord"
+                        ? "https://discord.gg/your-channel or https://discord.com/channels/..."
+                        : "Enter room or location link"
+                    }
+                    className="flex-1 p-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1E1E1E] text-xs text-gray-900 dark:text-white outline-none focus:border-[#0078D4]"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const clip = await navigator.clipboard.readText();
+                        if (clip) setFormMeetingLink(clip.trim());
+                      } catch {
+                        // ignore permission denial
+                      }
+                    }}
+                    className="px-3.5 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] hover:bg-gray-100 dark:hover:bg-[#2E2D2B] text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5 cursor-pointer shrink-0"
+                    title="Paste copied URL from your clipboard"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-gray-400" />
+                    <span>Paste</span>
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  Tip: Click the button above to launch <strong>{formPlatform === "google_meet" ? "Google Meet" : formPlatform === "zoom" ? "Zoom" : formPlatform === "slack" ? "Slack" : "Discord"}</strong>, copy your generated URL, and paste it here so the meeting link always works for invitees.
+                </p>
               </div>
 
               {/* Date, Time & Duration */}

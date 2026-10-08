@@ -148,6 +148,43 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // Check subscription validity & account hold for non-superusers
+      if (companyData && companyData.subscription?.currentPeriodEnd) {
+        const endDate = new Date(companyData.subscription.currentPeriodEnd);
+        const now = new Date();
+        const isExpired = endDate < now;
+
+        if (isExpired) {
+          const isOwner = (user.role || "").toLowerCase() === "owner";
+          if (!isOwner) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: `Workspace Access On Hold: Organization '${companyData.name}' subscription expired on ${endDate.toLocaleDateString()}. Workspace access is currently on hold. Please contact your Organization Owner to renew via Razorpay.`,
+                isSubscriptionExpired: true,
+                isOwner: false,
+                companyName: companyData.name,
+              },
+              { status: 403 }
+            );
+          } else {
+            return NextResponse.json(
+              {
+                success: false,
+                error: `Your organization subscription expired on ${endDate.toLocaleDateString()}. Please renew your subscription to reactivate workspace access for all team members.`,
+                isSubscriptionExpired: true,
+                isOwner: true,
+                companyCode: companyData.companyCode,
+                companyName: companyData.name,
+                ownerEmail: user.email,
+                planId: companyData.subscription.planId || "monthly",
+              },
+              { status: 402 }
+            );
+          }
+        }
+      }
+
       // If user specified a companyCode, verify it matches
       if (companyCode) {
         const targetCode = companyCode.trim().toUpperCase();

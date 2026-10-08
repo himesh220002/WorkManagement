@@ -31,6 +31,7 @@ import {
   Mic,
   Hash,
   Link2,
+  Copy,
 } from "lucide-react";
 import { addClientAccount, updateClientStage, addClientInteraction, deleteClientAccount } from "@/actions/crm";
 import { createMeeting } from "@/actions/meetings";
@@ -1246,18 +1247,78 @@ export default function CrmClient({
                 </div>
               </div>
 
-              {/* Direct Link (optional override) */}
-              <div>
-                <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  Custom Meeting URL (Optional override)
-                </label>
-                <input
-                  type="text"
-                  value={cmMeetingLink}
-                  onChange={(e) => setCmMeetingLink(e.target.value)}
-                  placeholder="Leave empty to auto-generate platform URL"
-                  className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-gray-900 dark:text-white outline-none"
-                />
+              {/* Direct Link (optional override) with Live Provider Launcher */}
+              <div className="space-y-1.5 p-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-[#FAF9F8] dark:bg-[#1E1E1E]">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block font-semibold text-gray-700 dark:text-gray-300">
+                    Direct Meeting URL (Paste real link)
+                  </label>
+
+                  {(() => {
+                    const launcher =
+                      cmPlatform === "google_meet"
+                        ? { url: "https://meet.google.com/new", label: "Create Google Meet ↗", color: "bg-emerald-600 hover:bg-emerald-700" }
+                        : cmPlatform === "zoom"
+                        ? { url: "https://zoom.us/meeting/schedule", label: "Schedule on Zoom ↗", color: "bg-sky-600 hover:bg-sky-700" }
+                        : cmPlatform === "slack"
+                        ? { url: "https://app.slack.com/", label: "Open Slack ↗", color: "bg-purple-600 hover:bg-purple-700" }
+                        : cmPlatform === "discord"
+                        ? { url: "https://discord.com/app", label: "Open Discord ↗", color: "bg-[#5865F2] hover:bg-[#4752C4]" }
+                        : null;
+
+                    if (!launcher) return null;
+                    return (
+                      <a
+                        href={launcher.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-semibold text-white ${launcher.color}`}
+                        title="Open official platform to generate a real room link"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>{launcher.label}</span>
+                      </a>
+                    );
+                  })()}
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={cmMeetingLink}
+                    onChange={(e) => setCmMeetingLink(e.target.value)}
+                    placeholder={
+                      cmPlatform === "google_meet"
+                        ? "https://meet.google.com/xxx-yyyy-zzz"
+                        : cmPlatform === "zoom"
+                        ? "https://zoom.us/j/94827103819"
+                        : cmPlatform === "slack"
+                        ? "https://app.slack.com/client/T000/C000"
+                        : "https://discord.gg/your-channel or https://discord.com/..."
+                    }
+                    className="flex-1 p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-gray-900 dark:text-white outline-none"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const clip = await navigator.clipboard.readText();
+                        if (clip) setCmMeetingLink(clip.trim());
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] hover:bg-gray-100 text-[11px] font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1 cursor-pointer shrink-0"
+                    title="Paste from clipboard"
+                  >
+                    <Copy className="w-3 h-3 text-gray-400" />
+                    <span>Paste</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-400">
+                  Click the button above to launch your provider, copy your genuine room URL, and paste it here.
+                </p>
               </div>
 
               {/* Attendees */}

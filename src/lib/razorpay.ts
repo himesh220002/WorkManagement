@@ -1,31 +1,53 @@
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 
+export type PlanId = "monthly" | "quarterly" | "annual";
+
 export interface PricingPlan {
-  id: "monthly" | "annual";
+  id: PlanId;
   name: string;
   usdAmount: number;
   inrAmount: number; // For Razorpay INR default currency
-  billingCycle: "month" | "year";
+  billingCycle: "month" | "quarter" | "year";
+  durationMonths: number;
   description: string;
   discountBadge?: string;
   features: string[];
 }
 
-export const PRICING_PLANS: Record<"monthly" | "annual", PricingPlan> = {
+export const PRICING_PLANS: Record<PlanId, PricingPlan> = {
   monthly: {
     id: "monthly",
     name: "Enterprise Monthly",
     usdAmount: 20,
     inrAmount: 1699,
     billingCycle: "month",
+    durationMonths: 1,
     description: "Full enterprise access with month-to-month flexibility.",
     features: [
       "Dedicated isolated MongoDB database (projectManageDB_{CODE})",
       "All Executive, Dev, Sales, Revenue & Resource dashboards",
       "Unlimited parallel execution pipelines & Gantt timelines",
       "AWS S3 presigned document vault & 4 security tiers",
-      "5 RBAC roles (Owner, Superuser, Manager, Team Lead, Employee)",
+      "Enterprise hierarchy (Owner, Managers, Team Leads, Employees)",
+    ],
+  },
+  quarterly: {
+    id: "quarterly",
+    name: "Enterprise Quarterly (3 Months)",
+    usdAmount: 55,
+    inrAmount: 4699,
+    billingCycle: "quarter",
+    durationMonths: 3,
+    description: "3-Month scaling runway. Save $5 compared to month-to-month.",
+    discountBadge: "Save $5 (3 Months)",
+    features: [
+      "Dedicated isolated MongoDB database (projectManageDB_{CODE})",
+      "All Executive, Dev, Sales, Revenue & Resource dashboards",
+      "Unlimited parallel execution pipelines & Gantt timelines",
+      "AWS S3 presigned document vault & 4 security tiers",
+      "Enterprise hierarchy (Owner, Managers, Team Leads, Employees)",
+      "Continuous workspace access with 3-month billing cadence",
     ],
   },
   annual: {
@@ -34,6 +56,7 @@ export const PRICING_PLANS: Record<"monthly" | "annual", PricingPlan> = {
     usdAmount: 200,
     inrAmount: 16999,
     billingCycle: "year",
+    durationMonths: 12,
     description: "Best value for growing companies. Save $40 / 17% every year.",
     discountBadge: "Save 17% ($40/yr)",
     features: [
@@ -41,7 +64,7 @@ export const PRICING_PLANS: Record<"monthly" | "annual", PricingPlan> = {
       "All Executive, Dev, Sales, Revenue & Resource dashboards",
       "Unlimited parallel execution pipelines & Gantt timelines",
       "AWS S3 presigned document vault & 4 security tiers",
-      "5 RBAC roles (Owner, Superuser, Manager, Team Lead, Employee)",
+      "Enterprise hierarchy (Owner, Managers, Team Leads, Employees)",
       "Priority customer onboarding & dedicated technical support",
     ],
   },
@@ -103,7 +126,7 @@ const PAYMENT_JWT_SECRET = process.env.JWT_SECRET || "taskflow-super-secure-jwt-
  * Issues a cryptographically signed payment verification token after successful payment
  */
 export function createPaymentVerificationToken(data: {
-  plan: "monthly" | "annual";
+  plan: PlanId;
   orderId: string;
   paymentId: string;
   amount: number;

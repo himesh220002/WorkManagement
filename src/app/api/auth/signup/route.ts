@@ -91,6 +91,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const rawPlan = (plan || "monthly").toLowerCase();
+    const planId: "monthly" | "quarterly" | "annual" =
+      rawPlan === "annual" ? "annual" : rawPlan === "quarterly" ? "quarterly" : "monthly";
+
+    const startDate = new Date();
+    const currentPeriodEnd = new Date(startDate);
+    if (planId === "annual") {
+      currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
+    } else if (planId === "quarterly") {
+      currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 3);
+    } else {
+      currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
+    }
+
+    const planName =
+      planId === "annual"
+        ? "Enterprise Annual ($200/yr)"
+        : planId === "quarterly"
+        ? "Enterprise Quarterly ($55/3mo)"
+        : "Enterprise Monthly ($20/mo)";
+
+    const amountUsd = planId === "annual" ? 200 : planId === "quarterly" ? 55 : 20;
+
     // 1. Create company in transaction
     const [company] = await Company.create(
       [
@@ -100,7 +123,16 @@ export async function POST(req: NextRequest) {
           subdomain: normalizedSlug,
           companyCode: code,
           industry: industry || "Technology",
-          plan: plan === "annual" ? "Enterprise Annual ($200/yr)" : "Enterprise Monthly ($20/mo)",
+          plan: planName,
+          subscription: {
+            planId,
+            planName,
+            startDate,
+            currentPeriodEnd,
+            status: "active",
+            razorpayPaymentId: body.paymentId || undefined,
+            amountUsd,
+          },
           status: CompanyStatus.Active,
           settings: {
             currency: "USD",

@@ -25,6 +25,17 @@ import {
   MetricTypeType,
 } from "./enums";
 
+export interface ICompanySubscription {
+  planId: "monthly" | "quarterly" | "annual";
+  planName?: string;
+  startDate: Date | string;
+  currentPeriodEnd: Date | string;
+  status: "active" | "past_due" | "expired" | "canceled";
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
+  amountUsd?: number;
+}
+
 export interface ICompany {
   _id: string | Types.ObjectId;
   name: string;
@@ -32,6 +43,7 @@ export interface ICompany {
   subdomain?: string;
   companyCode?: string;
   plan?: string;
+  subscription?: ICompanySubscription;
   logoUrl?: string;
   industry?: string;
   fiscalYearStart?: string;

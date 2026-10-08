@@ -4,3 +4,4 @@ export * from "./ContextSwitcher";
 export * from "./GlobalSearch";
 export * from "./MobileNavDrawer";
 export * from "./PersonaSwitcher";
+export * from "./SubscriptionBanner";

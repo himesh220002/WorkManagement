@@ -14,7 +14,7 @@ import {
   ArrowRight,
   Database,
 } from "lucide-react";
-import { PRICING_PLANS } from "@/lib/razorpay";
+import { PRICING_PLANS, PlanId } from "@/lib/razorpay";
 
 declare global {
   interface Window {
@@ -28,12 +28,14 @@ interface RazorpayCheckoutModalProps {
   onPaymentSuccess?: (paymentData: {
     verificationToken: string;
     paymentId: string;
-    plan: "monthly" | "annual";
+    plan: PlanId;
     planName: string;
   }) => void;
-  defaultPlan?: "monthly" | "annual";
+  defaultPlan?: PlanId;
   companyNameHint?: string;
   emailHint?: string;
+  title?: string;
+  subtitle?: string;
 }
 
 export default function RazorpayCheckoutModal({
@@ -43,8 +45,10 @@ export default function RazorpayCheckoutModal({
   defaultPlan = "monthly",
   companyNameHint = "",
   emailHint = "",
+  title = "Enterprise Direct Paywall & Subscription",
+  subtitle = "Secure checkout via Razorpay · Instant organization workspace provisioning",
 }: RazorpayCheckoutModalProps) {
-  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "annual">(defaultPlan);
+  const [selectedPlan, setSelectedPlan] = useState<PlanId>(defaultPlan);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [isSandboxMode, setIsSandboxMode] = useState(false);
@@ -160,7 +164,7 @@ export default function RazorpayCheckoutModal({
     orderId: string;
     paymentId: string;
     signature: string;
-    plan: "monthly" | "annual";
+    plan: PlanId;
   }) => {
     try {
       const verifyRes = await fetch("/api/payment/razorpay/verify", {
@@ -197,7 +201,7 @@ export default function RazorpayCheckoutModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-[#1E1E1E] rounded-xl border border-[#E1DFDD] dark:border-[#3B3A39] shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="relative w-full max-w-3xl bg-white dark:bg-[#1E1E1E] rounded-xl border border-[#E1DFDD] dark:border-[#3B3A39] shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header Ribbon */}
         <div className="bg-gradient-to-r from-[#004578] via-[#0078D4] to-[#106EBE] p-5 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -205,12 +209,8 @@ export default function RazorpayCheckoutModal({
               <CreditCard className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h2 className="text-base font-bold tracking-tight">
-                Enterprise Direct Paywall & Subscription
-              </h2>
-              <p className="text-xs text-blue-100 font-light">
-                Secure checkout via Razorpay · Instant organization workspace provisioning
-              </p>
+              <h2 className="text-base font-bold tracking-tight">{title}</h2>
+              <p className="text-xs text-blue-100 font-light">{subtitle}</p>
             </div>
           </div>
           <button
@@ -235,9 +235,8 @@ export default function RazorpayCheckoutModal({
           <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
             <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div>
-              <span className="font-bold">Strict Paywall Active: </span>
-              Free trial has been retired. New organizations require an active subscription
-              ($20/month or $200/year) to unlock dedicated multi-tenant databases and team workspaces.
+              <span className="font-bold">Enterprise Subscription Active: </span>
+              All company workspaces run in isolated database perimeters with multi-tenant encryption. Choose Monthly ($20), 3-Month ($55), or Annual ($200) to activate or restore access.
             </div>
           </div>
 
@@ -247,11 +246,11 @@ export default function RazorpayCheckoutModal({
               Select Your Subscription Plan
             </label>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Monthly Plan */}
               <div
                 onClick={() => setSelectedPlan("monthly")}
-                className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between relative ${
+                className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between relative ${
                   selectedPlan === "monthly"
                     ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-sm"
                     : "border-[#E1DFDD] dark:border-[#3B3A39] hover:border-gray-400 dark:hover:border-gray-600 bg-white dark:bg-[#252423]"
@@ -259,7 +258,7 @@ export default function RazorpayCheckoutModal({
               >
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-sm text-[#242424] dark:text-white">
+                    <span className="font-bold text-xs text-[#242424] dark:text-white">
                       {PRICING_PLANS.monthly.name}
                     </span>
                     <span
@@ -272,36 +271,78 @@ export default function RazorpayCheckoutModal({
                       {selectedPlan === "monthly" && <Check className="w-2.5 h-2.5 text-white" />}
                     </span>
                   </div>
-                  <div className="mb-2">
-                    <span className="text-2xl font-bold text-[#242424] dark:text-white">$20</span>
-                    <span className="text-xs text-[#605E5C] dark:text-[#A19F9D]"> USD / month</span>
+                  <div className="mb-1.5">
+                    <span className="text-xl font-bold text-[#242424] dark:text-white">$20</span>
+                    <span className="text-[11px] text-[#605E5C] dark:text-[#A19F9D]"> USD / mo</span>
                   </div>
-                  <p className="text-[11px] text-[#605E5C] dark:text-[#C8C6C4]">
+                  <p className="text-[10px] text-[#605E5C] dark:text-[#C8C6C4] leading-snug">
                     {PRICING_PLANS.monthly.description}
                   </p>
                 </div>
-                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 text-[10px] text-gray-500">
-                  Renews monthly · Cancel anytime
+                <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-gray-800 text-[9px] text-gray-500">
+                  Renews monthly
+                </div>
+              </div>
+
+              {/* 3-Month Quarterly Plan */}
+              <div
+                onClick={() => setSelectedPlan("quarterly")}
+                className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between relative ${
+                  selectedPlan === "quarterly"
+                    ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-sm"
+                    : "border-[#E1DFDD] dark:border-[#3B3A39] hover:border-gray-400 dark:hover:border-gray-600 bg-white dark:bg-[#252423]"
+                }`}
+              >
+                {PRICING_PLANS.quarterly.discountBadge && (
+                  <span className="absolute -top-2.5 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#0078D4] text-white shadow-xs">
+                    {PRICING_PLANS.quarterly.discountBadge}
+                  </span>
+                )}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-xs text-[#242424] dark:text-white">
+                      3-Month Plan
+                    </span>
+                    <span
+                      className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        selectedPlan === "quarterly"
+                          ? "border-[#0078D4] bg-[#0078D4]"
+                          : "border-gray-400"
+                      }`}
+                    >
+                      {selectedPlan === "quarterly" && <Check className="w-2.5 h-2.5 text-white" />}
+                    </span>
+                  </div>
+                  <div className="mb-1.5">
+                    <span className="text-xl font-bold text-[#242424] dark:text-white">$55</span>
+                    <span className="text-[11px] text-[#605E5C] dark:text-[#A19F9D]"> USD / 3 mo</span>
+                  </div>
+                  <p className="text-[10px] text-[#605E5C] dark:text-[#C8C6C4] leading-snug">
+                    {PRICING_PLANS.quarterly.description}
+                  </p>
+                </div>
+                <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-gray-800 text-[9px] text-[#0078D4] dark:text-[#479EF5] font-semibold">
+                  Save $5 vs monthly
                 </div>
               </div>
 
               {/* Annual Plan */}
               <div
                 onClick={() => setSelectedPlan("annual")}
-                className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between relative ${
+                className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between relative ${
                   selectedPlan === "annual"
                     ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-sm"
                     : "border-[#E1DFDD] dark:border-[#3B3A39] hover:border-gray-400 dark:hover:border-gray-600 bg-white dark:bg-[#252423]"
                 }`}
               >
                 {PRICING_PLANS.annual.discountBadge && (
-                  <span className="absolute -top-2.5 right-3 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#107C10] text-white shadow-xs">
+                  <span className="absolute -top-2.5 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#107C10] text-white shadow-xs">
                     {PRICING_PLANS.annual.discountBadge}
                   </span>
                 )}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-sm text-[#242424] dark:text-white">
+                    <span className="font-bold text-xs text-[#242424] dark:text-white">
                       {PRICING_PLANS.annual.name}
                     </span>
                     <span
@@ -314,16 +355,16 @@ export default function RazorpayCheckoutModal({
                       {selectedPlan === "annual" && <Check className="w-2.5 h-2.5 text-white" />}
                     </span>
                   </div>
-                  <div className="mb-2">
-                    <span className="text-2xl font-bold text-[#242424] dark:text-white">$200</span>
-                    <span className="text-xs text-[#605E5C] dark:text-[#A19F9D]"> USD / year</span>
+                  <div className="mb-1.5">
+                    <span className="text-xl font-bold text-[#242424] dark:text-white">$200</span>
+                    <span className="text-[11px] text-[#605E5C] dark:text-[#A19F9D]"> USD / yr</span>
                   </div>
-                  <p className="text-[11px] text-[#605E5C] dark:text-[#C8C6C4]">
+                  <p className="text-[10px] text-[#605E5C] dark:text-[#C8C6C4] leading-snug">
                     {PRICING_PLANS.annual.description}
                   </p>
                 </div>
-                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                  Save $40 compared to monthly billing
+                <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-gray-800 text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                  Save 17% ($40/yr)
                 </div>
               </div>
             </div>

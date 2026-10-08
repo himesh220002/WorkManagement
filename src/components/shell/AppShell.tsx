@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
-import { TopBar, Breadcrumbs } from "@/components/shell";
+import { TopBar, Breadcrumbs, SubscriptionBanner } from "@/components/shell";
 import ShowcaseGuestCard from "@/components/showcase/ShowcaseGuestCard";
 
 export const ShellContext = createContext<{
@@ -50,6 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <ShellContext.Provider value={{ isStandalone, setStandalone: setIsStandalone }}>
       <TopBar />
+      <SubscriptionBanner />
       <div className="flex-1 flex flex-col xl:flex-row w-full max-w-[1920px] mx-auto min-h-[calc(100vh-48px)]">
         <Sidebar />
         <main className="flex-1 min-w-0 p-2 sm:p-4 lg:p-6 overflow-x-hidden">

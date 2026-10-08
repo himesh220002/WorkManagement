@@ -110,6 +110,7 @@ export async function addPipeline(formData: FormData) {
 export async function addLead(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
+  assertNotGuest(session);
   const name = formData.get("name") as string;
   const owner = formData.get("owner") as string;
   const status = formData.get("status") as string;
@@ -124,6 +125,7 @@ export async function addLead(formData: FormData) {
 export async function addCampaign(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
+  assertNotGuest(session);
   const name = formData.get("name") as string;
   const leadsGenerated = Number(formData.get("leadsGenerated")) || 0;
   const expectedRevenue = Number(formData.get("expectedRevenue")) || 0;
@@ -138,6 +140,7 @@ export async function addCampaign(formData: FormData) {
 export async function addDeal(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
+  assertNotGuest(session);
   const name = formData.get("name") as string;
   const amount = Number(formData.get("amount")) || 0;
   const stage = formData.get("stage") as string;
@@ -177,12 +180,15 @@ export async function updateDealStage(dealId: string, stage: string) {
   await connectToDatabase();
   await Deal.findByIdAndUpdate(dealId, { stage });
   const session = await getCurrentSession();
+  assertNotGuest(session);
   await syncTenantWrite("Deal", "update", dealId, { stage }, session.companyCode);
   revalidatePath("/revenue/dashboard");
 }
 
 export async function updateDeal(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const dealId = formData.get("dealId") as string;
   const name = formData.get("name") as string;
   const amount = Number(formData.get("amount")) || 0;
@@ -220,6 +226,7 @@ export async function deleteDeal(formData: FormData) {
   if (dealId) {
     await Deal.findByIdAndDelete(dealId);
     const session = await getCurrentSession();
+  assertNotGuest(session);
     await syncTenantWrite("Deal", "delete", dealId, undefined, session.companyCode);
     revalidatePath("/revenue/dashboard");
   }
@@ -229,12 +236,15 @@ export async function updateLeadStatus(leadId: string, status: string) {
   await connectToDatabase();
   await Lead.findByIdAndUpdate(leadId, { status });
   const session = await getCurrentSession();
+  assertNotGuest(session);
   await syncTenantWrite("Lead", "update", leadId, { status }, session.companyCode);
   revalidatePath("/sales/dashboard");
 }
 
 export async function updateLead(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const leadId = formData.get("leadId") as string;
   const name = formData.get("name") as string;
   const owner = formData.get("owner") as string;
@@ -258,6 +268,7 @@ export async function deleteLead(formData: FormData) {
   if (leadId) {
     await Lead.findByIdAndDelete(leadId);
     const session = await getCurrentSession();
+  assertNotGuest(session);
     await syncTenantWrite("Lead", "delete", leadId, undefined, session.companyCode);
     revalidatePath("/sales/dashboard");
   }
@@ -265,6 +276,8 @@ export async function deleteLead(formData: FormData) {
 
 export async function updateCampaign(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const campaignId = formData.get("campaignId") as string;
   const name = formData.get("name") as string;
   const leadsGenerated = Number(formData.get("leadsGenerated")) || 0;
@@ -285,6 +298,8 @@ export async function updateCampaign(formData: FormData) {
 
 export async function deleteCampaign(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const campaignId = formData.get("campaignId") as string;
   if (campaignId) {
     await Campaign.findByIdAndDelete(campaignId);
@@ -297,6 +312,7 @@ export async function deleteCampaign(formData: FormData) {
 export async function addGoal(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
+  assertNotGuest(session);
   const title = formData.get("title") as string;
   const description = formData.get("description") as string;
   const category = (formData.get("category") as string) || "Company";
@@ -339,6 +355,8 @@ export async function deleteTeam(formData: FormData) {
 
 export async function addUser(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const name = formData.get("name") as string;
   const role = formData.get("role") as string || "Member";
   if (name) {
@@ -350,6 +368,7 @@ export async function addUser(formData: FormData) {
 export async function addProject(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
+  assertNotGuest(session);
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;
   const category = (formData.get("category") as string) || "Internal";
@@ -370,6 +389,7 @@ export async function addProject(formData: FormData) {
 export async function addTarget(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
+  assertNotGuest(session);
   const name = formData.get("name") as string;
   const industry = formData.get("industry") as string;
   const region = formData.get("region") as string;
@@ -389,6 +409,8 @@ export async function addTarget(formData: FormData) {
 
 export async function toggleTargetChecklist(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const targetId = formData.get("targetId") as string;
   const taskIndex = Number(formData.get("taskIndex"));
 
@@ -404,6 +426,8 @@ export async function toggleTargetChecklist(formData: FormData) {
 
 export async function updateTargetChecklist(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const targetId = formData.get("targetId") as string;
   const taskName = formData.get("taskName") as string;
 
@@ -420,6 +444,8 @@ export async function updateTargetChecklist(formData: FormData) {
 
 export async function updatePipeline(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const pipelineId = formData.get("pipelineId") as string;
   const name = formData.get("name") as string;
   const category = formData.get("category") as string;
@@ -454,6 +480,7 @@ export async function updatePipelineProgress(taskId: string, progress: number) {
   if (taskId && taskId !== "demo1") {
     await Pipeline.findByIdAndUpdate(taskId, { progress });
     const session = await getCurrentSession();
+  assertNotGuest(session);
     await syncTenantWrite("Pipeline", "update", taskId, { progress }, session.companyCode);
     revalidatePath("/dev/timeline");
   }
@@ -464,6 +491,7 @@ export async function updatePipelineDates(taskId: string, startDate: string, end
   if (taskId && taskId !== "demo1") {
     await Pipeline.findByIdAndUpdate(taskId, { startDate, endDate });
     const session = await getCurrentSession();
+  assertNotGuest(session);
     await syncTenantWrite("Pipeline", "update", taskId, { startDate, endDate }, session.companyCode);
     revalidatePath("/dev/timeline");
   }
@@ -587,6 +615,7 @@ export async function deletePipeline(formData: FormData) {
 export async function addResourceAllocation(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
+  assertNotGuest(session);
   const name = formData.get("name") as string;
   const type = (formData.get("type") as string) || "Budget";
   const totalAllocated = Number(formData.get("totalAllocated")) || 0;
@@ -610,6 +639,7 @@ export async function addResourceAllocation(formData: FormData) {
 export async function updateResourceAllocation(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
+  assertNotGuest(session);
   const id = formData.get("id") as string;
   const name = formData.get("name") as string;
   const type = (formData.get("type") as string) || "Budget";
@@ -644,6 +674,7 @@ export async function updateResourceAllocation(formData: FormData) {
 export async function deleteResourceAllocation(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
+  assertNotGuest(session);
   const id = formData.get("id") as string;
   if (id) {
     const filter: any = { _id: id };
@@ -658,6 +689,7 @@ export async function deleteResourceAllocation(formData: FormData) {
 export async function addTaskNode(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
+  assertNotGuest(session);
   const rawName = formData.get("name") as string;
   const predefinedTask = formData.get("predefinedTask") as string;
   const name = predefinedTask ? (rawName ? `${predefinedTask} - ${rawName}` : predefinedTask) : rawName;
@@ -703,6 +735,7 @@ export async function addTaskNode(formData: FormData) {
 export async function updateTaskNode(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
+  assertNotGuest(session);
   const taskId = formData.get("taskId") as string;
   const name = formData.get("name") as string;
   const status = formData.get("status") as string;
@@ -733,6 +766,7 @@ export async function updateTaskNode(formData: FormData) {
 export async function addCycle(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
+  assertNotGuest(session);
   const name = formData.get("name") as string;
   const project = formData.get("projectId") as string;
   const startDate = formData.get("startDate") as string;
@@ -764,6 +798,8 @@ export async function addCycle(formData: FormData) {
 
 export async function deleteGoal(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const goalId = formData.get("goalId") as string;
   if (goalId) {
     await Goal.findByIdAndDelete(goalId);
@@ -778,6 +814,8 @@ export async function deleteGoal(formData: FormData) {
 
 export async function updateGoal(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const goalId = formData.get("goalId") as string;
   const title = formData.get("title") as string;
   const description = formData.get("description") as string;
@@ -798,6 +836,7 @@ export async function deleteTarget(formData: FormData) {
   if (targetId) {
     await Target.findByIdAndDelete(targetId);
     const session = await getCurrentSession();
+  assertNotGuest(session);
     await syncTenantWrite("Target", "delete", targetId, undefined, session.companyCode);
     revalidatePath("/revenue/targets");
     revalidatePath("/exec/dashboard");
@@ -806,6 +845,8 @@ export async function deleteTarget(formData: FormData) {
 
 export async function updateTarget(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const targetId = formData.get("targetId") as string;
   const name = formData.get("name") as string;
   const expectedValue = Number(formData.get("expectedValue")) || 0;
@@ -838,6 +879,8 @@ export async function updateTarget(formData: FormData) {
 // --- New Global Member Actions ---
 export async function registerUser(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const name = formData.get("name") as string;
   const role = formData.get("role") as string;
   const position = formData.get("position") as string;
@@ -851,6 +894,8 @@ export async function registerUser(formData: FormData) {
 
 export async function updateUserProfile(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const userId = formData.get("userId") as string;
   const status = formData.get("status") as string;
   const joinedDateStr = formData.get("joinedDate") as string;
@@ -870,6 +915,8 @@ export async function updateUserProfile(formData: FormData) {
 
 export async function linkUserToTeam(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const teamId = formData.get("teamId") as string;
   const userId = formData.get("userId") as string;
 
@@ -882,6 +929,8 @@ export async function linkUserToTeam(formData: FormData) {
 
 export async function unlinkUserFromTeam(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const teamId = formData.get("teamId") as string;
   const userId = formData.get("userId") as string;
 
@@ -894,6 +943,8 @@ export async function unlinkUserFromTeam(formData: FormData) {
 
 export async function updateMemberMeritStats(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const userId = formData.get("userId") as string;
   const performanceScore = Number(formData.get("performanceScore"));
   const completedProjectsCount = Number(formData.get("completedProjectsCount"));
@@ -921,6 +972,8 @@ export async function updateMemberMeritStats(formData: FormData) {
 
 export async function promoteMemberByMerit(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const userId = formData.get("userId") as string;
   const newRank = formData.get("newRank") as string;
 

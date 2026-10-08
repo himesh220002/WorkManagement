@@ -5,7 +5,8 @@ import Razorpay from "razorpay";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const planId: "monthly" | "annual" = body.plan === "annual" ? "annual" : "monthly";
+    const planId: "monthly" | "quarterly" | "annual" =
+      body.plan === "annual" ? "annual" : body.plan === "quarterly" ? "quarterly" : "monthly";
     const selectedPlan = PRICING_PLANS[planId];
     const currency = body.currency || "USD"; // USD or INR
 

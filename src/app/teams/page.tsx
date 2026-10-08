@@ -25,6 +25,7 @@ async function addTeam(formData: FormData) {
   "use server";
   await connectToDatabase();
   const session = await getCurrentSession();
+  if (session.isGuest || !session.userId) return;
   const name = formData.get("teamName") as string;
   const memberIds = formData.getAll("memberIds") as string[];
 

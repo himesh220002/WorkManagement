@@ -28,7 +28,7 @@ import {
   Check,
 } from "lucide-react";
 import RazorpayCheckoutModal from "@/components/payment/RazorpayCheckoutModal";
-import { PRICING_PLANS } from "@/lib/razorpay";
+import { PRICING_PLANS, PlanId } from "@/lib/razorpay";
 
 interface SessionData {
   user: {
@@ -52,7 +52,7 @@ interface SessionData {
   };
 }
 
-type PersonaKey = "owner" | "manager" | "teamlead" | "employee" | "superuser";
+type PersonaKey = "employee" | "owner" | "superuser";
 
 interface PersonaMeta {
   key: PersonaKey;
@@ -71,51 +71,9 @@ interface PersonaMeta {
 
 const PERSONA_CONFIGS: PersonaMeta[] = [
   {
-    key: "owner",
-    label: "Company Owner",
-    shortRole: "Founder & Owner",
-    icon: Crown,
-    tagline: "Free Hand: Create an organization or manage all staff, managers & projects",
-    badgeStyle: "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200",
-    accentBorder: "border-amber-500",
-    demoCreds: {
-      email: "sarah.connor@acme.corp",
-      pass: "OwnerSecure#2026",
-      company: "ACME",
-    },
-  },
-  {
-    key: "manager",
-    label: "Operations Manager",
-    shortRole: "Staffing & Roadmaps",
-    icon: Briefcase,
-    tagline: "Provisions employee credentials, sets initial passwords, assigns project Team Leads",
-    badgeStyle: "bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/60 dark:text-blue-200",
-    accentBorder: "border-blue-500",
-    demoCreds: {
-      email: "marcus.vance@acme.corp",
-      pass: "Manager#2026",
-      company: "ACME",
-    },
-  },
-  {
-    key: "teamlead",
-    label: "Project Team Lead",
-    shortRole: "Project Governance",
-    icon: Zap,
-    tagline: "Project-centric lead: controls assigned project agendas & reviews employee change requests",
-    badgeStyle: "bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-950/60 dark:text-purple-200",
-    accentBorder: "border-purple-500",
-    demoCreds: {
-      email: "priya.sharma@acme.corp",
-      pass: "LeadPass#2026",
-      company: "ACME",
-    },
-  },
-  {
     key: "employee",
     label: "Company Employee",
-    shortRole: "Department Specialist (Dev / Sales / Finance / Ops)",
+    shortRole: "Department Specialist (Dev / Sales / Ops Specialist)",
     icon: Users,
     tagline: "Executes assigned tasks, client deals & department workflows; read-only project agendas with Team Lead approval requests",
     badgeStyle: "bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200",
@@ -123,6 +81,20 @@ const PERSONA_CONFIGS: PersonaMeta[] = [
     demoCreds: {
       email: "alex.chen@acme.corp",
       pass: "Employee#2026",
+      company: "ACME",
+    },
+  },
+  {
+    key: "owner",
+    label: "Company Owner",
+    shortRole: "Founder & Owner",
+    icon: Crown,
+    tagline: "Free Hand: Create an organization, register subscription & govern all staff, managers and TLs",
+    badgeStyle: "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200",
+    accentBorder: "border-amber-500",
+    demoCreds: {
+      email: "sarah.connor@acme.corp",
+      pass: "OwnerSecure#2026",
       company: "ACME",
     },
   },
@@ -151,10 +123,8 @@ export default function AuthPage({
 } = {}) {
   const router = useRouter();
 
-  // 1. First step: Chosen persona toggle (defaults to employee when on dedicated org portal)
-  const [selectedPersona, setSelectedPersona] = useState<PersonaKey>(
-    prefillOrgCode ? "employee" : "owner"
-  );
+  // 1. First step: Chosen persona toggle (defaults to employee)
+  const [selectedPersona, setSelectedPersona] = useState<PersonaKey>("employee");
 
   // Owner action mode: "signup" (create new company) or "login" (sign in)
   const [ownerMode, setOwnerMode] = useState<"signup" | "login">("login");
@@ -182,10 +152,19 @@ export default function AuthPage({
 
   // Razorpay Paywall Subscription State
   const [isPaymentVerified, setIsPaymentVerified] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "annual">("monthly");
+  const [selectedPlan, setSelectedPlan] = useState<PlanId>("monthly");
   const [paymentToken, setPaymentToken] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+
+  // Expired Owner Renewal State
+  const [expiredOwnerInfo, setExpiredOwnerInfo] = useState<{
+    companyCode: string;
+    companyName: string;
+    ownerEmail: string;
+    planId: PlanId;
+  } | null>(null);
+  const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
 
   // Check active session and payment URL parameters on mount
   useEffect(() => {
@@ -204,7 +183,7 @@ export default function AuthPage({
       if (token || paid === "true") {
         setIsPaymentVerified(true);
         if (token) setPaymentToken(token);
-        if (plan === "annual" || plan === "monthly") setSelectedPlan(plan);
+        if (plan === "annual" || plan === "monthly" || plan === "quarterly") setSelectedPlan(plan as PlanId);
         setPaymentId(urlParams.get("payment_id") || "pay_razorpay_verified");
       }
     }
@@ -269,6 +248,15 @@ export default function AuthPage({
 
       const data = await res.json();
       if (!res.ok) {
+        if (data.isSubscriptionExpired && data.isOwner) {
+          setExpiredOwnerInfo({
+            companyCode: data.companyCode,
+            companyName: data.companyName,
+            ownerEmail: data.ownerEmail,
+            planId: data.planId || "monthly",
+          });
+          setIsRenewModalOpen(true);
+        }
         throw new Error(data.error || data.message || "Login failed");
       }
 
@@ -289,6 +277,59 @@ export default function AuthPage({
           window.location.href = "/exec/dashboard";
         }
       }, 700);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOwnerRenewalSuccess = async (paymentData: {
+    verificationToken: string;
+    paymentId: string;
+    plan: PlanId;
+    planName: string;
+  }) => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/subscription/renew", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentToken: paymentData.verificationToken,
+          plan: paymentData.plan,
+          companyCode: expiredOwnerInfo?.companyCode || loginCompanyCode,
+          paymentId: paymentData.paymentId,
+        }),
+      });
+
+      const renewData = await res.json();
+      if (!renewData.success) {
+        throw new Error(renewData.error || "Subscription renewal failed");
+      }
+
+      setIsRenewModalOpen(false);
+      setSuccess("Subscription renewed! Logging in to reactivated workspace...");
+
+      // Automatically complete login
+      const loginRes = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: loginEmail,
+          password: loginPassword,
+          companyCode: loginCompanyCode || expiredOwnerInfo?.companyCode,
+        }),
+      });
+      const loginData = await loginRes.json();
+      if (loginRes.ok) {
+        localStorage.setItem("taskflow_jwt", loginData.token);
+        document.cookie = `demo_persona_role=owner; path=/; max-age=2592000`;
+        const targetOrg = loginData.company?.code || loginCompanyCode;
+        setTimeout(() => {
+          window.location.href = targetOrg ? `/${targetOrg}/exec/dashboard` : "/exec/dashboard";
+        }, 700);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -492,10 +533,8 @@ export default function AuthPage({
               onChange={(e) => handleSelectPersona(e.target.value as PersonaKey)}
               className="w-full pl-10 pr-9 py-2.5 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] text-xs font-bold text-[#242424] dark:text-white outline-none focus:border-[#0078D4] focus:ring-1 focus:ring-[#0078D4] appearance-none cursor-pointer shadow-xs transition-colors"
             >
-              <option value="owner">Company Owner (Founder &amp; Executive Authority)</option>
-              <option value="manager">Operations Manager (Staffing &amp; Roadmaps)</option>
-              <option value="teamlead">Project Team Lead (Project Governance)</option>
               <option value="employee">Company Employee (Dev / Sales / Ops Specialist)</option>
+              <option value="owner">Company Owner (Founder &amp; Executive Authority)</option>
               <option value="superuser">Developer Superuser (Master Mode)</option>
             </select>
             <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#0078D4] dark:text-[#479EF5]">
@@ -566,30 +605,28 @@ export default function AuthPage({
                 <div className="space-y-4 text-xs max-w-2xl bg-white dark:bg-[#1E1E1E] p-6 rounded-xl border border-[#E1DFDD] dark:border-[#3B3A39] shadow-sm">
                   <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-sm">
                     <Lock className="w-4 h-4" />
-                    <span>Direct Subscription Paywall — No Free Trial</span>
+                    <span>Subscription Razorpay Payment</span>
                   </div>
 
                   <p className="text-[#605E5C] dark:text-[#C8C6C4] leading-relaxed text-xs">
-                    TaskPMS provides an isolated per-company MongoDB database perimeter and AWS S3 document vault. A direct paid subscription (<span className="font-semibold text-gray-900 dark:text-white">$20 USD/month</span> or <span className="font-semibold text-gray-900 dark:text-white">$200 USD/year</span>) is strictly required to provision a new organization workspace.
+                    TaskPMS provides an isolated per-company MongoDB database perimeter and AWS S3 document vault. A direct paid subscription (<span className="font-semibold text-gray-900 dark:text-white">$20 USD/mo</span>, <span className="font-semibold text-gray-900 dark:text-white">$55 USD/3mo</span>, or <span className="font-semibold text-gray-900 dark:text-white">$200 USD/yr</span>) is strictly required to provision a new organization workspace.
                   </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 my-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 my-4">
                     <div
                       onClick={() => setSelectedPlan("monthly")}
-                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                        selectedPlan === "monthly"
+                      className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer ${selectedPlan === "monthly"
                           ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-xs"
                           : "border-[#E1DFDD] dark:border-[#3B3A39] hover:border-gray-400"
-                      }`}
+                        }`}
                     >
                       <div className="flex justify-between items-center mb-1">
-                        <span className="font-bold text-sm text-[#242424] dark:text-white">Monthly Plan</span>
+                        <span className="font-bold text-xs text-[#242424] dark:text-white">Monthly Plan</span>
                         <span
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                            selectedPlan === "monthly"
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedPlan === "monthly"
                               ? "border-[#0078D4] bg-[#0078D4]"
                               : "border-gray-400"
-                          }`}
+                            }`}
                         >
                           {selectedPlan === "monthly" && <Check className="w-2.5 h-2.5 text-white" />}
                         </span>
@@ -597,28 +634,55 @@ export default function AuthPage({
                       <div className="text-xl font-bold text-[#242424] dark:text-white">
                         $20 <span className="text-xs font-normal text-gray-500">USD / mo</span>
                       </div>
-                      <p className="text-[11px] text-gray-500 mt-1">Flexible month-to-month billing</p>
+                      <p className="text-[10px] text-gray-500 mt-1">Flexible month-to-month billing</p>
+                    </div>
+
+                    <div
+                      onClick={() => setSelectedPlan("quarterly")}
+                      className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer relative ${selectedPlan === "quarterly"
+                          ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-xs"
+                          : "border-[#E1DFDD] dark:border-[#3B3A39] hover:border-gray-400"
+                        }`}
+                    >
+                      <span className="absolute -top-2.5 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#0078D4] text-white shadow-xs">
+                        Save $5 (3 Months)
+                      </span>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-bold text-xs text-[#242424] dark:text-white">3-Month Plan</span>
+                        <span
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedPlan === "quarterly"
+                              ? "border-[#0078D4] bg-[#0078D4]"
+                              : "border-gray-400"
+                            }`}
+                        >
+                          {selectedPlan === "quarterly" && <Check className="w-2.5 h-2.5 text-white" />}
+                        </span>
+                      </div>
+                      <div className="text-xl font-bold text-[#242424] dark:text-white">
+                        $55 <span className="text-xs font-normal text-gray-500">USD / 3 mo</span>
+                      </div>
+                      <p className="text-[10px] text-[#0078D4] dark:text-[#479EF5] font-medium mt-1">
+                        Save $5 vs monthly
+                      </p>
                     </div>
 
                     <div
                       onClick={() => setSelectedPlan("annual")}
-                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer relative ${
-                        selectedPlan === "annual"
+                      className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer relative ${selectedPlan === "annual"
                           ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-xs"
                           : "border-[#E1DFDD] dark:border-[#3B3A39] hover:border-gray-400"
-                      }`}
+                        }`}
                     >
-                      <span className="absolute -top-2.5 right-3 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#107C10] text-white shadow-xs">
+                      <span className="absolute -top-2.5 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#107C10] text-white shadow-xs">
                         Save 17% ($40/yr)
                       </span>
                       <div className="flex justify-between items-center mb-1">
-                        <span className="font-bold text-sm text-[#242424] dark:text-white">Annual Plan</span>
+                        <span className="font-bold text-xs text-[#242424] dark:text-white">Annual Plan</span>
                         <span
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                            selectedPlan === "annual"
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedPlan === "annual"
                               ? "border-[#0078D4] bg-[#0078D4]"
                               : "border-gray-400"
-                          }`}
+                            }`}
                         >
                           {selectedPlan === "annual" && <Check className="w-2.5 h-2.5 text-white" />}
                         </span>
@@ -626,8 +690,8 @@ export default function AuthPage({
                       <div className="text-xl font-bold text-[#242424] dark:text-white">
                         $200 <span className="text-xs font-normal text-gray-500">USD / yr</span>
                       </div>
-                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">
-                        Best value for scaling organizations
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">
+                        Best value for scaling
                       </p>
                     </div>
                   </div>
@@ -644,7 +708,9 @@ export default function AuthPage({
                       className="w-full sm:w-auto px-5 py-2.5 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
                     >
                       <CreditCard className="w-4 h-4" />
-                      <span>Pay with Razorpay (${selectedPlan === "annual" ? "200" : "20"}) to Unlock</span>
+                      <span>
+                        Pay with Razorpay (${selectedPlan === "annual" ? "200" : selectedPlan === "quarterly" ? "55" : "20"}) to Unlock
+                      </span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -657,7 +723,7 @@ export default function AuthPage({
                     <div>
                       <div className="font-bold">✓ Subscription Payment Verified via Razorpay:</div>
                       <div className="text-[11px] mt-0.5">
-                        Plan: <span className="font-semibold">{selectedPlan === "annual" ? "Enterprise Annual ($200/yr)" : "Enterprise Monthly ($20/mo)"}</span> · Receipt ID: <code className="bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded font-mono">{paymentId}</code>.
+                        Plan: <span className="font-semibold">{selectedPlan === "annual" ? "Enterprise Annual ($200/yr)" : selectedPlan === "quarterly" ? "Enterprise 3-Month ($55/3mo)" : "Enterprise Monthly ($20/mo)"}</span> · Receipt ID: <code className="bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded font-mono">{paymentId}</code>.
                       </div>
                       <div className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-1">
                         Fill in your organization details below to instantly initialize your dedicated database perimeter.
@@ -881,13 +947,9 @@ export default function AuthPage({
 
             <div>
               <label className="block font-medium text-[#242424] dark:text-white mb-1">
-                {selectedPersona === "manager"
-                  ? "Operations Manager Email *"
-                  : selectedPersona === "teamlead"
-                    ? "Team Lead Login Email *"
-                    : selectedPersona === "employee"
-                      ? "Employee Login Email (Provided by Manager) *"
-                      : "Superuser Developer Email *"}
+                {selectedPersona === "employee"
+                  ? "Employee Login Email (Provided by Manager) *"
+                  : "Superuser Developer Email *"}
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-[#8A8886] absolute left-3 top-1/2 -translate-y-1/2" />
@@ -960,6 +1022,18 @@ export default function AuthPage({
           setIsCheckoutModalOpen(false);
           setSuccess(`Payment verified! Plan: ${data.planName}. Please enter your company details below.`);
         }}
+      />
+
+      {/* Razorpay Subscription Renewal Modal for Expired Owner */}
+      <RazorpayCheckoutModal
+        isOpen={isRenewModalOpen}
+        onClose={() => setIsRenewModalOpen(false)}
+        defaultPlan={expiredOwnerInfo?.planId || "monthly"}
+        companyNameHint={expiredOwnerInfo?.companyName || loginCompanyCode}
+        emailHint={expiredOwnerInfo?.ownerEmail || loginEmail}
+        title="Renew Organization Subscription"
+        subtitle="Workspace access is on hold. Complete Razorpay checkout to reactivate immediately."
+        onPaymentSuccess={handleOwnerRenewalSuccess}
       />
     </main>
   );
