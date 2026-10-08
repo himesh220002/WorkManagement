@@ -38,6 +38,7 @@ const PROTECTED_ROOT_ROUTES = new Set([
   "exec",
   "projects",
   "teams",
+  "people",
   "sales",
   "revenue",
   "growth",

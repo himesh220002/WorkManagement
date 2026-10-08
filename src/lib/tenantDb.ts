@@ -24,6 +24,7 @@ import {
   Document,
   Company,
   ClientAccount,
+  Meeting,
 } from "@/models";
 
 export interface TenantModels {
@@ -49,6 +50,7 @@ export interface TenantModels {
   Item: Model<any>;
   Document: Model<any>;
   ClientAccount: Model<any>;
+  Meeting: Model<any>;
 }
 
 /**
@@ -111,6 +113,7 @@ export async function getTenantModels(companyCode: string): Promise<TenantModels
     Item: getOrCompile("Item", Item),
     Document: getOrCompile("Document", Document),
     ClientAccount: getOrCompile("ClientAccount", ClientAccount),
+    Meeting: getOrCompile("Meeting", Meeting),
   };
 
   tenantModelsCache.set(dbName, models);
@@ -150,6 +153,7 @@ export async function migrateCompanyToDedicatedDb(companyCode: string, companyId
     "items",
     "documents",
     "clientaccounts",
+    "meetings",
   ];
 
   for (const col of allCollectionNames) {
@@ -184,6 +188,7 @@ export async function migrateCompanyToDedicatedDb(companyCode: string, companyId
     { name: "Item", source: Item, target: tenantModels.Item },
     { name: "Document", source: Document, target: tenantModels.Document },
     { name: "ClientAccount", source: ClientAccount, target: tenantModels.ClientAccount },
+    { name: "Meeting", source: Meeting, target: tenantModels.Meeting },
   ];
 
   const results: Record<string, number> = {};

@@ -13,6 +13,7 @@ import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import { PREDEFINED_PIPELINE_TASKS } from "@/utils/taskConstants";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import ParallelPipelineTrackViewer from "@/components/pipelines/ParallelPipelineTrackViewer";
+import ParallelPipelineRoadmap from "@/components/pipelines/ParallelPipelineRoadmap";
 import { triggerGuestRestriction } from "@/components/showcase/ShowcaseGuestCard";
 
 export default function TimelineClient({
@@ -32,6 +33,7 @@ export default function TimelineClient({
   const ganttInstance = useRef<any>(null);
   const mermaidContainerRef = useRef<HTMLDivElement>(null);
   const [activeCategory, setActiveCategory] = useState("All");
+  const [activeViewTab, setActiveViewTab] = useState<"roadmap" | "mesh" | "cards" | "classic">("roadmap");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formCategory, setFormCategory] = useState("Development");
   const [dayZoom, setDayZoom] = useState("Week");
@@ -40,8 +42,6 @@ export default function TimelineClient({
   const categories = ["Company Pipeline", "All", "Development", "Sales", "Finance", "HR", "Operations", "Marketing", "General"];
 
   const dayZoomOptions = [
-    { label: "Q-Day", value: "Quarter Day" },
-    { label: "H-Day", value: "Half Day" },
     { label: "Day", value: "Day" },
     { label: "Week", value: "Week" },
     { label: "Month", value: "Month" }
@@ -98,7 +98,11 @@ export default function TimelineClient({
       let start = t.startDate ? new Date(t.startDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
       let end = t.endDate
         ? new Date(t.endDate).toISOString().split("T")[0]
-        : new Date(new Date(start).getTime() + 86400000).toISOString().split("T")[0];
+        : new Date(new Date(start).getTime() + 86400000 * 21).toISOString().split("T")[0];
+
+      if (new Date(end).getTime() <= new Date(start).getTime()) {
+        end = new Date(new Date(start).getTime() + 86400000 * 21).toISOString().split("T")[0];
+      }
 
       const progress = t.progress || 0;
       initialValues[t._id] = { start, end, progress };
@@ -438,62 +442,121 @@ export default function TimelineClient({
           </div>
         </div>
 
-        {/* Controls Bar */}
-        <div className="mt-4 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 ">
+        {/* View Switcher & Controls Bar */}
+        <div className="mt-4 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+          {/* Main Visual Mode Switcher */}
+          <div className="flex items-center gap-1.5 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setActiveViewTab("roadmap")}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeViewTab === "roadmap"
+                  ? "bg-white dark:bg-gray-700 text-[#0078D4] dark:text-white shadow-xs font-bold"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
+              }`}
+            >
+              <span>🚀 Parallel Roadmap</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveViewTab("mesh")}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeViewTab === "mesh"
+                  ? "bg-white dark:bg-gray-700 text-[#0078D4] dark:text-white shadow-xs font-bold"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
+              }`}
+            >
+              <span>⚡ Track Mesh</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveViewTab("cards")}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeViewTab === "cards"
+                  ? "bg-white dark:bg-gray-700 text-[#0078D4] dark:text-white shadow-xs font-bold"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
+              }`}
+            >
+              <span>📋 Pipeline Cards</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveViewTab("classic")}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeViewTab === "classic"
+                  ? "bg-white dark:bg-gray-700 text-[#0078D4] dark:text-white shadow-xs font-bold"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
+              }`}
+            >
+              <span>📈 Classic Gantt</span>
+            </button>
+          </div>
+
+          {/* Right Controls: Category Filters & Classic Zoom */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-2"></span> */}
-            {categories.map(cat => (
-              <button
-                key={cat}
-                type="button"
-                className={`px-2 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${activeCategory === cat
-                  ? 'bg-blue-600/90 text-white shadow-lg shadow-blue-500/30 neon-border-blue'
-                  : 'bg-white/50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200/50 dark:border-gray-700/50 hover:bg-white/80 dark:hover:bg-gray-700/80'
+            <div className="flex flex-wrap items-center gap-1.5">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+                    activeCategory === cat
+                      ? "bg-blue-600 text-white shadow-sm font-semibold"
+                      : "bg-white/70 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-100"
                   }`}
-                onClick={() => setActiveCategory(cat)}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+                  onClick={() => setActiveCategory(cat)}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {/* <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-2"></span> */}
-            {dayZoomOptions.map((zoom) => (
-              <button
-                key={zoom.value}
-                type="button"
-                className={`px-2 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${dayZoom === zoom.value ? 'bg-blue-600/90 text-white shadow-lg shadow-blue-500/30 neon-border-blue' : 'bg-white/50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200/50 dark:border-gray-700/50 hover:bg-white/80 dark:hover:bg-gray-700/80'}`}
-                onClick={() => changeViewMode(zoom.value)}
-              >
-                {zoom.label}
-              </button>
-            ))}
+            {activeViewTab === "classic" && (
+              <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs">
+                {dayZoomOptions.map((zoom) => (
+                  <button
+                    key={zoom.value}
+                    type="button"
+                    className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                      dayZoom === zoom.value
+                        ? "bg-blue-600 text-white font-semibold shadow-xs"
+                        : "text-gray-600 dark:text-gray-300 hover:text-gray-900"
+                    }`}
+                    onClick={() => changeViewMode(zoom.value)}
+                  >
+                    {zoom.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </section>
 
-      {/* Redesigned Parallel Execution Pipeline Mesh */}
-      <section className="mb-6">
-        <ParallelPipelineTrackViewer
-          pipelines={filteredTasks}
-          projectName="Enterprise Active Pipelines"
-        />
-      </section>
+      {/* Tab 1: Primary Enterprise Parallel Roadmap Matrix */}
+      {activeViewTab === "roadmap" && (
+        <section className="mb-8">
+          <ParallelPipelineRoadmap
+            pipelines={filteredTasks}
+            currentRole={currentRole}
+            isGuest={isGuest}
+          />
+        </section>
+      )}
 
-      {/* Frappe Gantt Chart Section */}
-      <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 md:p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)] overflow-hidden">
-        <div className="w-full overflow-x-auto">
-          <div ref={ganttWrapperRef} className="min-w-[800px]"></div>
-        </div>
-      </section>
+      {/* Tab 2: Concurrent Track Mesh Lanes */}
+      {activeViewTab === "mesh" && (
+        <section className="mb-8">
+          <ParallelPipelineTrackViewer
+            pipelines={filteredTasks}
+            projectName="Enterprise Active Pipelines"
+          />
+        </section>
+      )}
 
-      {/* Detailed Pipeline Cards Grid */}
-      {activeCategory !== "Company Pipeline" && (
-        <section className="mt-8">
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6 flex items-center gap-3">
-            <i className="fa-solid fa-layer-group text-blue-600"></i> Pipeline Details
-          </h3>
+      {/* Tab 3: Detailed Pipeline Cards Grid */}
+      {activeViewTab === "cards" && (
+        <section className="mb-8">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredTasks.map((pipeline: any) => (
               <PipelineCard
@@ -510,6 +573,17 @@ export default function TimelineClient({
           </div>
         </section>
       )}
+
+      {/* Tab 4: Classic Frappe Gantt Chart (Preserved in DOM to prevent ref remounting bugs) */}
+      <section
+        className={`bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 md:p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)] overflow-hidden ${
+          activeViewTab === "classic" ? "block" : "hidden"
+        }`}
+      >
+        <div className="w-full overflow-x-auto">
+          <div ref={ganttWrapperRef} className="min-w-[800px]"></div>
+        </div>
+      </section>
       {showExamplesModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700">

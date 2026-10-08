@@ -28,6 +28,7 @@ import {
   ExternalLink,
   FileText,
   Contact2,
+  Video,
 } from "lucide-react";
 import { PERSONAS } from "./PersonaSwitcher";
 
@@ -63,7 +64,10 @@ export const NAV_GROUPS = [
   },
   {
     group: "People",
-    items: [{ label: "Teams & Members", href: "/teams", icon: Users }],
+    items: [
+      { label: "Teams & Members", href: "/teams", icon: Users },
+      { label: "Meetings & Discussions", href: "/teams/meetings", icon: Video },
+    ],
   },
   {
     group: "Growth",

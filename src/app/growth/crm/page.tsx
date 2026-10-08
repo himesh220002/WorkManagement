@@ -1,8 +1,8 @@
 import connectToDatabase from "@/lib/mongodb";
-import { ClientAccount, Project } from "@/models";
+import { ClientAccount, Project, Meeting } from "@/models";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import { fetchWithCache } from "@/lib/cache";
-import CrmClient from "./CrmClient";
+import CrmClient from "@/app/growth/crm/CrmClient";
 
 export default async function CrmPage() {
   await connectToDatabase();
@@ -12,14 +12,18 @@ export default async function CrmPage() {
 
   let accounts: any[] = [];
   let projects: any[] = [];
+  let meetings: any[] = [];
 
   try {
-    [accounts, projects] = await Promise.all([
+    [accounts, projects, meetings] = await Promise.all([
       fetchWithCache(`crm_accounts:${cId}`, 25, () =>
         ClientAccount.find(tenantFilter).populate("projectId", "name").sort({ contractARR: -1 }).lean()
       ),
       fetchWithCache(`crm_projects:${cId}`, 30, () =>
         Project.find(tenantFilter, { name: 1 }).lean()
+      ),
+      fetchWithCache(`crm_meetings:${cId}`, 20, () =>
+        Meeting.find(tenantFilter).sort({ scheduledAt: -1 }).lean()
       ),
     ]);
   } catch (err) {
@@ -70,10 +74,29 @@ export default async function CrmPage() {
     name: p.name,
   }));
 
+  const cleanMeetings = meetings.map((m: any) => ({
+    _id: m._id.toString(),
+    clientAccountId: m.clientAccountId ? m.clientAccountId.toString() : null,
+    title: m.title || "Meeting",
+    platform: m.platform || "google_meet",
+    meetingLink: m.meetingLink || "",
+    scheduledAt: m.scheduledAt ? new Date(m.scheduledAt).toISOString() : new Date().toISOString(),
+    durationMinutes: m.durationMinutes || 45,
+    status: m.status || "Scheduled",
+    discordChannelName: m.discordChannelName || "",
+    discordChannelUrl: m.discordChannelUrl || "",
+    slackChannelName: m.slackChannelName || "",
+    transcript: m.transcript || "",
+    attendees: Array.isArray(m.attendees)
+      ? m.attendees.map((a: any) => ({ name: a.name || "", email: a.email || "" }))
+      : [],
+  }));
+
   return (
     <CrmClient
       accounts={cleanAccounts}
       projects={cleanProjects}
+      meetings={cleanMeetings}
       currentRole={session.role}
       isGuest={Boolean(session.isGuest)}
     />

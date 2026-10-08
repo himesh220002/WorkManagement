@@ -27,8 +27,30 @@ import {
   FileText,
   BadgeDollarSign,
   ExternalLink,
+  Video,
+  Mic,
+  Hash,
+  Link2,
 } from "lucide-react";
 import { addClientAccount, updateClientStage, addClientInteraction, deleteClientAccount } from "@/actions/crm";
+import { createMeeting } from "@/actions/meetings";
+import Link from "next/link";
+
+interface CrmMeeting {
+  _id: string;
+  clientAccountId?: string | null;
+  title: string;
+  platform: "google_meet" | "zoom" | "slack" | "discord" | "in_person";
+  meetingLink: string;
+  scheduledAt: string;
+  durationMinutes: number;
+  status: string;
+  discordChannelName?: string;
+  discordChannelUrl?: string;
+  slackChannelName?: string;
+  transcript?: string;
+  attendees?: Array<{ name: string; email: string }>;
+}
 
 interface CrmAccount {
   _id: string;
@@ -61,6 +83,7 @@ interface CrmAccount {
 interface CrmClientProps {
   accounts: CrmAccount[];
   projects: Array<{ _id: string; name: string }>;
+  meetings?: CrmMeeting[];
   currentRole?: string;
   isGuest?: boolean;
 }
@@ -68,6 +91,7 @@ interface CrmClientProps {
 export default function CrmClient({
   accounts,
   projects,
+  meetings = [],
   currentRole = "manager",
   isGuest = false,
 }: CrmClientProps) {
@@ -79,6 +103,20 @@ export default function CrmClient({
   const [interactionType, setInteractionType] = useState("Meeting");
   const [interactionSummary, setInteractionSummary] = useState("");
   const [isSubmittingInteraction, setIsSubmittingInteraction] = useState(false);
+
+  // Client Meeting Scheduling State
+  const [isClientMeetingModalOpen, setIsClientMeetingModalOpen] = useState(false);
+  const [meetingTargetAccount, setMeetingTargetAccount] = useState<CrmAccount | null>(null);
+  const [cmTitle, setCmTitle] = useState("");
+  const [cmPlatform, setCmPlatform] = useState<"google_meet" | "zoom" | "slack" | "discord">("google_meet");
+  const [cmScheduledAt, setCmScheduledAt] = useState("");
+  const [cmDuration, setCmDuration] = useState("45");
+  const [cmMeetingLink, setCmMeetingLink] = useState("");
+  const [cmDiscordChannel, setCmDiscordChannel] = useState("");
+  const [cmDiscordUrl, setCmDiscordUrl] = useState("");
+  const [cmSlackChannel, setCmSlackChannel] = useState("");
+  const [cmAttendees, setCmAttendees] = useState("");
+  const [isSubmittingMeeting, setIsSubmittingMeeting] = useState(false);
 
   // Derived Telemetry & Metrics
   const totalARR = useMemo(() => {
@@ -142,6 +180,92 @@ export default function CrmClient({
       console.error(err);
     } finally {
       setIsSubmittingInteraction(false);
+    }
+  };
+
+  const openScheduleClientMeeting = (account: CrmAccount) => {
+    setMeetingTargetAccount(account);
+    setCmTitle(`Executive Sync: ${account.accountName}`);
+    setCmPlatform("google_meet");
+    const future = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    future.setMinutes(Math.ceil(future.getMinutes() / 15) * 15, 0, 0);
+    const localIso = new Date(future.getTime() - future.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
+    setCmScheduledAt(localIso);
+    setCmDuration("45");
+    setCmMeetingLink("");
+    setCmDiscordChannel(
+      account.accountName.toLowerCase().replace(/[^a-z0-9]/g, "-").slice(0, 20) + "-sync"
+    );
+    setCmDiscordUrl("");
+    setCmSlackChannel(
+      "client-" + account.accountName.toLowerCase().replace(/[^a-z0-9]/g, "-").slice(0, 15)
+    );
+    setCmAttendees(account.primaryContact.email);
+    setIsClientMeetingModalOpen(true);
+  };
+
+  const handleScheduleClientMeeting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isGuest || !meetingTargetAccount) return;
+
+    setIsSubmittingMeeting(true);
+    try {
+      const formData = new FormData();
+      formData.set("title", cmTitle);
+      formData.set("clientAccountId", meetingTargetAccount._id);
+      if (meetingTargetAccount.projectId?._id) {
+        formData.set("projectId", meetingTargetAccount.projectId._id);
+      }
+      formData.set("platform", cmPlatform);
+      formData.set("meetingLink", cmMeetingLink);
+      formData.set("scheduledAt", cmScheduledAt);
+      formData.set("durationMinutes", cmDuration);
+      formData.set("discordChannelName", cmDiscordChannel);
+      formData.set("discordChannelUrl", cmDiscordUrl);
+      formData.set("slackChannelName", cmSlackChannel);
+
+      const emails = cmAttendees
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      formData.set("attendeeEmails", emails.join(","));
+
+      await createMeeting(formData);
+
+      // Add optimistic interaction to selectedAccount if open
+      if (selectedAccount && selectedAccount._id === meetingTargetAccount._id) {
+        setSelectedAccount((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            interactions: [
+              {
+                _id: Date.now().toString(),
+                type: "Meeting",
+                summary: `Scheduled ${cmTitle} (${cmPlatform.toUpperCase()})${
+                  cmDiscordChannel ? ` | Discord: #${cmDiscordChannel}` : ""
+                }${cmSlackChannel ? ` | Slack: #${cmSlackChannel}` : ""}`,
+                date: cmScheduledAt ? new Date(cmScheduledAt).toISOString() : new Date().toISOString(),
+                recordedBy: "You",
+              },
+              ...prev.interactions,
+            ],
+            nextAction: {
+              action: `Attend ${cmTitle} (${cmPlatform.toUpperCase()})`,
+              dueDate: cmScheduledAt ? new Date(cmScheduledAt).toISOString() : null,
+            },
+          };
+        });
+      }
+
+      setIsClientMeetingModalOpen(false);
+      alert("Meeting scheduled! Connectivity details saved & interaction logged.");
+    } catch (err: any) {
+      alert(err.message || "Failed to schedule meeting.");
+    } finally {
+      setIsSubmittingMeeting(false);
     }
   };
 
@@ -397,6 +521,38 @@ export default function CrmClient({
                     </div>
                   </div>
                 )}
+
+                {/* Upcoming Meeting & Connectivity Indicator */}
+                {(() => {
+                  const clientMeets = (meetings || []).filter((m) => m.clientAccountId === account._id);
+                  const upcomingMeet = clientMeets.find((m) => m.status === "Scheduled" || m.status === "In Progress");
+                  if (!upcomingMeet) return null;
+                  return (
+                    <div className="p-2 rounded bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900/50 text-[11px] mb-3 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 truncate">
+                        {upcomingMeet.platform === "discord" ? (
+                          <Mic className="w-3.5 h-3.5 text-[#5865F2] shrink-0" />
+                        ) : (
+                          <Video className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                        )}
+                        <span className="font-semibold truncate text-purple-950 dark:text-purple-200">
+                          {upcomingMeet.platform === "discord" && upcomingMeet.discordChannelName
+                            ? `#${upcomingMeet.discordChannelName}`
+                            : upcomingMeet.title}
+                        </span>
+                      </div>
+                      <a
+                        href={upcomingMeet.meetingLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-purple-600 dark:text-purple-400 hover:underline font-bold shrink-0 ml-2 flex items-center gap-0.5"
+                      >
+                        <span>Join</span>
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Card Footer Actions */}
@@ -406,6 +562,16 @@ export default function CrmClient({
                 </span>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openScheduleClientMeeting(account)}
+                    className="px-2 py-1 text-[11px] font-semibold rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-600 hover:text-white transition-colors cursor-pointer flex items-center gap-1"
+                    title="Schedule Meeting & Connectivity"
+                  >
+                    <Video className="w-3 h-3" />
+                    <span>+ Meet</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setSelectedAccount(account)}
@@ -500,6 +666,90 @@ export default function CrmClient({
                   <span className="font-bold text-xs text-gray-800 dark:text-gray-200">
                     {selectedAccount.accountExecutive}
                   </span>
+                </div>
+              </div>
+
+              {/* Connected Meetings & Video / Discord Channels */}
+              <div className="space-y-3 p-4 rounded-lg border border-purple-200 dark:border-purple-900/60 bg-purple-50/50 dark:bg-purple-950/20">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-xs text-purple-900 dark:text-purple-300">
+                    <Video className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    <span>Meetings & Connectivity (Google Meet, Zoom, Slack, Discord)</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => openScheduleClientMeeting(selectedAccount)}
+                    disabled={isGuest}
+                    className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                      isGuest
+                        ? "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
+                        : "bg-purple-600 hover:bg-purple-700 text-white cursor-pointer"
+                    }`}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Schedule Meeting</span>
+                  </button>
+                </div>
+
+                {/* Client meetings list */}
+                {(() => {
+                  const clientMeets = (meetings || []).filter((m) => m.clientAccountId === selectedAccount._id);
+                  if (clientMeets.length === 0) {
+                    return (
+                      <p className="text-[11px] text-gray-500 italic">
+                        No live meetings scheduled yet. Click &ldquo;Schedule Meeting&rdquo; to connect via Google Meet, Zoom, Slack, or Discord.
+                      </p>
+                    );
+                  }
+                  return (
+                    <div className="space-y-2">
+                      {clientMeets.map((m) => (
+                        <div
+                          key={m._id}
+                          className="p-3 rounded-md bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-gray-800 flex items-center justify-between text-xs"
+                        >
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-gray-900 dark:text-white">{m.title}</span>
+                              <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300">
+                                {m.platform}
+                              </span>
+                              <span className="text-[10px] text-gray-400">
+                                {new Date(m.scheduledAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 text-[11px] text-gray-500">
+                              {m.discordChannelName && <span>Discord: #{m.discordChannelName}</span>}
+                              {m.slackChannelName && <span>Slack: #{m.slackChannelName}</span>}
+                              <span>Duration: {m.durationMinutes}m</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={m.meetingLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-1 rounded bg-[#0078D4] hover:bg-[#106EBE] text-white font-semibold text-[11px] flex items-center gap-1"
+                            >
+                              <span>Launch</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+
+                <div className="text-right pt-1">
+                  <Link
+                    href="/teams/meetings"
+                    className="text-[11px] text-[#0078D4] hover:underline font-semibold"
+                  >
+                    Open Full Meetings Hub &amp; Transcripts &rarr;
+                  </Link>
                 </div>
               </div>
 
@@ -824,6 +1074,228 @@ export default function CrmClient({
                   }`}
                 >
                   {isGuest ? "Creation Disabled in Showcase Mode" : "Establish Account"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* SCHEDULE CLIENT MEETING MODAL */}
+      {isClientMeetingModalOpen && meetingTargetAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-gray-800 shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-[#FAF9F8] dark:bg-[#252423]">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-lg bg-purple-500/10 text-purple-600">
+                  <Video className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="font-bold text-base text-gray-900 dark:text-white">
+                    Schedule Client Meeting & Connectivity
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Connecting with {meetingTargetAccount.accountName}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsClientMeetingModalOpen(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleScheduleClientMeeting} className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Meeting Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={cmTitle}
+                  onChange={(e) => setCmTitle(e.target.value)}
+                  className="w-full p-2.5 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-gray-900 dark:text-white outline-none focus:border-[#0078D4]"
+                />
+              </div>
+
+              {/* Platform Selector */}
+              <div>
+                <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Platform Connectivity *
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { id: "google_meet", label: "Google Meet", icon: Video },
+                    { id: "zoom", label: "Zoom Video", icon: Video },
+                    { id: "slack", label: "Slack Huddle", icon: MessageSquare },
+                    { id: "discord", label: "Discord Voice", icon: Mic },
+                  ].map((p) => {
+                    const isSel = cmPlatform === p.id;
+                    const Icon = p.icon;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setCmPlatform(p.id as any)}
+                        className={`flex flex-col items-center justify-center p-2.5 rounded-lg border text-xs font-semibold transition-all ${
+                          isSel
+                            ? "border-purple-600 bg-purple-500/10 text-purple-600 dark:text-purple-400"
+                            : "border-gray-200 dark:border-gray-800 bg-white dark:bg-[#252423] text-gray-600 dark:text-gray-400"
+                        }`}
+                      >
+                        <Icon className="w-4 h-4 mb-1" />
+                        <span>{p.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Discord Linkage Fields */}
+              {cmPlatform === "discord" && (
+                <div className="p-3 rounded-lg border border-[#5865F2]/30 bg-[#5865F2]/5 space-y-2">
+                  <div className="flex items-center gap-1.5 font-bold text-[#5865F2]">
+                    <Mic className="w-3.5 h-3.5" />
+                    <span>Discord Channel Linkage</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">
+                        Channel Name
+                      </label>
+                      <input
+                        type="text"
+                        value={cmDiscordChannel}
+                        onChange={(e) => setCmDiscordChannel(e.target.value)}
+                        placeholder="e.g. client-briefing"
+                        className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1E1E1E] text-gray-900 dark:text-white outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">
+                        Server / Channel Invite URL
+                      </label>
+                      <input
+                        type="text"
+                        value={cmDiscordUrl}
+                        onChange={(e) => setCmDiscordUrl(e.target.value)}
+                        placeholder="https://discord.gg/... or https://discord.com/..."
+                        className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1E1E1E] text-gray-900 dark:text-white outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Slack Linkage Fields */}
+              {cmPlatform === "slack" && (
+                <div className="p-3 rounded-lg border border-purple-500/30 bg-purple-500/5 space-y-2">
+                  <div className="flex items-center gap-1.5 font-bold text-purple-600 dark:text-purple-400">
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>Slack Channel Linkage</span>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">
+                      Channel Name
+                    </label>
+                    <input
+                      type="text"
+                      value={cmSlackChannel}
+                      onChange={(e) => setCmSlackChannel(e.target.value)}
+                      placeholder="e.g. client-sync"
+                      className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1E1E1E] text-gray-900 dark:text-white outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Date & Time, Duration */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Scheduled Date & Time *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={cmScheduledAt}
+                    onChange={(e) => setCmScheduledAt(e.target.value)}
+                    className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-gray-900 dark:text-white outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Duration
+                  </label>
+                  <select
+                    value={cmDuration}
+                    onChange={(e) => setCmDuration(e.target.value)}
+                    className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-gray-900 dark:text-white outline-none cursor-pointer"
+                  >
+                    <option value="15">15 Minutes (Sync)</option>
+                    <option value="30">30 Minutes (Check-in)</option>
+                    <option value="45">45 Minutes (Executive Review)</option>
+                    <option value="60">60 Minutes (Strategic Workshop)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Direct Link (optional override) */}
+              <div>
+                <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Custom Meeting URL (Optional override)
+                </label>
+                <input
+                  type="text"
+                  value={cmMeetingLink}
+                  onChange={(e) => setCmMeetingLink(e.target.value)}
+                  placeholder="Leave empty to auto-generate platform URL"
+                  className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-gray-900 dark:text-white outline-none"
+                />
+              </div>
+
+              {/* Attendees */}
+              <div>
+                <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Invitees (Client & Team Emails)
+                </label>
+                <input
+                  type="text"
+                  value={cmAttendees}
+                  onChange={(e) => setCmAttendees(e.target.value)}
+                  placeholder="contact@client.com, executive@taskflow.internal"
+                  className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-gray-900 dark:text-white outline-none"
+                />
+                <span className="text-[10px] text-gray-400 mt-0.5 block">
+                  Primary client contact ({meetingTargetAccount.primaryContact.name}) is prefilled.
+                </span>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex justify-end gap-2 pt-4 border-t border-gray-200 dark:border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setIsClientMeetingModalOpen(false)}
+                  className="px-4 py-2 rounded text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#2A2928]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isGuest || isSubmittingMeeting}
+                  className={`px-5 py-2 rounded font-semibold text-white transition-colors ${
+                    isGuest
+                      ? "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed border border-gray-300 dark:border-gray-600"
+                      : "bg-purple-600 hover:bg-purple-700 cursor-pointer"
+                  }`}
+                >
+                  {isGuest ? "Disabled in Showcase Mode" : isSubmittingMeeting ? "Scheduling..." : "Schedule & Connect"}
                 </button>
               </div>
             </form>

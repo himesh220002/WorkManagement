@@ -17,6 +17,7 @@ import {
   Briefcase,
   ShieldCheck,
   Contact2,
+  Video,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -28,6 +29,7 @@ export default function Sidebar() {
     "exec",
     "projects",
     "teams",
+    "people",
     "sales",
     "revenue",
     "growth",
@@ -67,6 +69,7 @@ export default function Sidebar() {
       group: "People",
       items: [
         { label: "Teams & Members", href: "/teams", icon: Users },
+        { label: "Meetings & Discussions", href: "/teams/meetings", icon: Video },
       ],
     },
     {

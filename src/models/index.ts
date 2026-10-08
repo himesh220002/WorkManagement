@@ -22,3 +22,4 @@ export { CustomerFeedback } from "./customerFeedback";
 export { List, Item } from "./list";
 export { Document } from "./document";
 export { ClientAccount } from "./clientAccount";
+export { Meeting } from "./meeting";
