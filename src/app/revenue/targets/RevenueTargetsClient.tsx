@@ -48,11 +48,13 @@ interface GoalItem {
 interface RevenueTargetsClientProps {
   targets: TargetItem[];
   goals?: GoalItem[];
+  isGuest?: boolean;
 }
 
 export default function RevenueTargetsClient({
   targets = [],
   goals = [],
+  isGuest = false,
 }: RevenueTargetsClientProps) {
   const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
 
@@ -138,13 +140,24 @@ export default function RevenueTargetsClient({
             </div>
 
             <div className="flex justify-end pt-2">
-              <button
-                type="submit"
-                className="px-4 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Set Goal</span>
-              </button>
+              {isGuest ? (
+                <button
+                  type="button"
+                  disabled
+                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-[4px] font-semibold flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Set Goal</span>
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Set Goal</span>
+                </button>
+              )}
             </div>
           </form>
         </div>
@@ -243,13 +256,24 @@ export default function RevenueTargetsClient({
             </div>
 
             <div className="flex justify-end pt-2">
-              <button
-                type="submit"
-                className="px-4 py-2 bg-[#107C10] hover:bg-[#0E6A0E] text-white rounded-[4px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Create Target</span>
-              </button>
+              {isGuest ? (
+                <button
+                  type="button"
+                  disabled
+                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-[4px] font-semibold flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Create Target</span>
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#107C10] hover:bg-[#0E6A0E] text-white rounded-[4px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Create Target</span>
+                </button>
+              )}
             </div>
           </form>
         </div>
@@ -356,12 +380,22 @@ export default function RevenueTargetsClient({
                       >
                         Cancel
                       </button>
-                      <button
-                        type="submit"
-                        className="px-3 py-1 bg-[#0078D4] text-white rounded-[4px] font-semibold"
-                      >
-                        Save
-                      </button>
+                      {isGuest ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-[4px] font-semibold"
+                        >
+                          Save
+                        </button>
+                      ) : (
+                        <button
+                          type="submit"
+                          className="px-3 py-1 bg-[#0078D4] text-white rounded-[4px] font-semibold cursor-pointer"
+                        >
+                          Save
+                        </button>
+                      )}
                     </div>
                   </form>
                 ) : (
@@ -404,23 +438,25 @@ export default function RevenueTargetsClient({
                       >
                         {target.status}
                       </span>
-                      <form
-                        action={deleteTarget}
-                        onSubmit={(e) => {
-                          if (!window.confirm(`Delete target "${target.name}"?`)) {
-                            e.preventDefault();
-                          }
-                        }}
-                      >
-                        <input type="hidden" name="targetId" value={target._id} />
-                        <button
-                          type="submit"
-                          className="text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#D13438] p-1"
-                          title="Delete Target"
+                      {!isGuest && (
+                        <form
+                          action={deleteTarget}
+                          onSubmit={(e) => {
+                            if (!window.confirm(`Delete target "${target.name}"?`)) {
+                              e.preventDefault();
+                            }
+                          }}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </form>
+                          <input type="hidden" name="targetId" value={target._id} />
+                          <button
+                            type="submit"
+                            className="text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#D13438] p-1 cursor-pointer"
+                            title="Delete Target"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </form>
+                      )}
                     </div>
                   </div>
                 )}
@@ -450,14 +486,16 @@ export default function RevenueTargetsClient({
                     {target.checklist?.map((task, idx) => (
                       <form
                         key={idx}
-                        action={toggleTargetChecklist}
+                        action={isGuest ? undefined : toggleTargetChecklist}
+                        onSubmit={isGuest ? (e) => e.preventDefault() : undefined}
                         className="flex items-center gap-2 p-1.5 rounded hover:bg-[#F3F2F1] dark:hover:bg-[#292827] transition-colors"
                       >
                         <input type="hidden" name="targetId" value={target._id} />
                         <input type="hidden" name="taskIndex" value={idx.toString()} />
                         <button
                           type="submit"
-                          className="text-[#0078D4] dark:text-[#479EF5] shrink-0"
+                          disabled={isGuest}
+                          className={`text-[#0078D4] dark:text-[#479EF5] shrink-0 ${isGuest ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
                         >
                           {task.isCompleted ? (
                             <CheckSquare className="w-4 h-4 text-[#107C10]" />
@@ -481,21 +519,36 @@ export default function RevenueTargetsClient({
                   </div>
 
                   {/* Add Checklist Step Form */}
-                  <form action={updateTargetChecklist} className="flex gap-2">
+                  <form
+                    action={isGuest ? undefined : updateTargetChecklist}
+                    onSubmit={isGuest ? (e) => e.preventDefault() : undefined}
+                    className="flex gap-2"
+                  >
                     <input type="hidden" name="targetId" value={target._id} />
                     <input
                       type="text"
                       name="taskName"
                       required
                       placeholder="Add actionable step..."
+                      disabled={isGuest}
                       className="flex-1 p-1.5 text-xs bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
                     />
-                    <button
-                      type="submit"
-                      className="px-2.5 py-1.5 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] text-xs font-semibold"
-                    >
-                      Add
-                    </button>
+                    {isGuest ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="px-2.5 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-[4px] text-xs font-semibold"
+                      >
+                        Add
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        className="px-2.5 py-1.5 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] text-xs font-semibold cursor-pointer"
+                      >
+                        Add
+                      </button>
+                    )}
                   </form>
                 </div>
               </div>

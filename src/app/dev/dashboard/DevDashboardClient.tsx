@@ -51,6 +51,7 @@ export default function DevDashboardClient({
   avgCycleTime = 0,
   selectedProjectId,
   chartData,
+  isGuest = false,
 }: {
   projects: any[];
   tasks: any[];
@@ -60,6 +61,7 @@ export default function DevDashboardClient({
   avgCycleTime?: number;
   selectedProjectId: string;
   chartData: any;
+  isGuest?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -413,10 +415,20 @@ export default function DevDashboardClient({
 
             <button
               type="submit"
-              disabled={projects.length === 0}
-              className="w-full py-2 bg-[#0078D4] hover:bg-[#006CBE] text-white rounded text-xs font-semibold disabled:opacity-50 transition-colors"
+              disabled={isGuest || projects.length === 0}
+              className={`w-full py-2 rounded text-xs font-semibold transition-colors ${
+                isGuest
+                  ? "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600"
+                  : projects.length === 0
+                  ? "bg-[#0078D4] opacity-50 text-white cursor-not-allowed"
+                  : "bg-[#0078D4] hover:bg-[#006CBE] text-white cursor-pointer"
+              }`}
             >
-              {projects.length === 0 ? "No Projects Available" : "Create Production Task"}
+              {isGuest
+                ? "Creation Disabled in Showcase Mode"
+                : projects.length === 0
+                ? "No Projects Available"
+                : "Create Production Task"}
             </button>
           </form>
         </div>
@@ -482,10 +494,20 @@ export default function DevDashboardClient({
 
             <button
               type="submit"
-              disabled={projects.length === 0}
-              className="w-full py-2 bg-[#107C10] hover:bg-[#0F7010] text-white rounded text-xs font-semibold disabled:opacity-50 transition-colors mt-4"
+              disabled={isGuest || projects.length === 0}
+              className={`w-full py-2 rounded text-xs font-semibold transition-colors mt-4 ${
+                isGuest
+                  ? "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600"
+                  : projects.length === 0
+                  ? "bg-[#107C10] opacity-50 text-white cursor-not-allowed"
+                  : "bg-[#107C10] hover:bg-[#0F7010] text-white cursor-pointer"
+              }`}
             >
-              {projects.length === 0 ? "No Projects Available" : "Launch Milestone / Sprint"}
+              {isGuest
+                ? "Milestone Launch Disabled in Showcase Mode"
+                : projects.length === 0
+                ? "No Projects Available"
+                : "Launch Milestone / Sprint"}
             </button>
           </form>
         </div>
@@ -496,7 +518,7 @@ export default function DevDashboardClient({
         <h3 className="font-bold text-base text-[#242424] dark:text-[#FFFFFF] mb-3">
           Interactive Task Backlog & Execution
         </h3>
-        <EditableTaskList tasks={tasks} pipelines={pipelines} cycles={cycles} />
+        <EditableTaskList tasks={tasks} pipelines={pipelines} cycles={cycles} isGuest={isGuest} />
       </div>
 
       {/* Pipeline Cards Grid with Big Look Modal */}
@@ -507,7 +529,7 @@ export default function DevDashboardClient({
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pipelines.map((p) => (
-            <PipelineCard key={p._id} pipeline={p} />
+            <PipelineCard key={p._id} pipeline={p} currentRole={isGuest ? "viewer" : "manager"} />
           ))}
           {pipelines.length === 0 && (
             <div className="col-span-full py-12 text-center text-xs text-[#A19F9D] border border-dashed border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px]">

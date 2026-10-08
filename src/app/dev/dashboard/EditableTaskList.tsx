@@ -2,7 +2,17 @@
 
 import { updateTaskNode } from "@/actions";
 
-export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }: { tasks: any[], pipelines?: any[], cycles?: any[] }) {
+export default function EditableTaskList({
+  tasks,
+  pipelines = [],
+  cycles = [],
+  isGuest = false,
+}: {
+  tasks: any[];
+  pipelines?: any[];
+  cycles?: any[];
+  isGuest?: boolean;
+}) {
   if (!tasks || tasks.length === 0) return null;
 
   return (
@@ -32,10 +42,11 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                     <input
                       type="text"
                       name="name"
+                      disabled={isGuest}
                       defaultValue={task.name}
-                      className="w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 transition-colors"
+                      className={`w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 transition-colors ${isGuest ? 'cursor-default' : ''}`}
                       onBlur={(e) => {
-                        if (e.target.value !== task.name) e.target.form?.requestSubmit();
+                        if (!isGuest && e.target.value !== task.name) e.target.form?.requestSubmit();
                       }}
                     />
                   </form>
@@ -45,9 +56,10 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                     <input type="hidden" name="taskId" value={task._id} />
                     <select
                       name="status"
+                      disabled={isGuest}
                       defaultValue={task.status || "Todo"}
-                      className="w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 cursor-pointer"
-                      onChange={(e) => e.target.form?.requestSubmit()}
+                      className={`w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 ${isGuest ? 'cursor-default' : 'cursor-pointer'}`}
+                      onChange={(e) => !isGuest && e.target.form?.requestSubmit()}
                     >
                       <option value="Todo">Todo</option>
                       <option value="In Progress">In Progress</option>
@@ -63,9 +75,10 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                     <input type="hidden" name="taskId" value={task._id} />
                     <select
                       name="severity"
+                      disabled={isGuest}
                       defaultValue={task.severity?.toLowerCase() || "medium"}
-                      className="w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 cursor-pointer"
-                      onChange={(e) => e.target.form?.requestSubmit()}
+                      className={`w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 ${isGuest ? 'cursor-default' : 'cursor-pointer'}`}
+                      onChange={(e) => !isGuest && e.target.form?.requestSubmit()}
                     >
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>
@@ -80,11 +93,12 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                     <input
                       type="number"
                       name="estimatedHours"
+                      disabled={isGuest}
                       defaultValue={task.estimatedHours || ""}
                       placeholder="0"
-                      className="w-20 p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 transition-colors"
+                      className={`w-20 p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 transition-colors ${isGuest ? 'cursor-default' : ''}`}
                       onBlur={(e) => {
-                        if (Number(e.target.value) !== (task.estimatedHours || 0)) e.target.form?.requestSubmit();
+                        if (!isGuest && Number(e.target.value) !== (task.estimatedHours || 0)) e.target.form?.requestSubmit();
                       }}
                     />
                   </form>
@@ -95,11 +109,12 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                     <input
                       type="number"
                       name="actualHours"
+                      disabled={isGuest}
                       defaultValue={task.actualHours || ""}
                       placeholder="0"
-                      className="w-20 p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 transition-colors"
+                      className={`w-20 p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 transition-colors ${isGuest ? 'cursor-default' : ''}`}
                       onBlur={(e) => {
-                        if (Number(e.target.value) !== (task.actualHours || 0)) e.target.form?.requestSubmit();
+                        if (!isGuest && Number(e.target.value) !== (task.actualHours || 0)) e.target.form?.requestSubmit();
                       }}
                     />
                   </form>
@@ -109,9 +124,10 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                     <input type="hidden" name="taskId" value={task._id} />
                     <select
                       name="pipelineId"
+                      disabled={isGuest}
                       defaultValue={task.pipelineId || "none"}
-                      className="w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 cursor-pointer"
-                      onChange={(e) => e.target.form?.requestSubmit()}
+                      className={`w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 ${isGuest ? 'cursor-default' : 'cursor-pointer'}`}
+                      onChange={(e) => !isGuest && e.target.form?.requestSubmit()}
                     >
                       <option value="none">No Pipeline</option>
                       {pipelines.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
@@ -123,9 +139,10 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                     <input type="hidden" name="taskId" value={task._id} />
                     <select
                       name="cycleId"
+                      disabled={isGuest}
                       defaultValue={task.cycleId || "none"}
-                      className="w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 cursor-pointer"
-                      onChange={(e) => e.target.form?.requestSubmit()}
+                      className={`w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 ${isGuest ? 'cursor-default' : 'cursor-pointer'}`}
+                      onChange={(e) => !isGuest && e.target.form?.requestSubmit()}
                     >
                       <option value="none">No Sprint / Batch</option>
                       {cycles.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}

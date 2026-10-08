@@ -96,7 +96,6 @@ export default function PipelineCard({
     e.preventDefault();
     setDraggedIndex(null);
     if (role === "viewer") {
-      triggerGuestRestriction("Reordering pipeline milestones");
       return;
     }
     await reorderPipelineTodos(pipeline._id, todos);
@@ -432,13 +431,13 @@ export default function PipelineCard({
                         {!isReorderMode && (
                           <input
                             type="checkbox"
-                            className="rounded cursor-pointer accent-[#0078D4] w-4 h-4 shrink-0"
+                            disabled={role === "viewer"}
+                            className={`rounded accent-[#0078D4] w-4 h-4 shrink-0 ${
+                              role === "viewer" ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                            }`}
                             checked={Boolean(todo.completed)}
                             onChange={(e) => {
-                              if (role === "viewer") {
-                                triggerGuestRestriction("Updating checklist task");
-                                return;
-                              }
+                              if (role === "viewer") return;
                               const newCompleted = e.target.checked;
                               const newTodos = [...todos];
                               newTodos[index].completed = newCompleted;
@@ -467,20 +466,16 @@ export default function PipelineCard({
                           </span>
                         )}
 
-                        {!isReorderMode && (
+                        {!isReorderMode && role !== "viewer" && (
                           <button
                             type="button"
                             onClick={() => {
-                              if (role === "viewer") {
-                                triggerGuestRestriction("Deleting pipeline milestone");
-                                return;
-                              }
                               const newTodos = [...todos];
                               newTodos.splice(index, 1);
                               setTodos(newTodos);
                               deletePipelineTodo(pipeline._id, todo._id);
                             }}
-                            className="text-[#A19F9D] hover:text-[#D13438] p-1 transition-colors"
+                            className="text-[#A19F9D] hover:text-[#D13438] p-1 transition-colors cursor-pointer"
                             title="Delete task"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -501,7 +496,6 @@ export default function PipelineCard({
                     onSubmit={(e) => {
                       e.preventDefault();
                       if (role === "viewer") {
-                        triggerGuestRestriction("Adding milestone to pipeline");
                         return;
                       }
                       const form = e.currentTarget;
@@ -563,10 +557,15 @@ export default function PipelineCard({
 
                     <button
                       type="submit"
-                      className="px-3 py-1.5 bg-[#0078D4] hover:bg-[#006CBE] text-white rounded text-xs font-semibold flex items-center gap-1 transition-colors"
+                      disabled={role === "viewer"}
+                      className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1 transition-colors ${
+                        role === "viewer"
+                          ? "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600"
+                          : "bg-[#0078D4] hover:bg-[#006CBE] text-white cursor-pointer"
+                      }`}
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>Add</span>
+                      <span>{role === "viewer" ? "Add (Disabled)" : "Add"}</span>
                     </button>
                   </form>
                 </div>
@@ -592,10 +591,13 @@ export default function PipelineCard({
                       </button>
                     </form>
                   ) : (
-                    <span className="text-[11px] text-[#8A8886] flex items-center gap-1">
-                      <Lock className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Pipeline Deletion Restricted to Management</span>
-                    </span>
+                    <button
+                      type="button"
+                      disabled
+                      className="px-3 py-1.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600"
+                    >
+                      Delete Disabled
+                    </button>
                   )}
 
                   <button

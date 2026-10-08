@@ -21,3 +21,4 @@ export { ResourceAllocation } from "./resourceAllocation";
 export { CustomerFeedback } from "./customerFeedback";
 export { List, Item } from "./list";
 export { Document } from "./document";
+export { ClientAccount } from "./clientAccount";

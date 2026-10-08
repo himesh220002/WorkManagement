@@ -38,5 +38,11 @@ export default async function RevenueTargetsPage() {
     title: g.title,
   }));
 
-  return <RevenueTargetsClient targets={cleanTargets} goals={cleanGoals} />;
+  return (
+    <RevenueTargetsClient
+      targets={cleanTargets}
+      goals={cleanGoals}
+      isGuest={Boolean(session.isGuest)}
+    />
+  );
 }

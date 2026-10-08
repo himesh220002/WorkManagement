@@ -269,9 +269,19 @@ export default async function ProjectsPage() {
               </p>
             </div>
           </div>
-          <div className="text-[11px] font-semibold text-[#0078D4] bg-[#EBF3FC] dark:bg-[#1C2B3D] px-2.5 py-1 rounded shrink-0">
-            Task Execution Mode
-          </div>
+          {session.isGuest ? (
+            <button
+              type="button"
+              disabled
+              className="text-[11px] font-semibold bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 px-3 py-1.5 rounded cursor-not-allowed border border-gray-300 dark:border-gray-600 shrink-0"
+            >
+              + Create Blueprint (Disabled)
+            </button>
+          ) : (
+            <div className="text-[11px] font-semibold text-[#0078D4] bg-[#EBF3FC] dark:bg-[#1C2B3D] px-2.5 py-1 rounded shrink-0">
+              Task Execution Mode
+            </div>
+          )}
         </div>
       )}
 

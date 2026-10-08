@@ -27,6 +27,7 @@ import {
   User,
   ExternalLink,
   FileText,
+  Contact2,
 } from "lucide-react";
 import { PERSONAS } from "./PersonaSwitcher";
 
@@ -67,6 +68,7 @@ export const NAV_GROUPS = [
   {
     group: "Growth",
     items: [
+      { label: "CRM & Client Hub", href: "/growth/crm", icon: Contact2 },
       { label: "Sales Pipeline", href: "/sales/dashboard", icon: BadgeDollarSign },
       { label: "Revenue & Targets", href: "/revenue/dashboard", icon: TrendingUp },
     ],

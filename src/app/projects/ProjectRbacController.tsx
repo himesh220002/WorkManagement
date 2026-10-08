@@ -285,8 +285,8 @@ export default function ProjectRbacController({
               <span>Project Agendas &amp; Delivery Milestones</span>
             </span>
             {isEmployee && (
-              <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-1">
-                <Lock className="w-3 h-3" />
+              <span className="text-[10px] text-blue-700 dark:text-blue-400 font-semibold flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3" />
                 <span>Protected Timeline (TL Governed)</span>
               </span>
             )}

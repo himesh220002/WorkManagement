@@ -315,7 +315,7 @@ export default function TimelineClient({
                 onSubmit={(e) => {
                   if (isGuest) {
                     e.preventDefault();
-                    triggerGuestRestriction("Creating new pipeline");
+                    return;
                   }
                 }}
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-inner"
@@ -421,8 +421,16 @@ export default function TimelineClient({
                 </div>
 
                 <div className="lg:col-span-4 flex justify-end mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <button type="submit" className="px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-sm font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer">
-                    <i className="fa-solid fa-plus"></i> Create Pipeline
+                  <button
+                    type="submit"
+                    disabled={isGuest}
+                    className={`px-6 py-3 rounded-lg text-sm font-bold transition-all shadow-md flex items-center gap-2 ${
+                      isGuest
+                        ? "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600"
+                        : "bg-blue-600 hover:bg-blue-700 active:scale-95 text-white cursor-pointer"
+                    }`}
+                  >
+                    <i className="fa-solid fa-plus"></i> {isGuest ? "Creation Disabled in Showcase Mode" : "Create Pipeline"}
                   </button>
                 </div>
               </form>

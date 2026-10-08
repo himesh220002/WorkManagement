@@ -42,7 +42,6 @@ import {
   Columns3,
   Shield,
   ShieldCheck,
-  Lock,
 } from "lucide-react";
 
 ChartJS.register(
@@ -65,6 +64,7 @@ export default function SalesDashboardClient({
   currentRole,
   currentUserId,
   currentUserName,
+  isGuest = false,
 }: {
   leads: any[];
   campaigns: any[];
@@ -73,6 +73,7 @@ export default function SalesDashboardClient({
   currentRole?: string;
   currentUserId?: string;
   currentUserName?: string;
+  isGuest?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<"kanban" | "campaigns" | "pipelines" | "analytics">("kanban");
   const [searchQuery, setSearchQuery] = useState("");
@@ -200,21 +201,42 @@ export default function SalesDashboardClient({
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
-          <button
-            onClick={() => setIsAddLeadOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[6px] text-xs font-semibold shadow-sm transition-colors cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Lead</span>
-          </button>
-          {canManageCampaigns && (
+          {isGuest ? (
             <button
-              onClick={() => setIsAddCampaignOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] hover:bg-[#F3F2F1] text-[#242424] dark:text-[#FFFFFF] rounded-[6px] text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+              disabled
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-[6px] text-xs font-semibold shadow-sm"
             >
-              <Megaphone className="w-3.5 h-3.5 text-[#107C10]" />
-              <span>New Campaign</span>
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Lead</span>
             </button>
+          ) : (
+            <button
+              onClick={() => setIsAddLeadOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[6px] text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Lead</span>
+            </button>
+          )}
+
+          {canManageCampaigns && (
+            isGuest ? (
+              <button
+                disabled
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-[6px] text-xs font-semibold shadow-sm"
+              >
+                <Megaphone className="w-3.5 h-3.5" />
+                <span>New Campaign</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsAddCampaignOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] hover:bg-[#F3F2F1] text-[#242424] dark:text-[#FFFFFF] rounded-[6px] text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+              >
+                <Megaphone className="w-3.5 h-3.5 text-[#107C10]" />
+                <span>New Campaign</span>
+              </button>
+            )
           )}
         </div>
       </header>
@@ -408,7 +430,7 @@ export default function SalesDashboardClient({
                             >
                               <Edit3 className="w-3.5 h-3.5 pointer-events-none" />
                             </button>
-                            {canDeleteLead && (
+                            {!isGuest && canDeleteLead && (
                               <form
                                 action={deleteLead}
                                 onSubmit={(e) => {
@@ -644,12 +666,22 @@ export default function SalesDashboardClient({
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 bg-[#0078D4] text-white rounded-[4px] font-semibold"
-                >
-                  Add Lead
-                </button>
+                {isGuest ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-4 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-[4px] font-semibold"
+                  >
+                    Add Lead
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 bg-[#0078D4] text-white rounded-[4px] font-semibold cursor-pointer"
+                  >
+                    Add Lead
+                  </button>
+                )}
               </div>
             </form>
           </div>
@@ -711,12 +743,22 @@ export default function SalesDashboardClient({
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 bg-[#107C10] text-white rounded-[4px] font-semibold"
-                >
-                  Launch Campaign
-                </button>
+                {isGuest ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-4 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-[4px] font-semibold"
+                  >
+                    Launch Campaign
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 bg-[#107C10] text-white rounded-[4px] font-semibold cursor-pointer"
+                  >
+                    Launch Campaign
+                  </button>
+                )}
               </div>
             </form>
           </div>
@@ -749,15 +791,11 @@ export default function SalesDashboardClient({
                 </button>
               </div>
 
-              {/* Security Restriction Banners */}
-              {isReadOnlyColleague && (
-                <div className="p-3 mb-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-[6px] text-xs text-amber-900 dark:text-amber-200 space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold">
-                    <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span>Protected Record (Profile Restricted)</span>
-                  </div>
+              {/* Role Indicator */}
+              {isReadOnlyColleague && !isGuest && (
+                <div className="p-2.5 mb-3 bg-neutral-100 dark:bg-[#2A2928] border border-neutral-200 dark:border-neutral-700 rounded-[6px] text-xs text-neutral-700 dark:text-neutral-300">
                   <p className="text-[11px] leading-relaxed">
-                    This lead is owned by <strong>{editingLead.owner}</strong>. As an employee ({currentUserName || "Employee"}), modifying colleague records without ownership or management clearance is restricted to maintain workflow integrity.
+                    This lead is owned by <strong>{editingLead.owner}</strong>. Viewing in standard read-only format.
                   </p>
                 </div>
               )}
@@ -810,8 +848,7 @@ export default function SalesDashboardClient({
                       Lead Owner *
                     </label>
                     {isEmployeeEditor && (
-                      <span className="text-[10px] text-[#605E5C] dark:text-[#A19F9D] flex items-center gap-1">
-                        <Lock className="w-3 h-3 text-amber-500" />
+                      <span className="text-[10px] text-[#605E5C] dark:text-[#A19F9D]">
                         <span>Manager Governed</span>
                       </span>
                     )}
@@ -894,12 +931,22 @@ export default function SalesDashboardClient({
                     {isReadOnlyColleague ? "Close" : "Cancel"}
                   </button>
                   {!isReadOnlyColleague && (
-                    <button
-                      type="submit"
-                      className="px-4 py-1.5 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] font-semibold transition-colors cursor-pointer"
-                    >
-                      Save Changes
-                    </button>
+                    isGuest ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="px-4 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-[4px] font-semibold"
+                      >
+                        Save Changes
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] font-semibold transition-colors cursor-pointer"
+                      >
+                        Save Changes
+                      </button>
+                    )
                   )}
                 </div>
               </form>
@@ -931,17 +978,7 @@ export default function SalesDashboardClient({
                 </button>
               </div>
 
-              {!isManager && (
-                <div className="p-3 mb-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-[6px] text-xs text-amber-900 dark:text-amber-200 space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold">
-                    <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span>Financial Model Protection</span>
-                  </div>
-                  <p className="text-[11px] leading-relaxed">
-                    Marketing budget allocations (${(editingCampaign.expectedRevenue || 0).toLocaleString()} expected revenue) and campaign targets are strictly governed by Operations Managers and Company Owners to prevent financial distortion.
-                  </p>
-                </div>
-              )}
+
 
               <form
                 action={async (formData) => {
@@ -1009,12 +1046,22 @@ export default function SalesDashboardClient({
                     {isManager ? "Cancel" : "Close"}
                   </button>
                   {isManager && (
-                    <button
-                      type="submit"
-                      className="px-4 py-1.5 bg-[#107C10] hover:bg-[#0E6A0E] text-white rounded-[4px] font-semibold transition-colors cursor-pointer"
-                    >
-                      Update Campaign
-                    </button>
+                    isGuest ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="px-4 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-[4px] font-semibold"
+                      >
+                        Update Campaign
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 bg-[#107C10] hover:bg-[#0E6A0E] text-white rounded-[4px] font-semibold transition-colors cursor-pointer"
+                      >
+                        Update Campaign
+                      </button>
+                    )
                   )}
                 </div>
               </form>

@@ -16,6 +16,7 @@ import {
   BookOpen,
   Briefcase,
   ShieldCheck,
+  Contact2,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -29,6 +30,7 @@ export default function Sidebar() {
     "teams",
     "sales",
     "revenue",
+    "growth",
     "diagrams",
     "my-work",
     "dev",
@@ -70,6 +72,7 @@ export default function Sidebar() {
     {
       group: "Growth",
       items: [
+        { label: "CRM & Client Hub", href: "/growth/crm", icon: Contact2 },
         { label: "Sales Pipeline", href: "/sales/dashboard", icon: BadgeDollarSign },
         { label: "Revenue & Targets", href: "/revenue/dashboard", icon: TrendingUp },
       ],

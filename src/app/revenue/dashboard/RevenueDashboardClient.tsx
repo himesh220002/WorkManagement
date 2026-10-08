@@ -49,7 +49,6 @@ import {
   SlidersHorizontal,
   Shield,
   ShieldCheck,
-  Lock,
 } from "lucide-react";
 
 ChartJS.register(
@@ -175,6 +174,7 @@ interface RevenueDashboardClientProps {
   currentRole?: string;
   currentUserId?: string;
   currentUserName?: string;
+  isGuest?: boolean;
 }
 
 export default function RevenueDashboardClient({
@@ -186,6 +186,7 @@ export default function RevenueDashboardClient({
   currentRole,
   currentUserId,
   currentUserName,
+  isGuest = false,
 }: RevenueDashboardClientProps) {
   const role = (currentRole || "manager").toLowerCase();
   const canManageRevenue = ["owner", "manager", "superuser"].includes(role);
@@ -457,19 +458,29 @@ export default function RevenueDashboardClient({
         <div className="flex items-center gap-3 w-full lg:w-auto flex-wrap">
           <button
             onClick={() => setShowExampleModal(true)}
-            className="flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] text-xs font-semibold text-[#242424] dark:text-[#FFFFFF] hover:bg-[#F3F2F1] dark:hover:bg-[#323130] transition-colors shadow-sm"
+            className="flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] text-xs font-semibold text-[#242424] dark:text-[#FFFFFF] hover:bg-[#F3F2F1] dark:hover:bg-[#323130] transition-colors shadow-sm cursor-pointer"
           >
             <BookOpen className="w-4 h-4 text-[#0078D4]" />
             <span>Interactive Blueprint</span>
           </button>
 
-          <button
-            onClick={() => openAddDealModal("Prospect")}
-            className="flex items-center gap-2 px-4 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[6px] text-xs font-semibold shadow-sm transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            <span>New Deal</span>
-          </button>
+          {isGuest ? (
+            <button
+              disabled
+              className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-[6px] text-xs font-semibold shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>New Deal</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => openAddDealModal("Prospect")}
+              className="flex items-center gap-2 px-4 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[6px] text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>New Deal</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -767,13 +778,19 @@ export default function RevenueDashboardClient({
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => openAddDealModal(stage)}
-                      className="p-1 text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#0078D4] dark:hover:text-[#479EF5] hover:bg-[#F3F2F1] dark:hover:bg-[#292827] rounded-[4px] transition-colors"
-                      title={`Add deal to ${stage}`}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
+                    {isGuest ? (
+                      <span className="p-1 text-gray-300 dark:text-gray-600 cursor-not-allowed">
+                        <Plus className="w-4 h-4" />
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => openAddDealModal(stage)}
+                        className="p-1 text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#0078D4] dark:hover:text-[#479EF5] hover:bg-[#F3F2F1] dark:hover:bg-[#292827] rounded-[4px] transition-colors cursor-pointer"
+                        title={`Add deal to ${stage}`}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
 
                   {/* Cards Drop Area */}
@@ -810,7 +827,7 @@ export default function RevenueDashboardClient({
                               >
                                 <Edit3 className="w-3.5 h-3.5 pointer-events-none" />
                               </button>
-                              {canManageRevenue && (
+                              {!isGuest && canManageRevenue && (
                                 <form
                                   action={deleteDeal}
                                   onSubmit={(e) => {
@@ -1068,13 +1085,23 @@ export default function RevenueDashboardClient({
                 Financial envelopes connecting deals and projects to operational budgets, manpower, and toolsets.
               </p>
             </div>
-            <button
-              onClick={() => setIsAddResourceOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[6px] text-xs font-semibold transition-colors shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Allocate Resource</span>
-            </button>
+            {isGuest ? (
+              <button
+                disabled
+                className="flex items-center gap-2 px-3.5 py-2 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-[6px] text-xs font-semibold shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Allocate Resource</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsAddResourceOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[6px] text-xs font-semibold transition-colors shadow-sm cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Allocate Resource</span>
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -1380,12 +1407,22 @@ export default function RevenueDashboardClient({
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] font-semibold"
-                >
-                  Create Deal
-                </button>
+                {isGuest ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-[4px] font-semibold"
+                  >
+                    Create Deal
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] font-semibold cursor-pointer"
+                  >
+                    Create Deal
+                  </button>
+                )}
               </div>
             </form>
           </div>
@@ -1580,12 +1617,22 @@ export default function RevenueDashboardClient({
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] font-semibold"
-                >
-                  Save Changes
-                </button>
+                {isGuest ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-[4px] font-semibold"
+                  >
+                    Save Changes
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] font-semibold cursor-pointer"
+                  >
+                    Save Changes
+                  </button>
+                )}
               </div>
             </form>
           </div>
@@ -1738,12 +1785,22 @@ export default function RevenueDashboardClient({
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] font-semibold"
-                >
-                  Confirm Allocation
-                </button>
+                {isGuest ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600 rounded-[4px] font-semibold"
+                  >
+                    Confirm Allocation
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] font-semibold cursor-pointer"
+                  >
+                    Confirm Allocation
+                  </button>
+                )}
               </div>
             </form>
           </div>

@@ -199,7 +199,7 @@ export default function GlobalMemberDirectory({
                     <span>{normalizeRole(u.role).toUpperCase()}</span>
                     {(normalizeRole(u.role) === "owner" || normalizeRole(u.role) === "superuser") && (
                       <span title="Protected: Owner tag cannot be changed by Managers">
-                        <Lock className="w-2.5 h-2.5 text-amber-700 ml-0.5" />
+                        <Shield className="w-2.5 h-2.5 text-amber-700 ml-0.5" />
                       </span>
                     )}
                   </span>

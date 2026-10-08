@@ -100,6 +100,7 @@ export default async function SalesDashboardPage() {
       currentRole={session.role}
       currentUserId={session.userId}
       currentUserName={session.name}
+      isGuest={Boolean(session.isGuest)}
     />
   );
 }

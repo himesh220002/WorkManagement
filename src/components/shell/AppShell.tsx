@@ -57,7 +57,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
-      <ShowcaseGuestCard />
     </ShellContext.Provider>
   );
 }

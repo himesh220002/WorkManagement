@@ -127,6 +127,7 @@ export default async function RevenueDashboardPage() {
       currentRole={session.role}
       currentUserId={session.userId}
       currentUserName={session.name}
+      isGuest={Boolean(session.isGuest)}
     />
   );
 }

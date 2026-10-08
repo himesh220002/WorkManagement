@@ -235,6 +235,7 @@ export default async function DevDashboardPage(
       avgCycleTime={avgCycleTime}
       selectedProjectId={selectedProjectId}
       chartData={chartData}
+      isGuest={Boolean(session.isGuest)}
     />
   );
 }
