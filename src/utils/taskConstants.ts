@@ -1,4 +1,30 @@
 export const PREDEFINED_PIPELINE_TASKS: Record<string, string[]> = {
+  "Physical Goods & Hardware": [
+    "CAD Modeling & Ergonomics Blueprint",
+    "BOM (Bill of Materials) & Parts Sourcing",
+    "Prototype Tooling & Machine Assembly",
+    "Stress, Durability & Load Testing",
+    "Packaging Design & Quality Inspection",
+    "Batch Pilot Manufacturing Run",
+    "Warehouse Logistics & Freight Staging"
+  ],
+  "Service Operations & Channels": [
+    "Channel Partner & Vendor Contracts",
+    "Facility & Location Readiness",
+    "Service SOP & Staff Hospitality Training",
+    "Booking & Order Dispatch System",
+    "Regulatory Licenses & Legal Permits",
+    "Pilot Channel Customer Onboarding",
+    "Live Service Channel Audit & Launch"
+  ],
+  "Creative & Design Systems": [
+    "Brand Identity & Visual Style Guide",
+    "Design System Component Tokens",
+    "Wireframing & UX Flow Architecture",
+    "Interactive Prototype Testing",
+    "Packaging Collateral & Artwork",
+    "Design QA & Asset Handover"
+  ],
   Development: [
     "UI Design & Wireframes",
     "Frontend Component Development",

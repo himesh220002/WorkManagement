@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { Company, User } from "@/models";
 import { signToken } from "@/server/auth/jwt";
 import { CompanyStatus, UserRole, UserStatus } from "@/models/enums";
+import { migrateCompanyToDedicatedDb } from "@/lib/tenantDb";
 
 export async function POST(req: NextRequest) {
   await connectToDatabase();
@@ -122,6 +123,13 @@ export async function POST(req: NextRequest) {
 
     await session.commitTransaction();
     session.endSession();
+
+    // Pre-initialize dedicated tenant database for this company
+    try {
+      await migrateCompanyToDedicatedDb(company.companyCode || code, company._id.toString());
+    } catch (e) {
+      console.warn("Could not pre-initialize dedicated tenant DB:", e);
+    }
 
     // 4. Generate signed JWT token
     const token = signToken({

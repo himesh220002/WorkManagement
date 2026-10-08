@@ -153,7 +153,7 @@ export default function AuthPage({
   );
 
   // Owner action mode: "signup" (create new company) or "login" (sign in)
-  const [ownerMode, setOwnerMode] = useState<"signup" | "login">("signup");
+  const [ownerMode, setOwnerMode] = useState<"signup" | "login">("login");
 
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -338,7 +338,7 @@ export default function AuthPage({
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+              <h1 className="text-lg sm:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
                 Corporate Access &amp; Multi-Tenant Portal
               </h1>
               <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4]">
@@ -453,11 +453,11 @@ export default function AuthPage({
               onChange={(e) => handleSelectPersona(e.target.value as PersonaKey)}
               className="w-full pl-10 pr-9 py-2.5 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] text-xs font-bold text-[#242424] dark:text-white outline-none focus:border-[#0078D4] focus:ring-1 focus:ring-[#0078D4] appearance-none cursor-pointer shadow-xs transition-colors"
             >
-              <option value="owner">👑 Company Owner (Founder &amp; Executive Authority)</option>
-              <option value="manager">💼 Operations Manager (Staffing &amp; Roadmaps)</option>
-              <option value="teamlead">⚡ Project Team Lead (Project Governance)</option>
-              <option value="employee">👥 Company Employee (Dev / Sales / Ops Specialist)</option>
-              <option value="superuser">🛡️ Developer Superuser (Master Mode)</option>
+              <option value="owner">Company Owner (Founder &amp; Executive Authority)</option>
+              <option value="manager">Operations Manager (Staffing &amp; Roadmaps)</option>
+              <option value="teamlead">Project Team Lead (Project Governance)</option>
+              <option value="employee">Company Employee (Dev / Sales / Ops Specialist)</option>
+              <option value="superuser">Developer Superuser (Master Mode)</option>
             </select>
             <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#0078D4] dark:text-[#479EF5]">
               <ActiveIcon className="w-4 h-4" />
@@ -497,6 +497,18 @@ export default function AuthPage({
             <div className="flex border-b border-[#E1DFDD] dark:border-[#3B3A39] mb-5">
               <button
                 type="button"
+                onClick={() => setOwnerMode("login")}
+                className={`pb-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${ownerMode === "login"
+                  ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+                  : "border-transparent text-[#605E5C] dark:text-[#C8C6C4]"
+                  }`}
+              >
+                <Lock className="w-4 h-4" />
+                <span>Sign In as Existing Owner</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setOwnerMode("signup")}
                 className={`pb-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${ownerMode === "signup"
                   ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
@@ -507,17 +519,7 @@ export default function AuthPage({
                 <span>Create New Organization (Fresh Workspace)</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => setOwnerMode("login")}
-                className={`pb-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${ownerMode === "login"
-                  ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-                  : "border-transparent text-[#605E5C] dark:text-[#C8C6C4]"
-                  }`}
-              >
-                <Lock className="w-4 h-4" />
-                <span>Sign In as Existing Owner</span>
-              </button>
+
             </div>
 
             {ownerMode === "signup" ? (

@@ -71,13 +71,13 @@ export default function TeamCard({ team, allUsers, currentRole, currentUserId }:
   return (
     <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden">
       {/* Team Header */}
-      <div className="p-4 border-b border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#1B1A19] flex justify-between items-center">
+      <div className="flex flex-wrap gap-2 p-4 border-b border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#1B1A19] flex justify-between items-center">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-[#EBF3FC] dark:bg-[#1C2B3D] text-[#0078D4] dark:text-[#479EF5] flex items-center justify-center font-bold">
             <Users className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="font-bold text-sm text-[#242424] dark:text-[#FFFFFF]">
+            <h3 className="text-wrap font-bold text-sm text-[#242424] dark:text-[#FFFFFF]">
               {team.name}
             </h3>
             <p className="text-[11px] text-[#605E5C] dark:text-[#C8C6C4]">
@@ -248,13 +248,12 @@ export default function TeamCard({ team, allUsers, currentRole, currentUserId }:
                     </div>
                     <div className="w-full bg-[#E1DFDD] dark:bg-[#3B3A39] h-1.5 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          merit.isPromotionReady
-                            ? "bg-emerald-500 shadow-sm"
-                            : merit.progressPercent >= 80
+                        className={`h-full rounded-full transition-all duration-500 ${merit.isPromotionReady
+                          ? "bg-emerald-500 shadow-sm"
+                          : merit.progressPercent >= 80
                             ? "bg-amber-500"
                             : "bg-[#0078D4]"
-                        }`}
+                          }`}
                         style={{ width: `${merit.progressPercent}%` }}
                       />
                     </div>
@@ -283,7 +282,7 @@ export default function TeamCard({ team, allUsers, currentRole, currentUserId }:
           <input type="hidden" name="teamId" value={team._id} />
           <select
             name="userId"
-            className="flex-1 p-1.5 text-xs bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none cursor-pointer"
+            className="w-full p-1.5 text-xs bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none cursor-pointer"
             defaultValue=""
             required
           >

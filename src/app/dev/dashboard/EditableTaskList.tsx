@@ -8,19 +8,19 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
   return (
     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-6">
       <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100 flex items-center gap-2">
-        <i className="fa-solid fa-list-check text-blue-600"></i> Active Project Tasks
+        <i className="fa-solid fa-list-check text-blue-600"></i> Active Production Tasks & Deliverables
       </h3>
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse min-w-[800px]">
           <thead>
             <tr className="border-b border-gray-200 dark:border-gray-700">
-              <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Task Name</th>
+              <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Task / Deliverable Name</th>
               <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Status</th>
-              <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Severity</th>
+              <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Severity / Priority</th>
               <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Est. Hours</th>
               <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Actual Hours</th>
               <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Pipeline</th>
-              <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Sprint</th>
+              <th className="p-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Sprint / Batch</th>
             </tr>
           </thead>
           <tbody>
@@ -51,7 +51,7 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                     >
                       <option value="Todo">Todo</option>
                       <option value="In Progress">In Progress</option>
-                      <option value="Code Review">Code Review</option>
+                      <option value="Code Review">Review / QA Verification</option>
                       <option value="Blocked">Blocked</option>
                       <option value="Done">Done</option>
                       <option value="Archived">Archived</option>
@@ -127,7 +127,7 @@ export default function EditableTaskList({ tasks, pipelines = [], cycles = [] }:
                       className="w-full p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-blue-500 bg-transparent text-sm text-gray-900 dark:text-gray-100 cursor-pointer"
                       onChange={(e) => e.target.form?.requestSubmit()}
                     >
-                      <option value="none">No Sprint</option>
+                      <option value="none">No Sprint / Batch</option>
                       {cycles.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
                     </select>
                   </form>

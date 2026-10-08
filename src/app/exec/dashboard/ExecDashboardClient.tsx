@@ -206,27 +206,35 @@ export default function ExecDashboardClient({
     return { total, completed, inProgress, review, blocked, todo, progressPercent };
   }, [scopedTasks]);
 
+  const isClosedWon = (d: any) => {
+    const stage = (d.stage || "").toLowerCase().trim();
+    const status = (d.status || "").toLowerCase().trim();
+    return (
+      stage === "closed" ||
+      stage === "won" ||
+      stage === "closed won" ||
+      stage === "closed-won" ||
+      stage.includes("closed") ||
+      stage.includes("won") ||
+      stage.includes("integration") ||
+      status === "won" ||
+      status === "closed"
+    );
+  };
+
   const currentRevenue = useMemo(() => {
     const won = scopedDeals
-      .filter(
-        (d) =>
-          ["closed", "won", "integration"].includes(d.stage.toLowerCase()) ||
-          d.status.toLowerCase() === "won"
-      )
-      .reduce((sum, d) => sum + d.amount, 0);
+      .filter(isClosedWon)
+      .reduce((sum, d) => sum + (Number(d.amount) || Number(d.revenue) || 0), 0);
 
     const pipeline = scopedDeals
       .filter(
         (d) =>
-          ![
-            "closed",
-            "won",
-            "integration",
-            "lost",
-            "dropped",
-          ].includes(d.stage.toLowerCase()) && d.status.toLowerCase() === "active"
+          !isClosedWon(d) &&
+          !["lost", "dropped", "cancelled"].includes((d.stage || "").toLowerCase().trim()) &&
+          (d.status || "").toLowerCase().trim() !== "lost"
       )
-      .reduce((sum, d) => sum + d.amount, 0);
+      .reduce((sum, d) => sum + (Number(d.amount) || Number(d.revenue) || 0), 0);
 
     return { won, pipeline };
   }, [scopedDeals]);
@@ -265,15 +273,11 @@ export default function ExecDashboardClient({
           leads.length,
           leads.filter((l) => ["qualified", "working"].includes(l.status.toLowerCase())).length,
           scopedDeals.filter((d) =>
-            ["initial analysis", "due diligence", "closing", "signing & closing", "prospect"].includes(
-              d.stage.toLowerCase()
+            ["initial analysis", "due diligence", "closing", "signing & closing", "prospect", "proposal"].some((s) =>
+              (d.stage || "").toLowerCase().includes(s)
             )
           ).length,
-          scopedDeals.filter(
-            (d) =>
-              ["closed", "won", "integration"].includes(d.stage.toLowerCase()) ||
-              d.status.toLowerCase() === "won"
-          ).length,
+          scopedDeals.filter(isClosedWon).length,
         ],
         backgroundColor: ["#E1DFDD", "#86A8D6", "#0078D4", "#107C10"],
         borderRadius: 4,
@@ -408,7 +412,7 @@ export default function ExecDashboardClient({
       <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14),0_0_2px_rgba(0,0,0,0.12)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl sm:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+            <h1 className="text-lg sm:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
               Executive &amp; Strategic Portfolio Dashboard
             </h1>
             <Badge tone="success" size="sm">
@@ -465,7 +469,7 @@ export default function ExecDashboardClient({
       )}
 
       {/* Executive Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4 mb-8">
         <Stat
           label={isAll ? "Active Projects" : "Project Status"}
           value={isAll ? `${portfolioStats.activeProjects} / ${portfolioStats.totalProjects}` : activeProjectObj?.status || "Active"}
@@ -561,7 +565,7 @@ export default function ExecDashboardClient({
       {/* Tab 1: Project Portfolio Table */}
       {activeTab === "portfolio" && (
         <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-2 sm:p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-col md:flex-row gap-4 justify-between items-start mb-4">
             <div>
               <h2 className="text-lg font-bold text-[#242424] dark:text-[#FFFFFF]">
                 Enterprise Project Portfolio & Task Rollup

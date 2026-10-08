@@ -276,7 +276,7 @@ export default function ResourceDashboardClient({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
+                <h1 className="text-lg sm:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
                   Resource Allocation &amp; Capacity Governance
                 </h1>
                 {companyCode && (
@@ -323,7 +323,7 @@ export default function ResourceDashboardClient({
               </span>
               <DollarSign className="w-4 h-4 text-[#0078D4]" />
             </div>
-            <div className="text-2xl font-bold text-[#242424] dark:text-white">
+            <div className="text-lg lg:text-xl font-bold text-[#242424] dark:text-white">
               ${totalBudgetAllocated.toLocaleString()}
             </div>
             <div className="flex items-center justify-between text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">
@@ -349,7 +349,7 @@ export default function ResourceDashboardClient({
               </span>
               <Users className="w-4 h-4 text-[#107C10]" />
             </div>
-            <div className="text-2xl font-bold text-[#242424] dark:text-white">
+            <div className="text-lg lg:text-xl font-bold text-[#242424] dark:text-white">
               {users.length} Active Members
             </div>
             <div className="flex items-center justify-between text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">
@@ -372,7 +372,7 @@ export default function ResourceDashboardClient({
               </span>
               <Server className="w-4 h-4 text-[#8764B8]" />
             </div>
-            <div className="text-2xl font-bold text-[#242424] dark:text-white">
+            <div className="text-lg lg:text-xl font-bold text-[#242424] dark:text-white">
               {infraResources.length} Envelopes
             </div>
             <div className="flex items-center justify-between text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">
@@ -395,7 +395,7 @@ export default function ResourceDashboardClient({
               </span>
               <AlertTriangle className="w-4 h-4 text-[#D13438]" />
             </div>
-            <div className="text-2xl font-bold text-[#242424] dark:text-white flex items-center gap-2">
+            <div className="text-lg lg:text-xl font-bold text-[#242424] dark:text-white flex items-center gap-2">
               <span>{highRiskCount}</span>
               <span className="text-xs font-normal text-[#605E5C] dark:text-[#C8C6C4]">
                 High Risk Items
@@ -417,17 +417,16 @@ export default function ResourceDashboardClient({
 
       {/* ================= NAVIGATION TABS & FILTERS ================= */}
       <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 mb-6 shadow-sm">
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+        <div className="flex flex-col items-stretch  justify-between gap-4">
           {/* Tabs */}
           <div className="flex border-b border-[#E1DFDD] dark:border-[#3B3A39] lg:border-b-0 space-x-2">
             <button
               type="button"
               onClick={() => setActiveTab("matrix")}
-              className={`pb-2.5 px-3 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === "matrix"
-                  ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-                  : "border-transparent text-[#605E5C] dark:text-[#C8C6C4]"
-              }`}
+              className={`pb-2.5 px-3 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${activeTab === "matrix"
+                ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+                : "border-transparent text-[#605E5C] dark:text-[#C8C6C4]"
+                }`}
             >
               <Layers className="w-4 h-4" />
               <span>Allocation Matrix ({filteredResources.length})</span>
@@ -436,11 +435,10 @@ export default function ResourceDashboardClient({
             <button
               type="button"
               onClick={() => setActiveTab("analytics")}
-              className={`pb-2.5 px-3 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === "analytics"
-                  ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-                  : "border-transparent text-[#605E5C] dark:text-[#C8C6C4]"
-              }`}
+              className={`pb-2.5 px-3 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${activeTab === "analytics"
+                ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+                : "border-transparent text-[#605E5C] dark:text-[#C8C6C4]"
+                }`}
             >
               <BarChart3 className="w-4 h-4" />
               <span>Utilization &amp; Burn Analytics</span>
@@ -449,11 +447,10 @@ export default function ResourceDashboardClient({
             <button
               type="button"
               onClick={() => setActiveTab("headcount")}
-              className={`pb-2.5 px-3 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === "headcount"
-                  ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
-                  : "border-transparent text-[#605E5C] dark:text-[#C8C6C4]"
-              }`}
+              className={`pb-2.5 px-3 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${activeTab === "headcount"
+                ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
+                : "border-transparent text-[#605E5C] dark:text-[#C8C6C4]"
+                }`}
             >
               <Users className="w-4 h-4" />
               <span>Squad &amp; Member Capacity ({users.length})</span>
@@ -463,7 +460,7 @@ export default function ResourceDashboardClient({
           {/* Filter Toolbar */}
           <div className="flex flex-wrap items-center gap-2.5 text-xs">
             {/* Search */}
-            <div className="relative min-w-[160px] flex-1 sm:flex-initial">
+            <div className="relative min-w-[160px] flex-1">
               <Search className="w-3.5 h-3.5 text-[#8A8886] absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -601,13 +598,12 @@ export default function ResourceDashboardClient({
 
                         <td className="py-3 px-3">
                           <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              r.type === "Budget"
-                                ? "bg-blue-100 text-[#0078D4] dark:bg-blue-900/40 dark:text-[#479EF5]"
-                                : r.type === "Headcount"
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${r.type === "Budget"
+                              ? "bg-blue-100 text-[#0078D4] dark:bg-blue-900/40 dark:text-[#479EF5]"
+                              : r.type === "Headcount"
                                 ? "bg-emerald-100 text-[#107C10] dark:bg-emerald-900/40 dark:text-[#54B054]"
                                 : "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
-                            }`}
+                              }`}
                           >
                             {r.type}
                           </span>
@@ -648,8 +644,8 @@ export default function ResourceDashboardClient({
                                   burnRate >= 90
                                     ? "danger"
                                     : burnRate >= 70
-                                    ? "warning"
-                                    : "brand"
+                                      ? "warning"
+                                      : "brand"
                                 }
                               />
                             </div>
@@ -661,13 +657,12 @@ export default function ResourceDashboardClient({
 
                         <td className="py-3 px-3">
                           <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              r.riskLevel === "High"
-                                ? "bg-rose-100 text-[#D13438] dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800"
-                                : r.riskLevel === "Medium"
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${r.riskLevel === "High"
+                              ? "bg-rose-100 text-[#D13438] dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800"
+                              : r.riskLevel === "Medium"
                                 ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
                                 : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
-                            }`}
+                              }`}
                           >
                             {r.riskLevel}
                           </span>

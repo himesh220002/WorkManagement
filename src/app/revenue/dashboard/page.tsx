@@ -24,7 +24,7 @@ export default async function RevenueDashboardPage() {
       fetchWithCache(`rev_deals:${cId}`, 30, () => Deal.find(tenantFilter).lean()),
       fetchWithCache(`rev_targets:${cId}`, 30, () => Target.find(tenantFilter).lean()),
       fetchWithCache(`rev_pipelines:${cId}`, 30, () =>
-        Pipeline.find({ ...tenantFilter, category: "Finance" })
+        Pipeline.find({ ...tenantFilter, category: { $in: ["Finance", "Sales"] } })
           .populate("projectId teamId taskId")
           .sort({ progress: -1 })
           .lean()

@@ -5,6 +5,7 @@ import { Pipeline, TaskNode, Lead, Campaign, Deal, Target, Goal, Team, User, Pro
 import { revalidatePath as nextRevalidatePath } from "next/cache";
 import { getCurrentSession } from "@/server/auth/session";
 import { invalidateAllAppCaches } from "@/lib/cache";
+import { syncTenantWrite } from "@/lib/tenantDb";
 
 function revalidatePath(path: string) {
   invalidateAllAppCaches();
@@ -84,12 +85,13 @@ export async function addPipeline(formData: FormData) {
       finalTaskId = newTask._id.toString();
     }
 
-    await Pipeline.create({ 
+    const newPipe = await Pipeline.create({ 
       name, category, owner, status, priority, startDate, endDate, progress, objectives, budget, kpis, riskLevel, dependencies, outcome,
       projectId, teamId, taskId: finalTaskId, memberIds,
       cashFlowProjectionUSD, expensesUSD, roiPercent,
       companyId: session.companyId,
     } as any);
+    await syncTenantWrite("Pipeline", "create", newPipe, undefined, session.companyCode);
     
     revalidatePath("/dev/timeline");
     revalidatePath("/sales/dashboard");
@@ -106,7 +108,8 @@ export async function addLead(formData: FormData) {
   const status = formData.get("status") as string;
 
   if (name) {
-    await Lead.create({ name, owner, status, source: "Manual Entry", companyId: session.companyId });
+    const newLead = await Lead.create({ name, owner, status, source: "Manual Entry", companyId: session.companyId });
+    await syncTenantWrite("Lead", "create", newLead, undefined, session.companyCode);
     revalidatePath("/sales/dashboard");
   }
 }
@@ -119,7 +122,8 @@ export async function addCampaign(formData: FormData) {
   const expectedRevenue = Number(formData.get("expectedRevenue")) || 0;
 
   if (name) {
-    await Campaign.create({ name, leadsGenerated, expectedRevenue, companyId: session.companyId });
+    const newCamp = await Campaign.create({ name, leadsGenerated, expectedRevenue, companyId: session.companyId });
+    await syncTenantWrite("Campaign", "create", newCamp, undefined, session.companyCode);
     revalidatePath("/sales/dashboard");
   }
 }
@@ -156,7 +160,8 @@ export async function addDeal(formData: FormData) {
     };
     if (formData.get("projectId")) data.projectId = formData.get("projectId");
     if (formData.get("pipelineId")) data.pipelineId = formData.get("pipelineId");
-    await Deal.create(data);
+    const newDeal = await Deal.create(data);
+    await syncTenantWrite("Deal", "create", newDeal, undefined, session.companyCode);
     revalidatePath("/revenue/dashboard");
   }
 }
@@ -164,6 +169,8 @@ export async function addDeal(formData: FormData) {
 export async function updateDealStage(dealId: string, stage: string) {
   await connectToDatabase();
   await Deal.findByIdAndUpdate(dealId, { stage });
+  const session = await getCurrentSession();
+  await syncTenantWrite("Deal", "update", dealId, { stage }, session.companyCode);
   revalidatePath("/revenue/dashboard");
 }
 
@@ -194,6 +201,8 @@ export async function updateDeal(formData: FormData) {
     if (riskLevel) data["metadata.riskLevel"] = riskLevel;
     
     await Deal.findByIdAndUpdate(dealId, data);
+    const session = await getCurrentSession();
+    await syncTenantWrite("Deal", "update", dealId, data, session.companyCode);
     revalidatePath("/revenue/dashboard");
   }
 }
@@ -203,6 +212,8 @@ export async function deleteDeal(formData: FormData) {
   const dealId = formData.get("dealId") as string;
   if (dealId) {
     await Deal.findByIdAndDelete(dealId);
+    const session = await getCurrentSession();
+    await syncTenantWrite("Deal", "delete", dealId, undefined, session.companyCode);
     revalidatePath("/revenue/dashboard");
   }
 }
@@ -210,6 +221,8 @@ export async function deleteDeal(formData: FormData) {
 export async function updateLeadStatus(leadId: string, status: string) {
   await connectToDatabase();
   await Lead.findByIdAndUpdate(leadId, { status });
+  const session = await getCurrentSession();
+  await syncTenantWrite("Lead", "update", leadId, { status }, session.companyCode);
   revalidatePath("/sales/dashboard");
 }
 
@@ -226,6 +239,8 @@ export async function updateLead(formData: FormData) {
     const data: any = { name, owner, status, source };
     if (campaignId !== undefined) data.campaignId = campaignId || null;
     await Lead.findByIdAndUpdate(leadId, data);
+    const session = await getCurrentSession();
+    await syncTenantWrite("Lead", "update", leadId, data, session.companyCode);
     revalidatePath("/sales/dashboard");
   }
 }
@@ -235,6 +250,8 @@ export async function deleteLead(formData: FormData) {
   const leadId = formData.get("leadId") as string;
   if (leadId) {
     await Lead.findByIdAndDelete(leadId);
+    const session = await getCurrentSession();
+    await syncTenantWrite("Lead", "delete", leadId, undefined, session.companyCode);
     revalidatePath("/sales/dashboard");
   }
 }
@@ -253,6 +270,8 @@ export async function updateCampaign(formData: FormData) {
     if (projectId !== undefined) data.projectId = projectId || null;
     if (pipelineId !== undefined) data.pipelineId = pipelineId || null;
     await Campaign.findByIdAndUpdate(campaignId, data);
+    const session = await getCurrentSession();
+    await syncTenantWrite("Campaign", "update", campaignId, data, session.companyCode);
     revalidatePath("/sales/dashboard");
   }
 }
@@ -262,6 +281,8 @@ export async function deleteCampaign(formData: FormData) {
   const campaignId = formData.get("campaignId") as string;
   if (campaignId) {
     await Campaign.findByIdAndDelete(campaignId);
+    const session = await getCurrentSession();
+    await syncTenantWrite("Campaign", "delete", campaignId, undefined, session.companyCode);
     revalidatePath("/sales/dashboard");
   }
 }
@@ -274,7 +295,8 @@ export async function addGoal(formData: FormData) {
   const category = (formData.get("category") as string) || "Company";
 
   if (title) {
-    await Goal.create({ title, description, category, companyId: session.companyId });
+    const newGoal = await Goal.create({ title, description, category, companyId: session.companyId });
+    await syncTenantWrite("Goal", "create", newGoal, undefined, session.companyCode);
     revalidatePath("/exec/dashboard");
   }
 }
@@ -284,7 +306,8 @@ export async function addTeam(formData: FormData) {
   const session = await getCurrentSession();
   const name = formData.get("name") as string;
   if (name) {
-    await Team.create({ name, companyId: session.companyId });
+    const newTeam = await Team.create({ name, companyId: session.companyId });
+    await syncTenantWrite("Team", "create", newTeam, undefined, session.companyCode);
     revalidatePath("/projects");
     revalidatePath("/teams");
     revalidatePath("/diagrams");
@@ -296,6 +319,8 @@ export async function deleteTeam(formData: FormData) {
   const id = formData.get("teamId") as string;
   if (id) {
     await Team.findByIdAndDelete(id);
+    const session = await getCurrentSession();
+    await syncTenantWrite("Team", "delete", id, undefined, session.companyCode);
     revalidatePath("/teams");
     revalidatePath("/projects");
     revalidatePath("/diagrams");
@@ -320,13 +345,14 @@ export async function addProject(formData: FormData) {
   const category = (formData.get("category") as string) || "Internal";
 
   if (name) {
-    await Project.create({
+    const newProj = await Project.create({
       name,
       description,
       category,
       companyId: session.companyId,
       ownerId: session.userId,
     } as any);
+    await syncTenantWrite("Project", "create", newProj, undefined, session.companyCode);
     revalidatePath("/projects");
   }
 }
@@ -344,7 +370,8 @@ export async function addTarget(formData: FormData) {
   if (name) {
     const data: any = { name, industry, region, expectedValue, actualValue, companyId: session.companyId };
     if (goalId) data.goalId = goalId;
-    await Target.create(data);
+    const newTarget = await Target.create(data);
+    await syncTenantWrite("Target", "create", newTarget, undefined, session.companyCode);
     revalidatePath("/revenue/dashboard");
     revalidatePath("/revenue/targets");
   }
@@ -393,7 +420,7 @@ export async function updatePipeline(formData: FormData) {
   const objectives = formData.get("objectives") as string;
 
   if (pipelineId) {
-    await Pipeline.findByIdAndUpdate(pipelineId, {
+    const updateObj = {
       name,
       category,
       priority,
@@ -401,7 +428,10 @@ export async function updatePipeline(formData: FormData) {
       riskLevel,
       budget,
       objectives,
-    });
+    };
+    await Pipeline.findByIdAndUpdate(pipelineId, updateObj);
+    const session = await getCurrentSession();
+    await syncTenantWrite("Pipeline", "update", pipelineId, updateObj, session.companyCode);
     revalidatePath("/sales/dashboard");
     revalidatePath("/revenue/dashboard");
     revalidatePath("/dev/timeline");
@@ -413,6 +443,8 @@ export async function updatePipelineProgress(taskId: string, progress: number) {
   await connectToDatabase();
   if (taskId && taskId !== "demo1") {
     await Pipeline.findByIdAndUpdate(taskId, { progress });
+    const session = await getCurrentSession();
+    await syncTenantWrite("Pipeline", "update", taskId, { progress }, session.companyCode);
     revalidatePath("/dev/timeline");
   }
 }
@@ -421,6 +453,8 @@ export async function updatePipelineDates(taskId: string, startDate: string, end
   await connectToDatabase();
   if (taskId && taskId !== "demo1") {
     await Pipeline.findByIdAndUpdate(taskId, { startDate, endDate });
+    const session = await getCurrentSession();
+    await syncTenantWrite("Pipeline", "update", taskId, { startDate, endDate }, session.companyCode);
     revalidatePath("/dev/timeline");
   }
 }
@@ -440,6 +474,8 @@ export async function addPipelineTodo(pipelineId: string, formData: FormData) {
     const completed = pipeline.todos.filter((t: any) => t.completed).length;
     pipeline.progress = total > 0 ? Math.round((completed / total) * 100) : 0;
     await pipeline.save();
+    const session = await getCurrentSession();
+    await syncTenantWrite("Pipeline", "update", pipelineId, { todos: pipeline.todos, progress: pipeline.progress }, session.companyCode);
     revalidatePath("/dev/timeline");
     revalidatePath("/dev/dashboard");
     revalidatePath("/dev");
@@ -466,6 +502,8 @@ export async function togglePipelineTodo(pipelineId: string, todoId: string, com
     const completedCount = pipeline.todos?.filter((t: any) => t.completed).length || 0;
     pipeline.progress = total > 0 ? Math.round((completedCount / total) * 100) : 0;
     await pipeline.save();
+    const session = await getCurrentSession();
+    await syncTenantWrite("Pipeline", "update", pipelineId, { todos: pipeline.todos, progress: pipeline.progress }, session.companyCode);
     revalidatePath("/dev/timeline");
     revalidatePath("/dev/dashboard");
     revalidatePath("/dev");
@@ -486,6 +524,8 @@ export async function deletePipelineTodo(pipelineId: string, todoId: string) {
     const completedCount = pipeline.todos.filter((t: any) => t.completed).length;
     pipeline.progress = total > 0 ? Math.round((completedCount / total) * 100) : 0;
     await pipeline.save();
+    const session = await getCurrentSession();
+    await syncTenantWrite("Pipeline", "update", pipelineId, { todos: pipeline.todos, progress: pipeline.progress }, session.companyCode);
     revalidatePath("/dev/timeline");
     revalidatePath("/dev/dashboard");
     revalidatePath("/dev");
@@ -509,6 +549,8 @@ export async function reorderPipelineTodos(pipelineId: string, todos: any[]) {
   const completedCount = cleanTodos.filter((t: any) => t.completed).length;
   const progress = total > 0 ? Math.round((completedCount / total) * 100) : 0;
   await Pipeline.findByIdAndUpdate(pipelineId, { todos: cleanTodos, progress });
+  const session = await getCurrentSession();
+  await syncTenantWrite("Pipeline", "update", pipelineId, { todos: cleanTodos, progress }, session.companyCode);
   revalidatePath("/dev/timeline");
   revalidatePath("/dev/dashboard");
   revalidatePath("/dev");
@@ -522,6 +564,8 @@ export async function deletePipeline(formData: FormData) {
   if (!pipelineId) return;
   await connectToDatabase();
   await Pipeline.findByIdAndDelete(pipelineId);
+  const session = await getCurrentSession();
+  await syncTenantWrite("Pipeline", "delete", pipelineId, undefined, session.companyCode);
   revalidatePath("/dev/timeline");
 }
 
@@ -541,7 +585,8 @@ export async function addResourceAllocation(formData: FormData) {
     if (assignedToProjectId) data.assignedToProjectId = assignedToProjectId;
     if (linkedDealId) data.linkedDealId = linkedDealId;
     
-    await ResourceAllocation.create(data);
+    const newRes = await ResourceAllocation.create(data);
+    await syncTenantWrite("ResourceAllocation", "create", newRes, undefined, session.companyCode);
     revalidatePath("/exec/resources");
     revalidatePath("/revenue/dashboard");
   }
@@ -575,6 +620,7 @@ export async function updateResourceAllocation(formData: FormData) {
     if (linkedDealId) updateData.linkedDealId = linkedDealId;
 
     await ResourceAllocation.updateOne(filter, updateData);
+    await syncTenantWrite("ResourceAllocation", "update", id, updateData, session.companyCode);
     revalidatePath("/exec/resources");
     revalidatePath("/revenue/dashboard");
   }
@@ -588,6 +634,7 @@ export async function deleteResourceAllocation(formData: FormData) {
     const filter: any = { _id: id };
     if (session.companyId) filter.companyId = session.companyId;
     await ResourceAllocation.deleteOne(filter);
+    await syncTenantWrite("ResourceAllocation", "delete", id, undefined, session.companyCode);
     revalidatePath("/exec/resources");
     revalidatePath("/revenue/dashboard");
   }
@@ -630,7 +677,8 @@ export async function addTaskNode(formData: FormData) {
     if (pipelineId && pipelineId !== "none") data.pipelineId = pipelineId;
     if (cycleId && cycleId !== "none") data.cycleId = cycleId;
     
-    await TaskNode.create(data);
+    const newTask = await TaskNode.create(data);
+    await syncTenantWrite("TaskNode", "create", newTask, undefined, session.companyCode);
     revalidatePath("/dev/dashboard");
     revalidatePath("/dev/timeline");
     revalidatePath("/exec/dashboard");
@@ -639,6 +687,7 @@ export async function addTaskNode(formData: FormData) {
 
 export async function updateTaskNode(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
   const taskId = formData.get("taskId") as string;
   const name = formData.get("name") as string;
   const status = formData.get("status") as string;
@@ -659,7 +708,10 @@ export async function updateTaskNode(formData: FormData) {
     if (cycleId) updateData.cycleId = cycleId === "none" ? null : cycleId;
 
     await TaskNode.findByIdAndUpdate(taskId, updateData);
+    await syncTenantWrite("TaskNode", "update", taskId, updateData, session.companyCode);
     revalidatePath("/dev/dashboard");
+    revalidatePath("/dev/timeline");
+    revalidatePath("/exec/dashboard");
   }
 }
 
@@ -680,12 +732,15 @@ export async function addCycle(formData: FormData) {
   }
 
   if (name && targetProject && targetProject !== "all") {
-    await Cycle.create({
+    const cycleData = {
       name,
       project: targetProject,
+      companyId: session.companyId,
       startDate: startDate ? new Date(startDate) : new Date(),
       endDate: endDate ? new Date(endDate) : undefined,
-    });
+    };
+    const newCycle = await Cycle.create(cycleData);
+    await syncTenantWrite("Cycle", "create", newCycle, undefined, session.companyCode);
     revalidatePath("/dev/dashboard");
     revalidatePath("/dev/timeline");
     revalidatePath("/exec/dashboard");
@@ -698,6 +753,9 @@ export async function deleteGoal(formData: FormData) {
   if (goalId) {
     await Goal.findByIdAndDelete(goalId);
     await Target.deleteMany({ goalId: goalId });
+    const session = await getCurrentSession();
+    await syncTenantWrite("Goal", "delete", goalId, undefined, session.companyCode);
+    await syncTenantWrite("Target", "delete", { goalId }, undefined, session.companyCode);
     revalidatePath("/exec/dashboard");
     revalidatePath("/revenue/targets");
   }
@@ -712,6 +770,8 @@ export async function updateGoal(formData: FormData) {
 
   if (goalId) {
     await Goal.findByIdAndUpdate(goalId, { title, description, category });
+    const session = await getCurrentSession();
+    await syncTenantWrite("Goal", "update", goalId, { title, description, category }, session.companyCode);
     revalidatePath("/exec/dashboard");
     revalidatePath("/revenue/targets");
   }
@@ -722,6 +782,8 @@ export async function deleteTarget(formData: FormData) {
   const targetId = formData.get("targetId") as string;
   if (targetId) {
     await Target.findByIdAndDelete(targetId);
+    const session = await getCurrentSession();
+    await syncTenantWrite("Target", "delete", targetId, undefined, session.companyCode);
     revalidatePath("/revenue/targets");
     revalidatePath("/exec/dashboard");
   }
@@ -751,6 +813,8 @@ export async function updateTarget(formData: FormData) {
       updateData.goalId = goalId || null;
     }
     await Target.findByIdAndUpdate(targetId, updateData);
+    const session = await getCurrentSession();
+    await syncTenantWrite("Target", "update", targetId, updateData, session.companyCode);
     revalidatePath("/revenue/targets");
     revalidatePath("/exec/dashboard");
   }

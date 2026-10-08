@@ -358,6 +358,7 @@ export interface ICampaign {
 export interface ICycle {
   _id: string | Types.ObjectId;
   name: string;
+  companyId?: Types.ObjectId | string;
   project?: Types.ObjectId | string;
   startDate?: Date;
   endDate?: Date;

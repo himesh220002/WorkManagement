@@ -51,4 +51,54 @@ describe("Database-per-Tenant Architecture", () => {
     expect(models.Item).toBeDefined();
     expect(models.Document).toBeDefined();
   });
+
+  it("syncTenantWrite delegates create, update, and delete correctly to the tenant model", async () => {
+    const { syncTenantWrite } = await import("@/lib/tenantDb");
+    const fakeUpdateOne = vi.fn().mockResolvedValue({ acknowledged: true });
+    const fakeDeleteOne = vi.fn().mockResolvedValue({ acknowledged: true });
+
+    const fakeModels: Record<string, any> = {
+      Cycle: {
+        updateOne: fakeUpdateOne,
+        deleteOne: fakeDeleteOne,
+      },
+      TaskNode: {
+        updateOne: fakeUpdateOne,
+        deleteOne: fakeDeleteOne,
+      },
+    };
+
+    const fakeConnection = {
+      name: "projectManageDB_ORGTTV",
+      models: fakeModels,
+      model: vi.fn((name: string) => fakeModels[name]),
+    };
+
+    vi.spyOn(mongoose.connection, "useDb").mockReturnValue(fakeConnection as any);
+
+    // 1. Create operation
+    const mockCycle = { _id: "cycle123", name: "Sprint Alpha", companyId: "comp123" };
+    await syncTenantWrite("Cycle", "create", mockCycle, undefined, "ORGTTV");
+    expect(fakeUpdateOne).toHaveBeenCalledWith(
+      { _id: "cycle123" },
+      { $set: mockCycle },
+      { upsert: true }
+    );
+
+    // 2. Update operation
+    await syncTenantWrite("TaskNode", "update", "task456", { status: "Done" }, "ORGTTV");
+    expect(fakeUpdateOne).toHaveBeenCalledWith(
+      { _id: "task456" },
+      { status: "Done" }
+    );
+
+    // 3. Delete operation
+    await syncTenantWrite("TaskNode", "delete", "task456", undefined, "ORGTTV");
+    expect(fakeDeleteOne).toHaveBeenCalledWith({ _id: "task456" });
+
+    // 4. No-op without companyCode
+    fakeUpdateOne.mockClear();
+    await syncTenantWrite("Cycle", "create", mockCycle, undefined, undefined);
+    expect(fakeUpdateOne).not.toHaveBeenCalled();
+  });
 });

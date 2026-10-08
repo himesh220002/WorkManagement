@@ -29,20 +29,22 @@ export const metadata: Metadata = {
 
 export default function AboutPage() {
   return (
-    <main className="flex flex-col min-w-0 p-0 sm:p-4 flex-1 max-w-[1600px] mx-auto w-full">
+    <main className="flex flex-col min-w-0 p-4 flex-1 max-w-[1600px] mx-auto w-full">
       {/* Header */}
       <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 sm:p-6 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <h1 className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
               About WorkManagement Platform
             </h1>
-            <Badge tone="brand" size="sm">
-              Enterprise Architecture v2.0
-            </Badge>
-            <Badge tone="success" size="sm">
-              Microsoft Fluent 2 Standards
-            </Badge>
+            <div className="flex gap-2 items-center ">
+              <Badge tone="brand" size="sm">
+                Enterprise Architecture v2.0
+              </Badge>
+              <Badge tone="success" size="sm">
+                Microsoft Fluent 2 Standards
+              </Badge>
+            </div>
           </div>
           <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">
             System architectural doctrine, cross-pipeline operating model, and complete enterprise capability matrix.
@@ -68,12 +70,12 @@ export default function AboutPage() {
       </header>
 
       {/* Hero Overview Banner */}
-      <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-8 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] relative overflow-hidden">
+      <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 lg:p-8 mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.14)] relative overflow-hidden">
         <div className="max-w-4xl relative z-10">
           <span className="text-xs font-bold text-[#0078D4] dark:text-[#479EF5] uppercase tracking-wider block mb-2">
             The Enterprise Operating System
           </span>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-[#242424] dark:text-[#FFFFFF] mb-4 leading-tight">
+          <h2 className="text-lg lg:text-2xl sm:text-3xl font-extrabold text-[#242424] dark:text-[#FFFFFF] mb-4 leading-tight">
             Synchronizing Engineering Delivery, Commercial Sales, and Revenue Realization in a Single Continuum
           </h2>
           <p className="text-sm text-[#605E5C] dark:text-[#C8C6C4] leading-relaxed mb-6">
@@ -257,8 +259,8 @@ export default function AboutPage() {
       </div>
 
       {/* Seniority Rank Hierarchy Reference Matrix */}
-      <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-8 shadow-sm">
-        <div className="mb-4">
+      <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-0 sm:p-6 mb-8 shadow-sm">
+        <div className="p-4">
           <h3 className="text-base font-bold text-[#242424] dark:text-[#FFFFFF] flex items-center gap-2">
             <Award className="w-5 h-5 text-[#0078D4]" />
             <span>Enterprise Talent Capability &amp; Seniority Matrix (Ranks 1–5)</span>
@@ -269,7 +271,7 @@ export default function AboutPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left border-collapse">
+          <table className="min-w-[600px] w-full text-xs text-left border-collapse">
             <thead>
               <tr className="border-b border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#1B1A19] text-[#605E5C] dark:text-[#C8C6C4]">
                 <th className="py-2.5 px-4 font-semibold">Tier Rank</th>

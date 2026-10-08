@@ -23,7 +23,7 @@ export default async function SalesDashboardPage() {
       fetchWithCache(`sales_leads:${cId}`, 30, () => Lead.find(tenantFilter).lean()),
       fetchWithCache(`sales_campaigns:${cId}`, 30, () => Campaign.find(tenantFilter).lean()),
       fetchWithCache(`sales_pipelines:${cId}`, 30, () =>
-        Pipeline.find({ ...tenantFilter, category: "Sales" })
+        Pipeline.find({ ...tenantFilter, category: { $in: ["Sales", "Finance"] } })
           .populate("projectId teamId taskId")
           .sort({ progress: -1 })
           .lean()

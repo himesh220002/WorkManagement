@@ -3,6 +3,7 @@ import { Project, Pipeline, Team, Task, Goal, Deal } from "@/models";
 import DiagramsClient from "@/app/diagrams/DiagramsClient";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import { fetchWithCache } from "@/lib/cache";
+import { computePipelineProgress } from "@/utils/pipelineProgress";
 
 export default async function DiagramsPage() {
   await connectToDatabase();
@@ -40,17 +41,40 @@ export default async function DiagramsPage() {
     health: p.health || "On Track",
   }));
 
-  const cleanPipelines = pipelinesRaw.map((p: any) => ({
-    _id: p._id.toString(),
-    name: p.name,
-    category: p.category || "General",
-    status: p.status || "Active",
-    progress: Number(p.progress || 0),
-    riskLevel: p.riskLevel || "Low",
-    owner: p.owner || "Unassigned",
-    projectId: p.projectId ? { _id: (p.projectId._id || p.projectId).toString(), name: p.projectId.name } : null,
-    teamId: p.teamId ? { _id: (p.teamId._id || p.teamId).toString(), name: p.teamId.name } : null,
-  }));
+  const cleanPipelines = pipelinesRaw.map((p: any) => {
+    const pipeIdStr = p._id.toString();
+    const linkedTasks = tasksRaw.filter(
+      (t: any) => t.pipelineId && t.pipelineId.toString() === pipeIdStr
+    );
+    const progress = computePipelineProgress(p, linkedTasks);
+
+    return {
+      _id: pipeIdStr,
+      name: p.name,
+      category: p.category || "General",
+      status: p.status || "Active",
+      progress,
+      riskLevel: p.riskLevel || "Low",
+      owner: p.owner || "Unassigned",
+      dependencies: p.dependencies || null,
+      todosCount: Array.isArray(p.todos) ? p.todos.length : 0,
+      completedTodosCount: Array.isArray(p.todos)
+        ? p.todos.filter((t: any) => t.completed).length
+        : 0,
+      projectId: p.projectId
+        ? {
+            _id: (p.projectId._id || p.projectId).toString(),
+            name: p.projectId.name,
+          }
+        : null,
+      teamId: p.teamId
+        ? {
+            _id: (p.teamId._id || p.teamId).toString(),
+            name: p.teamId.name,
+          }
+        : null,
+    };
+  });
 
   const cleanTeams = teamsRaw.map((t: any) => ({
     _id: t._id.toString(),

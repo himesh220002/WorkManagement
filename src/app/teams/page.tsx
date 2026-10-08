@@ -9,6 +9,7 @@ import { calculateMeritEvaluation } from "@/utils/meritEvaluation";
 import { revalidatePath } from "next/cache";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import { fetchWithCache, invalidateCachePrefix } from "@/lib/cache";
+import { syncTenantWrite } from "@/lib/tenantDb";
 import {
   Users,
   Plus,
@@ -28,7 +29,8 @@ async function addTeam(formData: FormData) {
   const memberIds = formData.getAll("memberIds") as string[];
 
   if (name) {
-    await Team.create({ name, members: memberIds, companyId: session.companyId });
+    const newTeam = await Team.create({ name, members: memberIds, companyId: session.companyId });
+    await syncTenantWrite("Team", "create", newTeam, undefined, session.companyCode);
     invalidateCachePrefix("teams_");
     invalidateCachePrefix("exec_");
     revalidatePath("/teams");
@@ -120,7 +122,7 @@ export default async function TeamsPage() {
   return (
     <main className="flex flex-col min-w-0 p-0 sm:p-4 flex-1 max-w-[1600px] mx-auto w-full">
       {/* Header */}
-      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-5 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 mb-5 shadow-[0_1px_2px_rgba(0,0,0,0.14)] flex flex-col justify-between items-start gap-4">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">

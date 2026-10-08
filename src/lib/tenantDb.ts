@@ -22,6 +22,7 @@ import {
   List,
   Item,
   Document,
+  Company,
 } from "@/models";
 
 export interface TenantModels {
@@ -118,7 +119,44 @@ export async function getTenantModels(companyCode: string): Promise<TenantModels
  */
 export async function migrateCompanyToDedicatedDb(companyCode: string, companyId: string) {
   await connectToDatabase();
+  const tenantConn = await getTenantConnection(companyCode);
   const tenantModels = await getTenantModels(companyCode);
+
+  // Pre-initialize and physically create all 21 collection folders in the dedicated tenant DB
+  // Ensures MongoDB Atlas and Compass immediately display every collection folder for the registered company
+  const allCollectionNames = [
+    "users",
+    "teams",
+    "projects",
+    "pipelines",
+    "tasks",
+    "tasknodes",
+    "deals",
+    "leads",
+    "campaigns",
+    "cycles",
+    "goals",
+    "dailygoals",
+    "targets",
+    "assignments",
+    "activitylogs",
+    "statussnapshots",
+    "resourceallocations",
+    "customerfeedbacks",
+    "lists",
+    "items",
+    "documents",
+  ];
+
+  for (const col of allCollectionNames) {
+    try {
+      if (tenantConn.db) {
+        await tenantConn.db.createCollection(col);
+      }
+    } catch {
+      // Ignore if collection already exists
+    }
+  }
 
   const collectionsToMigrate: Array<{ name: string; source: Model<any>; target: Model<any> }> = [
     { name: "User", source: User, target: tenantModels.User },
@@ -147,7 +185,28 @@ export async function migrateCompanyToDedicatedDb(companyCode: string, companyId
 
   for (const { name, source, target } of collectionsToMigrate) {
     try {
-      const docs = await source.find({ companyId }).lean();
+      let docs: any[] = [];
+      if (name === "Cycle") {
+        // Cycles might have companyId, or link to projects belonging to this company
+        const projects = await Project.find({ companyId }).select("_id").lean();
+        const projectIds = projects.map((p: any) => p._id);
+        docs = await source
+          .find({
+            $or: [{ companyId }, { project: { $in: projectIds } }],
+          })
+          .lean();
+        // Also ensure companyId is set on source if missing
+        if (docs.length > 0) {
+          await source.updateMany(
+            { _id: { $in: docs.map((d: any) => d._id) } },
+            { $set: { companyId } }
+          );
+        }
+        docs = docs.map((d: any) => ({ ...d, companyId }));
+      } else {
+        docs = await source.find({ companyId }).lean();
+      }
+
       if (docs && docs.length > 0) {
         for (const doc of docs) {
           await target.updateOne({ _id: (doc as any)._id }, { $set: doc }, { upsert: true });
@@ -165,3 +224,51 @@ export async function migrateCompanyToDedicatedDb(companyCode: string, companyId
     migrated: results,
   };
 }
+
+/**
+ * Automatically synchronizes model writes to the tenant's isolated database (projectManageDB_{CODE})
+ * ensuring all collections (cycles, tasknodes, teams, pipelines, goals, etc.) stay in sync.
+ */
+export async function syncTenantWrite(
+  modelName: keyof TenantModels,
+  operation: "create" | "update" | "delete",
+  docOrFilter: any,
+  updatePayload?: any,
+  companyCode?: string
+) {
+  let targetCode = companyCode;
+  if (!targetCode && docOrFilter?.companyId) {
+    try {
+      const comp = await Company.findById(docOrFilter.companyId).select("companyCode").lean();
+      if (comp) targetCode = (comp as any).companyCode;
+    } catch {}
+  }
+  if (!targetCode) return;
+  try {
+    const tenantModels = await getTenantModels(targetCode);
+    const targetModel = tenantModels[modelName];
+    if (!targetModel) return;
+
+    if (operation === "create") {
+      const cleanDoc = docOrFilter && typeof docOrFilter.toObject === "function" 
+        ? docOrFilter.toObject() 
+        : docOrFilter;
+      if (cleanDoc && cleanDoc._id) {
+        await targetModel.updateOne(
+          { _id: cleanDoc._id },
+          { $set: cleanDoc },
+          { upsert: true }
+        );
+      }
+    } else if (operation === "update") {
+      const filter = typeof docOrFilter === "string" ? { _id: docOrFilter } : docOrFilter;
+      await targetModel.updateOne(filter, updatePayload);
+    } else if (operation === "delete") {
+      const filter = typeof docOrFilter === "string" ? { _id: docOrFilter } : docOrFilter;
+      await targetModel.deleteOne(filter);
+    }
+  } catch (err) {
+    console.warn(`[syncTenantWrite] Warning syncing ${modelName} to tenant ${targetCode}:`, err);
+  }
+}
+

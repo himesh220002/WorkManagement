@@ -220,11 +220,10 @@ export default function ProjectHelpDemoClient({
               <div
                 key={idx}
                 onClick={() => setActivePhaseIndex(idx)}
-                className={`cursor-pointer rounded-[4px] border p-4 transition-all flex flex-col justify-between ${
-                  isSelected
-                    ? "border-[#0078D4] bg-[#F7FAFD] dark:bg-[#1C2B3D]/30 shadow-md ring-1 ring-[#0078D4]"
-                    : "border-[#E1DFDD] dark:border-[#3B3A39] bg-white dark:bg-[#201F1E] hover:border-[#0078D4]"
-                }`}
+                className={`cursor-pointer rounded-[4px] border p-4 transition-all flex flex-col justify-between ${isSelected
+                  ? "border-[#0078D4] bg-[#F7FAFD] dark:bg-[#1C2B3D]/30 shadow-md ring-1 ring-[#0078D4]"
+                  : "border-[#E1DFDD] dark:border-[#3B3A39] bg-white dark:bg-[#201F1E] hover:border-[#0078D4]"
+                  }`}
               >
                 <div>
                   <div className="flex items-center justify-between mb-2.5">
@@ -286,15 +285,14 @@ export default function ProjectHelpDemoClient({
           </div>
 
           {/* Archetype Tab Switcher */}
-          <div className="inline-flex rounded-sm bg-[#FAF9F8] dark:bg-[#292827] p-1 border border-[#E1DFDD] dark:border-[#3B3A39] self-start md:self-auto">
+          <div className="flex flex-col 2xl:flex-row rounded-sm bg-[#FAF9F8] dark:bg-[#292827] p-1 border border-[#E1DFDD] dark:border-[#3B3A39] self-start md:self-auto">
             <button
               type="button"
               onClick={() => setActiveArchetype("chair")}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-semibold transition ${
-                activeArchetype === "chair"
-                  ? "bg-white dark:bg-[#3B3A39] text-[#0078D4] dark:text-white shadow-sm"
-                  : "text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-              }`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-semibold transition ${activeArchetype === "chair"
+                ? "bg-white dark:bg-[#3B3A39] text-[#0078D4] dark:text-white shadow-sm"
+                : "text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+                }`}
             >
               <Package className="w-3.5 h-3.5" />
               <span>1. Physical Office Chair</span>
@@ -302,11 +300,10 @@ export default function ProjectHelpDemoClient({
             <button
               type="button"
               onClick={() => setActiveArchetype("hotel")}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-semibold transition ${
-                activeArchetype === "hotel"
-                  ? "bg-white dark:bg-[#3B3A39] text-[#0078D4] dark:text-white shadow-sm"
-                  : "text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-              }`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-semibold transition ${activeArchetype === "hotel"
+                ? "bg-white dark:bg-[#3B3A39] text-[#0078D4] dark:text-white shadow-sm"
+                : "text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+                }`}
             >
               <Hotel className="w-3.5 h-3.5" />
               <span>2. 4-City Hotel Service</span>
@@ -314,11 +311,10 @@ export default function ProjectHelpDemoClient({
             <button
               type="button"
               onClick={() => setActiveArchetype("webdev")}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-semibold transition ${
-                activeArchetype === "webdev"
-                  ? "bg-white dark:bg-[#3B3A39] text-[#0078D4] dark:text-white shadow-sm"
-                  : "text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
-              }`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-semibold transition ${activeArchetype === "webdev"
+                ? "bg-white dark:bg-[#3B3A39] text-[#0078D4] dark:text-white shadow-sm"
+                : "text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
+                }`}
             >
               <Laptop className="w-3.5 h-3.5" />
               <span>3. Full-Stack Web Dev Agency</span>
@@ -788,25 +784,23 @@ export default function ProjectHelpDemoClient({
               <div
                 key={item.key}
                 onClick={() => toggleTodo(item.key)}
-                className={`cursor-pointer flex items-center justify-between p-3 rounded-[4px] border text-xs transition ${
-                  isDone
-                    ? "bg-[#FAF9F8] dark:bg-[#292827] border-[#EDEBE9] dark:border-[#3B3A39]"
-                    : "bg-white dark:bg-[#201F1E] border-[#E1DFDD] dark:border-[#3B3A39] hover:border-[#0078D4]"
-                }`}
+                className={`cursor-pointer flex items-center justify-between p-3 rounded-[4px] border text-xs transition ${isDone
+                  ? "bg-[#FAF9F8] dark:bg-[#292827] border-[#EDEBE9] dark:border-[#3B3A39]"
+                  : "bg-white dark:bg-[#201F1E] border-[#E1DFDD] dark:border-[#3B3A39] hover:border-[#0078D4]"
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   <input
                     type="checkbox"
                     checked={isDone}
-                    onChange={() => {}}
+                    onChange={() => { }}
                     className="h-4 w-4 rounded accent-[#0078D4] cursor-pointer"
                   />
                   <span
-                    className={`font-medium ${
-                      isDone
-                        ? "line-through text-[#8A8886] dark:text-[#797775]"
-                        : "text-[#242424] dark:text-white"
-                    }`}
+                    className={`font-medium ${isDone
+                      ? "line-through text-[#8A8886] dark:text-[#797775]"
+                      : "text-[#242424] dark:text-white"
+                      }`}
                   >
                     {item.text}
                   </span>
@@ -825,7 +819,7 @@ export default function ProjectHelpDemoClient({
           })}
         </div>
 
-        <div className="flex justify-between items-center pt-2 text-xs text-[#605E5C] dark:text-[#A19F9D]">
+        <div className="flex flex-col sm:flex-row gap-2 justify-between items-center pt-2 text-xs text-[#605E5C] dark:text-[#A19F9D]">
           <span>
             💡 This exact checklist is available on any pipeline card in{" "}
             <Link href={`${orgPrefix}/dev/dashboard`} className="text-[#0078D4] font-semibold hover:underline">

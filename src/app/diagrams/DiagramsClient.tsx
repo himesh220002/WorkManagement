@@ -176,32 +176,106 @@ export default function DiagramsClient({
     }
 
     if (activeDiagram === "pipelines") {
-      return `flowchart LR
-    %% Cross-functional Pipeline Interconnectivity
-    subgraph DevPhase ["1. Development Phase"]
-        Dev["💻 Core Development Pipeline"]
-    end
+      const sanitize = (str: string) => (str || "").replace(/["'\[\]\(\)\{\}\<\>]/g, " ").trim();
 
-    subgraph LaunchPhase ["2. Launch & Operations Phase"]
-        Mktg["📢 Marketing & Growth"]
-        Ops["⚙️ Operations & Deployment"]
-        HR["👥 Talent & Capability"]
-    end
+      let code = `flowchart LR\n`;
+      code += `  %% Live Parallel Pipeline Interconnectivity Flow\n`;
+      code += `  classDef highProgress fill:#DFF6DD,stroke:#107C10,stroke-width:2px,color:#107C10,font-weight:bold;\n`;
+      code += `  classDef medProgress fill:#EBF3FC,stroke:#0078D4,stroke-width:2px,color:#0078D4,font-weight:bold;\n`;
+      code += `  classDef pendingProgress fill:#FFF4CE,stroke:#797673,stroke-width:1.5px,color:#242424;\n`;
+      code += `  classDef commercial fill:#FDF3F2,stroke:#C4314B,stroke-width:1.5px,color:#C4314B,font-weight:bold;\n`;
 
-    subgraph RevenuePhase ["3. Commercialization Phase"]
-        Sales["💼 Sales & Deal Pipeline"]
-        Fin["💰 Finance & Revenue Recognition"]
-    end
+      if (pipelines.length === 0) {
+        code += `  subgraph Phase1 ["1. Production & Execution Phase"]\n`;
+        code += `    Dev["⚡ Core Production Pipeline (0%)"]:::pendingProgress\n`;
+        code += `  end\n`;
+        code += `  subgraph Phase2 ["2. Operational & Channel Phase"]\n`;
+        code += `    Ops["⚙️ Operations & Deployment (0%)"]:::pendingProgress\n`;
+        code += `    Mktg["📢 Marketing & Channel Distribution (0%)"]:::pendingProgress\n`;
+        code += `  end\n`;
+        code += `  subgraph Phase3 ["3. Commercialization & Revenue"]\n`;
+        code += `    Sales["💼 B2B Sales & Revenue Recognition"]:::commercial\n`;
+        code += `  end\n`;
+        code += `  Dev ==> Ops\n`;
+        code += `  Dev ==> Mktg\n`;
+        code += `  Ops --> Sales\n`;
+        code += `  Mktg --> Sales\n`;
+        return code;
+      }
 
-    Dev ==> Mktg
-    Dev ==> Ops
-    Dev ==> HR
-    Mktg --> Sales
-    Ops --> Sales
-    Sales ==> Fin
-    
-    classDef highlight fill:#EBF3FC,stroke:#0078D4,stroke-width:2px,color:#0078D4,font-weight:bold;
-    class Dev,Sales,Fin highlight;`;
+      // Group pipelines by Project
+      const projectMap: Record<string, any[]> = {};
+      const unassignedPipelines: any[] = [];
+
+      pipelines.forEach((p) => {
+        const pId = p.projectId?._id || (typeof p.projectId === "string" ? p.projectId : null);
+        if (pId) {
+          if (!projectMap[pId]) projectMap[pId] = [];
+          projectMap[pId].push(p);
+        } else {
+          unassignedPipelines.push(p);
+        }
+      });
+
+      const renderedPipeIds: string[] = [];
+
+      Object.entries(projectMap).forEach(([projId, pipeList], projIdx) => {
+        const proj = projects.find((pr) => pr._id === projId);
+        const projName = sanitize(proj?.name || `Project ${projIdx + 1}`);
+        const clusterId = `ProjCluster_${projId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+
+        code += `  subgraph ${clusterId} ["📁 ${projName} (Parallel Execution Tracks)"]\n`;
+        code += `    direction TB\n`;
+
+        pipeList.forEach((pipe, pipeIdx) => {
+          const pipeNodeId = `Pipe_${pipe._id.replace(/[^a-zA-Z0-9]/g, "_")}`;
+          renderedPipeIds.push(pipeNodeId);
+          const safeName = sanitize(pipe.name || `Pipeline ${pipeIdx + 1}`);
+          const prog = Math.round(Number(pipe.progress || 0));
+          const risk = sanitize(pipe.riskLevel || "Low");
+          const teamName = pipe.teamId?.name ? ` | 👥 ${sanitize(pipe.teamId.name)}` : "";
+          const pClass = prog >= 100 ? "highProgress" : prog > 0 ? "medProgress" : "pendingProgress";
+
+          code += `    ${pipeNodeId}["⚡ ${safeName}<br/><b>${prog}% Progress</b> (${risk} Risk)${teamName}"]:::${pClass}\n`;
+
+          if (pipeIdx > 0) {
+            const prevPipeNodeId = `Pipe_${pipeList[pipeIdx - 1]._id.replace(/[^a-zA-Z0-9]/g, "_")}`;
+            code += `    ${prevPipeNodeId} ==> ${pipeNodeId}\n`;
+          }
+        });
+
+        code += `  end\n`;
+      });
+
+      if (unassignedPipelines.length > 0) {
+        code += `  subgraph GlobalTracks ["🌐 Global Operational Delivery Pipelines"]\n`;
+        unassignedPipelines.forEach((pipe) => {
+          const pipeNodeId = `Pipe_${pipe._id.replace(/[^a-zA-Z0-9]/g, "_")}`;
+          renderedPipeIds.push(pipeNodeId);
+          const safeName = sanitize(pipe.name);
+          const prog = Math.round(Number(pipe.progress || 0));
+          const pClass = prog >= 100 ? "highProgress" : prog > 0 ? "medProgress" : "pendingProgress";
+          code += `    ${pipeNodeId}["⚡ ${safeName}<br/><b>${prog}% Progress</b>"]:::${pClass}\n`;
+        });
+        code += `  end\n`;
+      }
+
+      // Add Commercialization & Downstream Delivery Integration Hub
+      code += `  subgraph CommercialHub ["3. Commercialization & Revenue Recognition"]\n`;
+      code += `    SalesChannel["💼 B2B Sales & Channel Contracts"]:::commercial\n`;
+      code += `    RevStream["💰 Revenue Inflow & Invoicing"]:::commercial\n`;
+      code += `    SalesChannel ==> RevStream\n`;
+      code += `  end\n`;
+
+      if (renderedPipeIds.length > 0) {
+        renderedPipeIds.forEach((pNodeId, i) => {
+          if (i === renderedPipeIds.length - 1 || renderedPipeIds.length === 1 || i % 2 === 0) {
+            code += `  ${pNodeId} ==> SalesChannel\n`;
+          }
+        });
+      }
+
+      return code;
     }
 
     // Lifecycle Diagram

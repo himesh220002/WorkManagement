@@ -34,17 +34,37 @@ export default async function DevDashboardPage(
       
       if (selectedProjectId && selectedProjectId !== "all") {
         tasks = await fetchWithCache(`dev_tasks:${cId}:${selectedProjectId}`, 20, () =>
-          TaskNode.find({ ...tenantFilter, projectId: selectedProjectId }).lean()
+          TaskNode.find({
+            $or: [
+              { ...tenantFilter, projectId: selectedProjectId },
+              { projectId: selectedProjectId },
+            ],
+          }).lean()
         );
         cycles = await fetchWithCache(`dev_cycles:${cId}:${selectedProjectId}`, 25, () =>
-          Cycle.find({ ...tenantFilter, project: selectedProjectId }).lean()
+          Cycle.find({
+            $or: [
+              { ...tenantFilter, project: selectedProjectId },
+              { project: selectedProjectId },
+            ],
+          }).sort({ createdAt: -1 }).lean()
         );
       } else {
         tasks = await fetchWithCache(`dev_tasks_all:${cId}`, 20, () =>
-          TaskNode.find({ ...tenantFilter, projectId: { $in: projectIds } }).lean()
+          TaskNode.find({
+            $or: [
+              { ...tenantFilter, projectId: { $in: projectIds } },
+              { projectId: { $in: projectIds } },
+            ],
+          }).lean()
         );
         cycles = await fetchWithCache(`dev_cycles_all:${cId}`, 25, () =>
-          Cycle.find({ ...tenantFilter, project: { $in: projectIds } }).lean()
+          Cycle.find({
+            $or: [
+              { ...tenantFilter, project: { $in: projectIds } },
+              { project: { $in: projectIds } },
+            ],
+          }).sort({ createdAt: -1 }).lean()
         );
       }
     } else if (session.role === "superuser" && !session.companyId) {

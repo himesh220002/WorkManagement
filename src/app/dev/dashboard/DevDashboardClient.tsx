@@ -71,6 +71,7 @@ export default function DevDashboardClient({
   const [sprintProjectId, setSprintProjectId] = useState(
     selectedProjectId !== "all" ? selectedProjectId : projects[0]?._id || ""
   );
+  const [taskCategory, setTaskCategory] = useState<string>("Physical Goods & Hardware");
 
   useEffect(() => {
     setCurrentProjectId(selectedProjectId || "all");
@@ -142,14 +143,14 @@ export default function DevDashboardClient({
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
-              Engineering & Development Hub
+              Production & Operations Delivery Hub
             </h1>
             <Badge tone="brand" size="sm">
-              Dev Telemetry
+              Universal Production
             </Badge>
           </div>
           <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1">
-            Task execution tracking, estimated vs. actual velocity, and sprint cycle analysis.
+            Universal production tracking across physical goods manufacturing, service channel rollouts, creative design, and technical engineering.
           </p>
         </div>
 
@@ -173,30 +174,30 @@ export default function DevDashboardClient({
         </div>
       </header>
 
-      {/* Engineering Stats */}
+      {/* Production & Engineering Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Stat
-          label="Total Tasks"
-          value={`${tasks.length} Tasks`}
+          label="Total Tasks & Deliverables"
+          value={`${tasks.length} Deliverables`}
           subtext={activeProject ? `Scoped to ${activeProject.name}` : "Across all projects"}
           icon={<CheckSquare className="w-5 h-5 text-[#0078D4]" />}
         />
         <Stat
-          label="Avg Cycle Time"
+          label="Avg Milestone Velocity"
           value={`${avgCycleTime} Days`}
-          subtext="Based on sprint durations"
+          subtext="Based on milestone/batch cycle duration"
           icon={<Clock className="w-5 h-5 text-[#605E5C]" />}
         />
         <Stat
-          label="Pipeline Progress"
+          label="Active Pipeline Progress"
           value={`${avgPipelineProgress}%`}
-          subtext={`${pipelines.length} Active Dev Pipelines`}
+          subtext={`${pipelines.length} Active Production Pipelines`}
           icon={<Layers className="w-5 h-5 text-[#107C10]" />}
         />
         <Stat
-          label="Work Hours Logged"
+          label="Production Hours Logged"
           value={`${chartData.totalHours} hrs`}
-          subtext="Actual time invested"
+          subtext="Actual time invested across modules"
           icon={<Briefcase className="w-5 h-5 text-[#0078D4]" />}
         />
       </div>
@@ -250,10 +251,10 @@ export default function DevDashboardClient({
       {/* Status Flow Bar */}
       <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
         <h3 className="font-semibold text-sm text-[#242424] dark:text-[#FFFFFF] mb-1">
-          Task Distribution by Status
+          Deliverable & Task Distribution by Status
         </h3>
         <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mb-4">
-          Visual status breakdown across Backlog, In Progress, Code Review, and Done.
+          Visual status breakdown across Backlog, In Progress, Review / QA, and Done.
         </p>
         <div className="h-28">
           <Bar
@@ -276,7 +277,7 @@ export default function DevDashboardClient({
         {/* Add Task Form */}
         <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
           <h3 className="font-bold text-sm text-[#242424] dark:text-[#FFFFFF] mb-3 flex items-center gap-2">
-            <Plus className="w-4 h-4 text-[#0078D4]" /> Add Engineering Task
+            <Plus className="w-4 h-4 text-[#0078D4]" /> Add Deliverable / Production Task
           </h3>
           <form action={addTaskNode} className="space-y-3">
             {/* Target Project Dropdown */}
@@ -302,6 +303,24 @@ export default function DevDashboardClient({
               </select>
             </div>
 
+            {/* Production Domain Category */}
+            <div>
+              <label className="text-[11px] font-semibold text-[#605E5C] dark:text-[#C8C6C4] block mb-1">
+                Production Domain
+              </label>
+              <select
+                value={taskCategory}
+                onChange={(e) => setTaskCategory(e.target.value)}
+                className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
+              >
+                {Object.keys(PREDEFINED_PIPELINE_TASKS).map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="flex flex-col sm:flex-row gap-2">
               <select
                 name="pipelineId"
@@ -320,8 +339,8 @@ export default function DevDashboardClient({
                 name="predefinedTask"
                 className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
               >
-                <option value="">Category...</option>
-                {PREDEFINED_PIPELINE_TASKS["Development"]?.map((task: string) => (
+                <option value="">Deliverable Preset...</option>
+                {(PREDEFINED_PIPELINE_TASKS[taskCategory] || []).map((task: string) => (
                   <option key={task} value={task}>
                     {task}
                   </option>
@@ -332,7 +351,7 @@ export default function DevDashboardClient({
             <input
               type="text"
               name="name"
-              placeholder="Task Title or Specification..."
+              placeholder="Deliverable Title / Specification (e.g. Ergonomics Blueprint, Channel Rollout SOP)..."
               className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
               required
             />
@@ -342,29 +361,29 @@ export default function DevDashboardClient({
                 type="number"
                 name="estimatedHours"
                 placeholder="Est. Hours"
-                className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF]"
+                className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF]"
               />
               <input
                 type="number"
                 name="actualHours"
                 placeholder="Actual Hours"
-                className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF]"
+                className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF]"
               />
             </div>
 
             <div className="flex gap-2">
               <select
                 name="status"
-                className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
+                className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
               >
                 <option value="Todo">Todo</option>
                 <option value="In Progress">In Progress</option>
-                <option value="Code Review">Code Review</option>
+                <option value="Code Review">Review / QA Verification</option>
                 <option value="Done">Done</option>
               </select>
               <select
                 name="severity"
-                className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
+                className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
               >
                 <option value="low">Low Severity</option>
                 <option value="medium">Medium Severity</option>
@@ -375,13 +394,13 @@ export default function DevDashboardClient({
 
             <div>
               <label className="text-[11px] font-semibold text-[#605E5C] dark:text-[#C8C6C4] block mb-1">
-                Sprint Cycle (Optional)
+                Milestone, Batch or Sprint (Optional)
               </label>
               <select
                 name="cycleId"
                 className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
               >
-                <option value="none">No Sprint Cycle (Backlog / General)</option>
+                <option value="none">No Milestone / Batch (Backlog / General)</option>
                 {cycles
                   .filter((c) => !taskProjectId || !c.project || c.project === taskProjectId)
                   .map((c) => (
@@ -397,7 +416,7 @@ export default function DevDashboardClient({
               disabled={projects.length === 0}
               className="w-full py-2 bg-[#0078D4] hover:bg-[#006CBE] text-white rounded text-xs font-semibold disabled:opacity-50 transition-colors"
             >
-              {projects.length === 0 ? "No Projects Available" : "Create Task"}
+              {projects.length === 0 ? "No Projects Available" : "Create Production Task"}
             </button>
           </form>
         </div>
@@ -405,8 +424,11 @@ export default function DevDashboardClient({
         {/* Add Sprint Cycle Form */}
         <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.14)]">
           <h3 className="font-bold text-sm text-[#242424] dark:text-[#FFFFFF] mb-3 flex items-center gap-2">
-            <RotateCcw className="w-4 h-4 text-[#107C10]" /> Define Sprint Cycle
+            <RotateCcw className="w-4 h-4 text-[#107C10]" /> Define Milestone, Batch or Sprint
           </h3>
+          <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mb-3">
+            Group deliverables into time-boxed manufacturing batches, service channel rollouts, or development sprints.
+          </p>
           <form action={addCycle} className="space-y-3">
             <div>
               <label className="text-[11px] font-semibold text-[#605E5C] dark:text-[#C8C6C4] block mb-1">
@@ -433,7 +455,7 @@ export default function DevDashboardClient({
             <input
               type="text"
               name="name"
-              placeholder="Sprint Name (e.g. Sprint 24 - MVP Beta)..."
+              placeholder="Milestone / Batch Name (e.g. Batch 01 - Tooling & BOM, Phase 2 - Regional Rollout, Sprint 24)..."
               className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
               required
             />
@@ -463,14 +485,14 @@ export default function DevDashboardClient({
               disabled={projects.length === 0}
               className="w-full py-2 bg-[#107C10] hover:bg-[#0F7010] text-white rounded text-xs font-semibold disabled:opacity-50 transition-colors mt-4"
             >
-              {projects.length === 0 ? "No Projects Available" : "Create Sprint Cycle"}
+              {projects.length === 0 ? "No Projects Available" : "Launch Milestone / Sprint"}
             </button>
           </form>
         </div>
       </div>
 
       {/* Editable Tasks Table */}
-      <div className="mb-8">
+      <div className="mb-8 px-4">
         <h3 className="font-bold text-base text-[#242424] dark:text-[#FFFFFF] mb-3">
           Interactive Task Backlog & Execution
         </h3>
@@ -478,10 +500,10 @@ export default function DevDashboardClient({
       </div>
 
       {/* Pipeline Cards Grid with Big Look Modal */}
-      <div className="mb-8">
+      <div className="mb-8 px-4">
         <h3 className="font-bold text-base text-[#242424] dark:text-[#FFFFFF] mb-3 flex items-center gap-2">
           <Layers className="w-4 h-4 text-[#0078D4]" />
-          Development Pipelines ({pipelines.length})
+          Production Pipelines ({pipelines.length})
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pipelines.map((p) => (
@@ -489,7 +511,7 @@ export default function DevDashboardClient({
           ))}
           {pipelines.length === 0 && (
             <div className="col-span-full py-12 text-center text-xs text-[#A19F9D] border border-dashed border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px]">
-              No development pipelines found for this context.
+              No production pipelines found for this context.
             </div>
           )}
         </div>

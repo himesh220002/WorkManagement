@@ -11,6 +11,7 @@ import { Stat } from "@/components/ui/Stat";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { addProject } from "@/actions";
 import { fetchWithCache, invalidateCachePrefix } from "@/lib/cache";
+import { computePipelineProgress } from "@/utils/pipelineProgress";
 import {
   FolderKanban,
   Plus,
@@ -87,10 +88,21 @@ export default async function ProjectsPage() {
           p.teams.some((tid: any) => tid.toString() === t._id.toString()))
     );
 
-    // Associated pipelines
-    const pipelines = allPipelines.filter(
-      (pipe: any) => pipe.projectId?.toString() === pIdStr
-    );
+    // Associated pipelines with live dynamic progress rollup
+    const pipelines = allPipelines
+      .filter((pipe: any) => pipe.projectId?.toString() === pIdStr)
+      .map((pipe: any) => {
+        const pipeIdStr = pipe._id?.toString();
+        const linkedTasks = allTasks.filter(
+          (t: any) => t.pipelineId && t.pipelineId.toString() === pipeIdStr
+        );
+        const progress = computePipelineProgress(pipe, linkedTasks);
+        return {
+          ...pipe,
+          _id: pipeIdStr,
+          progress,
+        };
+      });
 
     // Associated tasks
     const tasks = allTasks.filter(

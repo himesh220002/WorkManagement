@@ -5,6 +5,7 @@ import { User, Team, Project, Company } from "@/models";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { getCurrentSession } from "@/server/auth/session";
+import { syncTenantWrite } from "@/lib/tenantDb";
 import {
   canProvisionMemberRole,
   canUpdateMemberRole,
@@ -122,6 +123,10 @@ export async function provisionMemberAction(formData: FormData): Promise<ActionR
     });
   }
 
+  if (companyCode) {
+    await syncTenantWrite("User", "create", newUser, undefined, companyCode);
+  }
+
   revalidatePath("/teams");
   revalidatePath("/projects");
   revalidatePath("/diagrams");
@@ -225,6 +230,8 @@ export async function assignProjectStaffAction(formData: FormData): Promise<Acti
   if (!project) {
     return { success: false, error: "Project not found." };
   }
+
+  await syncTenantWrite("Project", "update", projectId, updateData, session.companyCode);
 
   revalidatePath("/projects");
   revalidatePath("/dev/timeline");
@@ -439,6 +446,7 @@ export async function archiveMemberAction(formData: FormData): Promise<ActionRes
   targetUser.isActive = false;
   targetUser.remarks = `Archived by ${session.name} (${session.role}) on ${new Date().toLocaleDateString("en-US")}`;
   await targetUser.save();
+  await syncTenantWrite("User", "update", targetUser._id.toString(), { status: UserStatus.Archived, isActive: false, leftDate: targetUser.leftDate, remarks: targetUser.remarks }, session.companyCode);
 
   // Remove member from active teams and projects
   await Team.updateMany({ members: targetUser._id }, { $pull: { members: targetUser._id } });
@@ -492,6 +500,7 @@ export async function restoreMemberAction(formData: FormData): Promise<ActionRes
   targetUser.isActive = true;
   targetUser.remarks = `Restored to active working roster by ${session.name} (${session.role}) on ${new Date().toLocaleDateString("en-US")}`;
   await targetUser.save();
+  await syncTenantWrite("User", "update", targetUser._id.toString(), { status: UserStatus.Working, isActive: true, leftDate: null, remarks: targetUser.remarks }, session.companyCode);
 
   revalidatePath("/teams");
   revalidatePath("/projects");
@@ -537,6 +546,7 @@ export async function resignMemberAction(formData: FormData): Promise<ActionResu
   targetUser.isActive = false;
   targetUser.remarks = `Voluntary resignation submitted by ${targetUser.name} on ${new Date().toLocaleDateString("en-US")}`;
   await targetUser.save();
+  await syncTenantWrite("User", "update", targetUser._id.toString(), { status: UserStatus.Resigned, isActive: false, leftDate: targetUser.leftDate, remarks: targetUser.remarks }, session.companyCode);
 
   // Remove from active teams & projects
   await Team.updateMany({ members: targetUser._id }, { $pull: { members: targetUser._id } });
