@@ -12,6 +12,7 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import { addProject } from "@/actions";
 import { fetchWithCache, invalidateCachePrefix } from "@/lib/cache";
 import { computePipelineProgress } from "@/utils/pipelineProgress";
+import ParallelPipelineTrackViewer from "@/components/pipelines/ParallelPipelineTrackViewer";
 import {
   FolderKanban,
   Plus,
@@ -30,6 +31,10 @@ import {
 
 async function deleteProjectAction(formData: FormData) {
   "use server";
+  const session = await getCurrentSession();
+  if (!session.userId || session.isGuest) {
+    return;
+  }
   await connectToDatabase();
   const id = formData.get("projectId");
 
@@ -136,8 +141,10 @@ export default async function ProjectsPage() {
   const totalPipelinesCount = allPipelines.length;
 
   const currentRole = (session.role || "employee").toLowerCase();
-  const canCreateProject = ["owner", "manager", "superuser"].includes(currentRole);
-  const canDeleteProject = ["owner", "manager", "superuser"].includes(currentRole);
+  const canCreateProject =
+    !session.isGuest && Boolean(session.userId) && ["owner", "manager", "superuser"].includes(currentRole);
+  const canDeleteProject =
+    !session.isGuest && Boolean(session.userId) && ["owner", "manager", "superuser"].includes(currentRole);
 
   return (
     <main className="flex flex-col min-w-0 p-0 sm:p-4 flex-1 max-w-[1600px] mx-auto w-full">
@@ -349,10 +356,10 @@ export default async function ProjectsPage() {
                   </div>
                 </div>
 
-                {/* Pipelines */}
+                {/* Pipelines Track Overview */}
                 <div>
                   <span className="text-[#605E5C] dark:text-[#C8C6C4] block mb-1">
-                    Active Pipelines ({p.pipelines.length}):
+                    Parallel Tracks ({p.pipelines.length}):
                   </span>
                   <div className="flex gap-1 flex-wrap">
                     {p.pipelines.length > 0 ? (
@@ -368,6 +375,17 @@ export default async function ProjectsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Redesigned Parallel Execution Pipeline Mesh */}
+              {p.pipelines.length > 0 && (
+                <div className="mb-4">
+                  <ParallelPipelineTrackViewer
+                    pipelines={p.pipelines}
+                    projectName={p.name}
+                    projectId={p._id}
+                  />
+                </div>
+              )}
 
               {/* Corporate RBAC: Team Lead, Staff Assignment, Agendas & Change Approvals */}
               <ProjectRbacController

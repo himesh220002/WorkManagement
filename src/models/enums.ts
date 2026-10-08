@@ -36,10 +36,10 @@ export const UserRole = {
   Manager: "manager",
   TeamLead: "teamlead",
   Employee: "employee",
+  Viewer: "viewer",
   // Legacy aliases
   Admin: "owner",
   Member: "employee",
-  Viewer: "employee",
 } as const;
 export type UserRoleType = (typeof UserRole)[keyof typeof UserRole];
 
@@ -49,6 +49,7 @@ export const ROLE_HIERARCHY: Record<string, number> = {
   manager: 60,
   teamlead: 40,
   employee: 20,
+  viewer: 10,
 };
 
 export const UserStatus = {

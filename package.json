@@ -25,6 +25,7 @@
     "next": "16.3.1",
     "nextjs-toploader": "^3.9.17",
     "pdf-lib": "^1.17.1",
+    "razorpay": "^2.9.8",
     "react": "19.2.8",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "19.2.8",

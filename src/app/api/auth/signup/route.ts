@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { companyName, companyCode, subdomain, ownerName, email, password, industry } = body;
+    const { companyName, companyCode, subdomain, ownerName, email, password, industry, plan, paymentToken } = body;
 
     if (!companyName || !ownerName || !email || !password) {
       await session.abortTransaction();
@@ -23,6 +23,19 @@ export async function POST(req: NextRequest) {
         { success: false, error: "Missing required fields" },
         { status: 400 }
       );
+    }
+
+    if (paymentToken) {
+      const { verifyPaymentVerificationToken } = await import("@/lib/razorpay");
+      const paymentCheck = verifyPaymentVerificationToken(paymentToken);
+      if (!paymentCheck.valid) {
+        await session.abortTransaction();
+        session.endSession();
+        return NextResponse.json(
+          { success: false, error: paymentCheck.error || "Payment verification token invalid or expired" },
+          { status: 402 }
+        );
+      }
     }
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -87,6 +100,7 @@ export async function POST(req: NextRequest) {
           subdomain: normalizedSlug,
           companyCode: code,
           industry: industry || "Technology",
+          plan: plan === "annual" ? "Enterprise Annual ($200/yr)" : "Enterprise Monthly ($20/mo)",
           status: CompanyStatus.Active,
           settings: {
             currency: "USD",

@@ -118,5 +118,13 @@ export default async function TimelinePage() {
     };
   });
 
-  return <TimelineClient tasks={cleanTasks} options={options} projectMetrics={projectMetrics} />;
+  return (
+    <TimelineClient
+      tasks={cleanTasks}
+      options={options}
+      projectMetrics={projectMetrics}
+      currentRole={session.role}
+      isGuest={Boolean(session.isGuest)}
+    />
+  );
 }

@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { TopBar, Breadcrumbs } from "@/components/shell";
+import ShowcaseGuestCard from "@/components/showcase/ShowcaseGuestCard";
 
 export const ShellContext = createContext<{
   isStandalone: boolean;
@@ -19,7 +20,7 @@ export function useShell() {
 
 /**
  * Decides between the public marketing chrome (landing `/`, about us,
- * legal, contact, and error pages) and the authenticated dashboard shell
+ * legal, contact, and error pages) and the dashboard shell
  * (TopBar + Sidebar + Breadcrumbs).
  */
 const PUBLIC_MARKETING_PATHS = new Set([
@@ -56,6 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+      <ShowcaseGuestCard />
     </ShellContext.Provider>
   );
 }

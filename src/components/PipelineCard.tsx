@@ -32,6 +32,7 @@ import {
   Lock,
   ShieldCheck,
 } from "lucide-react";
+import { triggerGuestRestriction } from "@/components/showcase/ShowcaseGuestCard";
 
 export default function PipelineCard({
   pipeline,
@@ -94,6 +95,10 @@ export default function PipelineCard({
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setDraggedIndex(null);
+    if (role === "viewer") {
+      triggerGuestRestriction("Reordering pipeline milestones");
+      return;
+    }
     await reorderPipelineTodos(pipeline._id, todos);
   };
 
@@ -430,6 +435,10 @@ export default function PipelineCard({
                             className="rounded cursor-pointer accent-[#0078D4] w-4 h-4 shrink-0"
                             checked={Boolean(todo.completed)}
                             onChange={(e) => {
+                              if (role === "viewer") {
+                                triggerGuestRestriction("Updating checklist task");
+                                return;
+                              }
                               const newCompleted = e.target.checked;
                               const newTodos = [...todos];
                               newTodos[index].completed = newCompleted;
@@ -462,6 +471,10 @@ export default function PipelineCard({
                           <button
                             type="button"
                             onClick={() => {
+                              if (role === "viewer") {
+                                triggerGuestRestriction("Deleting pipeline milestone");
+                                return;
+                              }
                               const newTodos = [...todos];
                               newTodos.splice(index, 1);
                               setTodos(newTodos);
@@ -487,6 +500,10 @@ export default function PipelineCard({
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
+                      if (role === "viewer") {
+                        triggerGuestRestriction("Adding milestone to pipeline");
+                        return;
+                      }
                       const form = e.currentTarget;
                       const formData = new FormData(form);
                       const text = formData.get("text") as string;

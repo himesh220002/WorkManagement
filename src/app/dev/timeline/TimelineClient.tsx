@@ -12,8 +12,22 @@ import PipelineCard from "@/components/PipelineCard";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import { PREDEFINED_PIPELINE_TASKS } from "@/utils/taskConstants";
 import { ArrowDown, ArrowUp } from "lucide-react";
+import ParallelPipelineTrackViewer from "@/components/pipelines/ParallelPipelineTrackViewer";
+import { triggerGuestRestriction } from "@/components/showcase/ShowcaseGuestCard";
 
-export default function TimelineClient({ tasks, options, projectMetrics = [] }: { tasks: any[], options?: Options, projectMetrics?: any[] }) {
+export default function TimelineClient({
+  tasks,
+  options,
+  projectMetrics = [],
+  currentRole = "manager",
+  isGuest = false,
+}: {
+  tasks: any[];
+  options?: Options;
+  projectMetrics?: any[];
+  currentRole?: string;
+  isGuest?: boolean;
+}) {
   const ganttWrapperRef = useRef<HTMLDivElement>(null);
   const ganttInstance = useRef<any>(null);
   const mermaidContainerRef = useRef<HTMLDivElement>(null);
@@ -296,7 +310,16 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
 
           <div className={`grid transition-all duration-300 ease-in-out ${isFormOpen ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0'}`}>
             <div className="overflow-hidden">
-              <form action={addPipeline} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-inner">
+              <form
+                action={isGuest ? undefined : addPipeline}
+                onSubmit={(e) => {
+                  if (isGuest) {
+                    e.preventDefault();
+                    triggerGuestRestriction("Creating new pipeline");
+                  }
+                }}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-inner"
+              >
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Pipeline Name *</label>
                   <input type="text" name="name" className="tech-input" placeholder="e.g. Frontend Sprint Q3" required />
@@ -442,6 +465,14 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
         </div>
       </section>
 
+      {/* Redesigned Parallel Execution Pipeline Mesh */}
+      <section className="mb-6">
+        <ParallelPipelineTrackViewer
+          pipelines={filteredTasks}
+          projectName="Enterprise Active Pipelines"
+        />
+      </section>
+
       {/* Frappe Gantt Chart Section */}
       <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 md:p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)] overflow-hidden">
         <div className="w-full overflow-x-auto">
@@ -457,7 +488,11 @@ export default function TimelineClient({ tasks, options, projectMetrics = [] }: 
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredTasks.map((pipeline: any) => (
-              <PipelineCard key={pipeline._id} pipeline={pipeline} />
+              <PipelineCard
+                key={pipeline._id}
+                pipeline={pipeline}
+                currentRole={isGuest ? "viewer" : currentRole}
+              />
             ))}
             {filteredTasks.length === 0 && (
               <div className="col-span-full py-16 text-center text-base text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">

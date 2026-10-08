@@ -1,9 +1,9 @@
 import { UserRoleType, ROLE_HIERARCHY } from "@/models/enums";
 
-export type RoleName = "superuser" | "owner" | "manager" | "teamlead" | "employee";
+export type RoleName = "superuser" | "owner" | "manager" | "teamlead" | "employee" | "viewer";
 
 /**
- * Normalizes any role string or legacy alias into one of the 5 canonical roles.
+ * Normalizes any role string or legacy alias into one of the canonical roles.
  */
 export function normalizeRole(role?: string | null): RoleName {
   if (!role) return "employee";
@@ -12,6 +12,7 @@ export function normalizeRole(role?: string | null): RoleName {
   if (lower === "owner" || lower === "admin") return "owner";
   if (lower === "manager") return "manager";
   if (lower === "teamlead" || lower === "tl" || lower === "lead") return "teamlead";
+  if (lower === "viewer" || lower === "guest") return "viewer";
   return "employee";
 }
 

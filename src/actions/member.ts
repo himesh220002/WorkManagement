@@ -32,6 +32,12 @@ export interface ActionResult<T = any> {
 export async function provisionMemberAction(formData: FormData): Promise<ActionResult> {
   await connectToDatabase();
   const session = await getCurrentSession();
+  if (session.isGuest || !session.userId) {
+    return {
+      success: false,
+      error: "Guest showcase mode is read-only. Please log in or subscribe to provision accounts.",
+    };
+  }
 
   const name = (formData.get("name") as string)?.trim();
   const email = (formData.get("email") as string)?.toLowerCase().trim();
@@ -159,6 +165,12 @@ export async function provisionMemberAction(formData: FormData): Promise<ActionR
 export async function updateMemberRoleTagAction(formData: FormData): Promise<ActionResult> {
   await connectToDatabase();
   const session = await getCurrentSession();
+  if (session.isGuest || !session.userId) {
+    return {
+      success: false,
+      error: "Guest showcase mode is read-only. Please log in or subscribe to update member roles.",
+    };
+  }
 
   const userId = formData.get("userId") as string;
   const newRawRole = formData.get("newRole") as string;
@@ -206,6 +218,12 @@ export async function updateMemberRoleTagAction(formData: FormData): Promise<Act
 export async function assignProjectStaffAction(formData: FormData): Promise<ActionResult> {
   await connectToDatabase();
   const session = await getCurrentSession();
+  if (session.isGuest || !session.userId) {
+    return {
+      success: false,
+      error: "Guest showcase mode is read-only. Please log in or subscribe to assign project staff.",
+    };
+  }
 
   const projectId = formData.get("projectId") as string;
   const leadId = formData.get("leadId") as string;
@@ -251,6 +269,12 @@ export async function assignProjectStaffAction(formData: FormData): Promise<Acti
 export async function updateProjectAgendasAction(formData: FormData): Promise<ActionResult> {
   await connectToDatabase();
   const session = await getCurrentSession();
+  if (session.isGuest || !session.userId) {
+    return {
+      success: false,
+      error: "Guest showcase mode is read-only. Please log in or subscribe to update project agendas.",
+    };
+  }
 
   const projectId = formData.get("projectId") as string;
   const agendasRaw = formData.get("agendas") as string;
@@ -309,6 +333,12 @@ export async function updateProjectAgendasAction(formData: FormData): Promise<Ac
 export async function submitProjectChangeRequestAction(formData: FormData): Promise<ActionResult> {
   await connectToDatabase();
   const session = await getCurrentSession();
+  if (session.isGuest || !session.userId) {
+    return {
+      success: false,
+      error: "Guest showcase mode is read-only. Please log in or subscribe to submit change requests.",
+    };
+  }
 
   const projectId = formData.get("projectId") as string;
   const title = (formData.get("title") as string)?.trim();
@@ -353,6 +383,12 @@ export async function submitProjectChangeRequestAction(formData: FormData): Prom
 export async function reviewProjectChangeRequestAction(formData: FormData): Promise<ActionResult> {
   await connectToDatabase();
   const session = await getCurrentSession();
+  if (session.isGuest || !session.userId) {
+    return {
+      success: false,
+      error: "Guest showcase mode is read-only. Please log in or subscribe to review change requests.",
+    };
+  }
 
   const projectId = formData.get("projectId") as string;
   const requestId = formData.get("requestId") as string;
@@ -414,6 +450,12 @@ export async function reviewProjectChangeRequestAction(formData: FormData): Prom
 export async function archiveMemberAction(formData: FormData): Promise<ActionResult> {
   await connectToDatabase();
   const session = await getCurrentSession();
+  if (session.isGuest || !session.userId) {
+    return {
+      success: false,
+      error: "Guest showcase mode is read-only. Please log in or subscribe to archive members.",
+    };
+  }
 
   const userId = formData.get("userId") as string;
   if (!userId) {
@@ -470,6 +512,12 @@ export async function archiveMemberAction(formData: FormData): Promise<ActionRes
 export async function restoreMemberAction(formData: FormData): Promise<ActionResult> {
   await connectToDatabase();
   const session = await getCurrentSession();
+  if (session.isGuest || !session.userId) {
+    return {
+      success: false,
+      error: "Guest showcase mode is read-only. Please log in or subscribe to restore members.",
+    };
+  }
 
   const userId = formData.get("userId") as string;
   if (!userId) {
@@ -520,6 +568,12 @@ export async function restoreMemberAction(formData: FormData): Promise<ActionRes
 export async function resignMemberAction(formData: FormData): Promise<ActionResult> {
   await connectToDatabase();
   const session = await getCurrentSession();
+  if (session.isGuest || !session.userId) {
+    return {
+      success: false,
+      error: "Guest showcase mode is read-only. Please log in or subscribe.",
+    };
+  }
 
   const userId = (formData.get("userId") as string) || session.userId;
   if (!userId) {

@@ -14,6 +14,7 @@ export interface SessionContext {
   email: string;
   name: string;
   userDoc?: any;
+  isGuest?: boolean;
 }
 
 /**
@@ -178,14 +179,40 @@ export async function getCurrentSession(): Promise<SessionContext> {
     }
   } catch {}
 
-  // Unauthenticated safe fallback: strictly least-privilege Employee with no userId
+  // Unauthenticated safe fallback: Public Guest Showcase Mode backed by general DB showcase company
+  try {
+    const showcaseCompany =
+      (await Company.findOne({
+        $or: [
+          { companyCode: headerOrgCode ? headerOrgCode.toUpperCase() : "ORGTTV" },
+          { companyCode: "ORGTTV" },
+          { name: "TaskFlow Organization" },
+        ],
+      }).lean()) || (await Company.findOne().lean());
+
+    if (showcaseCompany) {
+      return {
+        userId: undefined,
+        companyId: showcaseCompany._id.toString(),
+        companyCode: showcaseCompany.companyCode || "ORGTTV",
+        role: "viewer",
+        email: "guest@taskflow.showcase",
+        name: "Guest Explorer",
+        isGuest: true,
+      };
+    }
+  } catch (err) {
+    console.warn("Could not load showcase company for guest session:", err);
+  }
+
   return {
     userId: undefined,
     companyId: undefined,
     companyCode: undefined,
-    role: "employee",
-    email: "guest@taskflow.local",
-    name: "Guest",
+    role: "viewer",
+    email: "guest@taskflow.showcase",
+    name: "Guest Explorer",
+    isGuest: true,
   };
 }
 

@@ -4,7 +4,7 @@ import { MarketingShell } from "@/components/marketing/MarketingShell";
 export const metadata: Metadata = {
   title: "Terms & Conditions",
   description:
-    "The terms governing your TaskPMS trial and subscription — workspaces, fair use, billing, data ownership and acceptable use.",
+    "The terms governing your TaskPMS subscription — workspaces, fair use, billing, data ownership and acceptable use.",
   alternates: { canonical: "/terms" },
 };
 
@@ -14,8 +14,8 @@ const sections = [
     p: "TaskPMS provides a hosted, multi-tenant task project management system: isolated company workspaces with projects, tasks, pipelines, teams, sales and revenue dashboards, and an S3-backed document vault. By creating an account or using a workspace you agree to these terms on behalf of your company.",
   },
   {
-    h: "2. Free trial",
-    p: "New companies receive one full month of free, full-access use. No credit card is required to start a trial. At the end of the trial you may choose a paid tier to continue; if you do not subscribe, your workspace is paused (not immediately deleted) so you can reactivate it later.",
+    h: "2. Subscription & Direct Paywall",
+    p: "New organizations are provisioned upon activating an active subscription ($20 USD / month or $200 USD / year) processed via Razorpay. Direct paywall applies to all workspace initializations. You may explore the public showcase workspace for free prior to subscribing. Subscriptions can be managed or cancelled at any time.",
   },
   {
     h: "3. Accounts & roles",
@@ -39,7 +39,7 @@ const sections = [
   },
   {
     h: "8. Availability & support",
-    p: "We target high availability but do not guarantee uninterrupted service; scheduled maintenance and incident updates are communicated to company owners. Support is provided via hello@taskpms.com with best-effort response within two business days on trial and standard tiers.",
+    p: "We target high availability but do not guarantee uninterrupted service; scheduled maintenance and incident updates are communicated to company owners. Support is provided via hello@taskpms.com with best-effort response within two business days on active subscription tiers.",
   },
   {
     h: "9. Limitation of liability",

@@ -122,14 +122,20 @@ export function TopBar() {
               </button>
             </div>
           ) : (
-            <Link
-              href="/auth/login"
-              className="hidden sm:inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 text-[11px] sm:text-xs font-semibold rounded-[4px] bg-[#EBF3FC] dark:bg-[#1C2B3D] text-[#0078D4] dark:text-[#479EF5] hover:bg-[#0078D4] hover:text-white transition-colors border border-[#0078D4]/20"
-              title="SaaS Multi-Tenant Authentication & RBAC Control"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Tenant Auth</span>
-            </Link>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                <Sparkles className="w-3 h-3 text-amber-500" />
+                Showcase Mode
+              </span>
+              <Link
+                href="/auth/login"
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] sm:text-xs font-semibold rounded-[4px] bg-[#0078D4] text-white hover:bg-[#106EBE] transition-colors shadow-sm"
+                title="Sign in or Subscribe to launch your organization"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Sign In / Subscribe</span>
+              </Link>
+            </div>
           )}
 
           {/* Desktop-only: Persona Switcher and Context Switcher (embedded in Mobile Drawer on < lg to keep header compact) */}

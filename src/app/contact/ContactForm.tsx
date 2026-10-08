@@ -40,7 +40,7 @@ export function ContactForm() {
         </div>
         <div>
           <label htmlFor="contact-message" className="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-1.5">How can we help? *</label>
-          <textarea id="contact-message" required rows={5} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="We want to trial TaskPMS for a 40-person engineering + sales org…" className={inputCls} />
+          <textarea id="contact-message" required rows={5} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="We want to deploy TaskPMS for a 40-person engineering + sales org…" className={inputCls} />
         </div>
         {sent && (
           <p className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
@@ -56,12 +56,12 @@ export function ContactForm() {
         <div className="bg-white dark:bg-[#201F1E] border border-gray-200 dark:border-[#3B3A39] rounded-sm p-5">
           <p className="flex items-center gap-2 font-semibold text-sm text-gray-900 dark:text-white mb-1"><Mail className="w-4 h-4 text-[#0078d4]" /> Email us directly</p>
           <a href="mailto:hello@taskpms.com" className="text-sm text-[#0078d4] hover:underline">hello@taskpms.com</a>
-          <p className="text-xs text-gray-500 dark:text-zinc-400 font-light mt-2">For trials, billing, security questions and data-deletion requests.</p>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 font-light mt-2">For subscriptions, billing, security questions and data-deletion requests.</p>
         </div>
         <div className="bg-white dark:bg-[#201F1E] border border-gray-200 dark:border-[#3B3A39] rounded-sm p-5 text-sm">
           <p className="font-semibold text-gray-900 dark:text-white mb-2">Before you write</p>
           <ul className="text-[13px] text-gray-600 dark:text-zinc-300 font-light space-y-1.5">
-            <li>· Trial help → start at <a href="/auth/signup" className="text-[#0078d4] hover:underline">Try Free Month</a></li>
+            <li>· Subscription help → start at <a href="/auth/signup" className="text-[#0078d4] hover:underline">Subscribe ($20/mo)</a></li>
             <li>· Signed in already? Use <a href="/exec/dashboard" className="text-[#0078d4] hover:underline">Open Dashboard</a></li>
             <li>· Architecture questions → <a href="/about" className="text-[#0078d4] hover:underline">About Us</a></li>
           </ul>

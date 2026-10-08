@@ -24,7 +24,11 @@ import {
   Shield,
   Zap,
   ChevronDown,
+  CreditCard,
+  Check,
 } from "lucide-react";
+import RazorpayCheckoutModal from "@/components/payment/RazorpayCheckoutModal";
+import { PRICING_PLANS } from "@/lib/razorpay";
 
 interface SessionData {
   user: {
@@ -176,9 +180,34 @@ export default function AuthPage({
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
 
-  // Check active session on mount
+  // Razorpay Paywall Subscription State
+  const [isPaymentVerified, setIsPaymentVerified] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "annual">("monthly");
+  const [paymentToken, setPaymentToken] = useState<string | null>(null);
+  const [paymentId, setPaymentId] = useState<string | null>(null);
+  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+
+  // Check active session and payment URL parameters on mount
   useEffect(() => {
     fetchSession();
+
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tabParam = urlParams.get("tab");
+      if (tabParam === "signup") {
+        setSelectedPersona("owner");
+        setOwnerMode("signup");
+      }
+      const token = urlParams.get("payment_token");
+      const plan = urlParams.get("plan");
+      const paid = urlParams.get("paid");
+      if (token || paid === "true") {
+        setIsPaymentVerified(true);
+        if (token) setPaymentToken(token);
+        if (plan === "annual" || plan === "monthly") setSelectedPlan(plan);
+        setPaymentId(urlParams.get("payment_id") || "pay_razorpay_verified");
+      }
+    }
   }, []);
 
   const fetchSession = async () => {
@@ -271,6 +300,13 @@ export default function AuthPage({
     e.preventDefault();
     setError(null);
     setSuccess(null);
+
+    if (!isPaymentVerified) {
+      setError("Active subscription required. Please choose your plan and complete Razorpay checkout ($20/mo or $200/yr) to launch your workspace.");
+      setIsCheckoutModalOpen(true);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -283,6 +319,9 @@ export default function AuthPage({
           ownerName: signupOwnerName,
           email: signupEmail,
           password: signupPassword,
+          plan: selectedPlan,
+          paymentToken,
+          paymentId,
         }),
       });
 
@@ -523,142 +562,240 @@ export default function AuthPage({
             </div>
 
             {ownerMode === "signup" ? (
-              <form onSubmit={handleSignup} className="space-y-4 text-xs max-w-2xl">
-                <div className="p-3 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-200">
-                  <strong>New Organization Workspace:</strong> When you create this organization, you will be automatically logged in as its Owner. Your workspace will start 100% clean with its own empty project blueprints list.
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div>
-                    <label className="block font-medium text-[#242424] dark:text-white mb-1">
-                      Organization / Company Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={signupCompanyName}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setSignupCompanyName(val);
-                        if (!signupCompanyCode) {
-                          const prefix = val.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3);
-                          const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-                          let gen = prefix;
-                          while (gen.length < 6) {
-                            gen += chars.charAt(Math.floor(Math.random() * chars.length));
-                          }
-                          setSignupCompanyCode(gen.slice(0, 6));
-                        }
-                      }}
-                      placeholder="e.g. Globex Technologies"
-                      className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded text-[#242424] dark:text-white outline-none focus:border-[#0078D4]"
-                    />
+              !isPaymentVerified ? (
+                <div className="space-y-4 text-xs max-w-2xl bg-white dark:bg-[#1E1E1E] p-6 rounded-xl border border-[#E1DFDD] dark:border-[#3B3A39] shadow-sm">
+                  <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-sm">
+                    <Lock className="w-4 h-4" />
+                    <span>Direct Subscription Paywall — No Free Trial</span>
                   </div>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block font-medium text-[#242424] dark:text-white">
-                        6-Char Company Code *
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const prefix = (signupCompanyName || "ORG")
-                            .toUpperCase()
-                            .replace(/[^A-Z0-9]/g, "")
-                            .slice(0, 3);
-                          const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-                          let gen = prefix;
-                          while (gen.length < 6) {
-                            gen += chars.charAt(Math.floor(Math.random() * chars.length));
-                          }
-                          setSignupCompanyCode(gen.slice(0, 6));
-                        }}
-                        className="text-[10px] text-[#0078D4] dark:text-[#479EF5] hover:underline font-semibold"
-                      >
-                        Regenerate Code
-                      </button>
+                  <p className="text-[#605E5C] dark:text-[#C8C6C4] leading-relaxed text-xs">
+                    TaskPMS provides an isolated per-company MongoDB database perimeter and AWS S3 document vault. A direct paid subscription (<span className="font-semibold text-gray-900 dark:text-white">$20 USD/month</span> or <span className="font-semibold text-gray-900 dark:text-white">$200 USD/year</span>) is strictly required to provision a new organization workspace.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 my-4">
+                    <div
+                      onClick={() => setSelectedPlan("monthly")}
+                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                        selectedPlan === "monthly"
+                          ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-xs"
+                          : "border-[#E1DFDD] dark:border-[#3B3A39] hover:border-gray-400"
+                      }`}
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-bold text-sm text-[#242424] dark:text-white">Monthly Plan</span>
+                        <span
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            selectedPlan === "monthly"
+                              ? "border-[#0078D4] bg-[#0078D4]"
+                              : "border-gray-400"
+                          }`}
+                        >
+                          {selectedPlan === "monthly" && <Check className="w-2.5 h-2.5 text-white" />}
+                        </span>
+                      </div>
+                      <div className="text-xl font-bold text-[#242424] dark:text-white">
+                        $20 <span className="text-xs font-normal text-gray-500">USD / mo</span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 mt-1">Flexible month-to-month billing</p>
                     </div>
-                    <input
-                      type="text"
-                      required
-                      maxLength={6}
-                      value={signupCompanyCode}
-                      onChange={(e) =>
-                        setSignupCompanyCode(
-                          e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6)
-                        )
-                      }
-                      placeholder="GLB724"
-                      className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded text-[#242424] dark:text-white outline-none focus:border-[#0078D4] font-mono font-bold tracking-wider uppercase"
-                    />
 
+                    <div
+                      onClick={() => setSelectedPlan("annual")}
+                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer relative ${
+                        selectedPlan === "annual"
+                          ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-xs"
+                          : "border-[#E1DFDD] dark:border-[#3B3A39] hover:border-gray-400"
+                      }`}
+                    >
+                      <span className="absolute -top-2.5 right-3 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#107C10] text-white shadow-xs">
+                        Save 17% ($40/yr)
+                      </span>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-bold text-sm text-[#242424] dark:text-white">Annual Plan</span>
+                        <span
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            selectedPlan === "annual"
+                              ? "border-[#0078D4] bg-[#0078D4]"
+                              : "border-gray-400"
+                          }`}
+                        >
+                          {selectedPlan === "annual" && <Check className="w-2.5 h-2.5 text-white" />}
+                        </span>
+                      </div>
+                      <div className="text-xl font-bold text-[#242424] dark:text-white">
+                        $200 <span className="text-xs font-normal text-gray-500">USD / yr</span>
+                      </div>
+                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">
+                        Best value for scaling organizations
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div>
-                    <label className="block font-medium text-[#242424] dark:text-white mb-1">
-                      Owner Full Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={signupOwnerName}
-                      onChange={(e) => setSignupOwnerName(e.target.value)}
-                      placeholder="e.g. Alex Sterling"
-                      className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded text-[#242424] dark:text-white outline-none focus:border-[#0078D4]"
-                    />
-                  </div>
+                  <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-gray-100 dark:border-gray-800">
+                    <span className="text-[11px] text-[#605E5C] dark:text-[#A19F9D] flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#107C10]" />
+                      <span>Encrypted Razorpay payment gateway</span>
+                    </span>
 
-                  <div>
-                    <label className="block font-medium text-[#242424] dark:text-white mb-1">
-                      Owner Login Email *
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={signupEmail}
-                      onChange={(e) => setSignupEmail(e.target.value)}
-                      placeholder="owner@globex.com"
-                      className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded text-[#242424] dark:text-white outline-none focus:border-[#0078D4]"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-medium text-[#242424] dark:text-white mb-1">
-                    Password *
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      required
-                      value={signupPassword}
-                      onChange={(e) => setSignupPassword(e.target.value)}
-                      placeholder="••••••••••••"
-                      className="w-full p-2 pr-9 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded text-[#242424] dark:text-white outline-none focus:border-[#0078D4]"
-                    />
                     <button
                       type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-2.5 text-[#8A8886]"
+                      onClick={() => setIsCheckoutModalOpen(true)}
+                      className="w-full sm:w-auto px-5 py-2.5 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      <CreditCard className="w-4 h-4" />
+                      <span>Pay with Razorpay (${selectedPlan === "annual" ? "200" : "20"}) to Unlock</span>
+                      <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
+              ) : (
+                <form onSubmit={handleSignup} className="space-y-4 text-xs max-w-2xl">
+                  {/* Verified subscription banner */}
+                  <div className="p-3.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-200 flex items-start gap-2.5">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-bold">✓ Subscription Payment Verified via Razorpay:</div>
+                      <div className="text-[11px] mt-0.5">
+                        Plan: <span className="font-semibold">{selectedPlan === "annual" ? "Enterprise Annual ($200/yr)" : "Enterprise Monthly ($20/mo)"}</span> · Receipt ID: <code className="bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded font-mono">{paymentId}</code>.
+                      </div>
+                      <div className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-1">
+                        Fill in your organization details below to instantly initialize your dedicated database perimeter.
+                      </div>
+                    </div>
+                  </div>
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-5 py-2.5 bg-[#0078D4] hover:bg-[#106EBE] disabled:opacity-50 text-white rounded font-semibold text-xs flex items-center gap-2 transition-colors shadow-sm cursor-pointer"
-                >
-                  <Crown className="w-4 h-4" />
-                  <span>{loading ? "Creating Organization..." : "Launch Organization & Login"}</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </form>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block font-medium text-[#242424] dark:text-white mb-1">
+                        Organization / Company Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={signupCompanyName}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSignupCompanyName(val);
+                          if (!signupCompanyCode) {
+                            const prefix = val.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3);
+                            const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+                            let gen = prefix;
+                            while (gen.length < 6) {
+                              gen += chars.charAt(Math.floor(Math.random() * chars.length));
+                            }
+                            setSignupCompanyCode(gen.slice(0, 6));
+                          }
+                        }}
+                        placeholder="e.g. Globex Technologies"
+                        className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded text-[#242424] dark:text-white outline-none focus:border-[#0078D4]"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-medium text-[#242424] dark:text-white">
+                          6-Char Company Code *
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const prefix = (signupCompanyName || "ORG")
+                              .toUpperCase()
+                              .replace(/[^A-Z0-9]/g, "")
+                              .slice(0, 3);
+                            const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+                            let gen = prefix;
+                            while (gen.length < 6) {
+                              gen += chars.charAt(Math.floor(Math.random() * chars.length));
+                            }
+                            setSignupCompanyCode(gen.slice(0, 6));
+                          }}
+                          className="text-[10px] text-[#0078D4] dark:text-[#479EF5] hover:underline font-semibold"
+                        >
+                          Regenerate Code
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        maxLength={6}
+                        value={signupCompanyCode}
+                        onChange={(e) =>
+                          setSignupCompanyCode(
+                            e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6)
+                          )
+                        }
+                        placeholder="GLB724"
+                        className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded text-[#242424] dark:text-white outline-none focus:border-[#0078D4] font-mono font-bold tracking-wider uppercase"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block font-medium text-[#242424] dark:text-white mb-1">
+                        Owner Full Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={signupOwnerName}
+                        onChange={(e) => setSignupOwnerName(e.target.value)}
+                        placeholder="e.g. Alex Sterling"
+                        className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded text-[#242424] dark:text-white outline-none focus:border-[#0078D4]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-medium text-[#242424] dark:text-white mb-1">
+                        Owner Login Email *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={signupEmail}
+                        onChange={(e) => setSignupEmail(e.target.value)}
+                        placeholder="owner@globex.com"
+                        className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded text-[#242424] dark:text-white outline-none focus:border-[#0078D4]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-medium text-[#242424] dark:text-white mb-1">
+                      Password *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={signupPassword}
+                        onChange={(e) => setSignupPassword(e.target.value)}
+                        placeholder="••••••••••••"
+                        className="w-full p-2 pr-9 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded text-[#242424] dark:text-white outline-none focus:border-[#0078D4]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-2.5 text-[#8A8886]"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="px-5 py-2.5 bg-[#0078D4] hover:bg-[#106EBE] disabled:opacity-50 text-white rounded font-semibold text-xs flex items-center gap-2 transition-colors shadow-sm cursor-pointer"
+                  >
+                    <Crown className="w-4 h-4" />
+                    <span>{loading ? "Creating Organization..." : "Launch Organization & Login"}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </form>
+              )
             ) : (
               <form onSubmit={handleLogin} className="space-y-4 text-xs max-w-xl">
                 <div>
@@ -807,6 +944,23 @@ export default function AuthPage({
           </form>
         )}
       </section>
+
+      {/* Razorpay Subscription Paywall Modal */}
+      <RazorpayCheckoutModal
+        isOpen={isCheckoutModalOpen}
+        onClose={() => setIsCheckoutModalOpen(false)}
+        defaultPlan={selectedPlan}
+        companyNameHint={signupCompanyName}
+        emailHint={signupEmail}
+        onPaymentSuccess={(data) => {
+          setIsPaymentVerified(true);
+          setPaymentToken(data.verificationToken);
+          setPaymentId(data.paymentId);
+          setSelectedPlan(data.plan);
+          setIsCheckoutModalOpen(false);
+          setSuccess(`Payment verified! Plan: ${data.planName}. Please enter your company details below.`);
+        }}
+      />
     </main>
   );
 }

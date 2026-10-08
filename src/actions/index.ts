@@ -12,6 +12,12 @@ function revalidatePath(path: string) {
   nextRevalidatePath(path);
 }
 
+function assertNotGuest(session: { isGuest?: boolean; userId?: string | null }) {
+  if (session.isGuest || !session.userId) {
+    throw new Error("Guest showcase mode is read-only. Please log in or subscribe to modify workspace data.");
+  }
+}
+
 export async function getAssigneeOptions() {
   await connectToDatabase();
   const users = await User.find({}).select('name').lean();
@@ -26,6 +32,7 @@ export async function getAssigneeOptions() {
 export async function addPipeline(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
+  assertNotGuest(session);
   const name = formData.get("name") as string;
   const category = formData.get("category") as string;
   const owner = formData.get("owner") as string;
@@ -304,6 +311,7 @@ export async function addGoal(formData: FormData) {
 export async function addTeam(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
+  assertNotGuest(session);
   const name = formData.get("name") as string;
   if (name) {
     const newTeam = await Team.create({ name, companyId: session.companyId });
@@ -316,6 +324,8 @@ export async function addTeam(formData: FormData) {
 
 export async function deleteTeam(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const id = formData.get("teamId") as string;
   if (id) {
     await Team.findByIdAndDelete(id);
@@ -460,6 +470,8 @@ export async function updatePipelineDates(taskId: string, startDate: string, end
 }
 
 export async function addPipelineTodo(pipelineId: string, formData: FormData) {
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const text = formData.get("text") as string;
   const assigneeType = (formData.get("assigneeType") as string) || "Individual";
   const assigneeName = (formData.get("assigneeName") as string) || "";
@@ -474,7 +486,6 @@ export async function addPipelineTodo(pipelineId: string, formData: FormData) {
     const completed = pipeline.todos.filter((t: any) => t.completed).length;
     pipeline.progress = total > 0 ? Math.round((completed / total) * 100) : 0;
     await pipeline.save();
-    const session = await getCurrentSession();
     await syncTenantWrite("Pipeline", "update", pipelineId, { todos: pipeline.todos, progress: pipeline.progress }, session.companyCode);
     revalidatePath("/dev/timeline");
     revalidatePath("/dev/dashboard");
@@ -486,6 +497,8 @@ export async function addPipelineTodo(pipelineId: string, formData: FormData) {
 }
 
 export async function togglePipelineTodo(pipelineId: string, todoId: string, completed: boolean) {
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   await connectToDatabase();
   const pipeline = await Pipeline.findById(pipelineId);
   if (pipeline) {
@@ -502,7 +515,6 @@ export async function togglePipelineTodo(pipelineId: string, todoId: string, com
     const completedCount = pipeline.todos?.filter((t: any) => t.completed).length || 0;
     pipeline.progress = total > 0 ? Math.round((completedCount / total) * 100) : 0;
     await pipeline.save();
-    const session = await getCurrentSession();
     await syncTenantWrite("Pipeline", "update", pipelineId, { todos: pipeline.todos, progress: pipeline.progress }, session.companyCode);
     revalidatePath("/dev/timeline");
     revalidatePath("/dev/dashboard");
@@ -514,6 +526,8 @@ export async function togglePipelineTodo(pipelineId: string, todoId: string, com
 }
 
 export async function deletePipelineTodo(pipelineId: string, todoId: string) {
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   await connectToDatabase();
   const pipeline = await Pipeline.findById(pipelineId);
   if (pipeline) {
@@ -524,7 +538,6 @@ export async function deletePipelineTodo(pipelineId: string, todoId: string) {
     const completedCount = pipeline.todos.filter((t: any) => t.completed).length;
     pipeline.progress = total > 0 ? Math.round((completedCount / total) * 100) : 0;
     await pipeline.save();
-    const session = await getCurrentSession();
     await syncTenantWrite("Pipeline", "update", pipelineId, { todos: pipeline.todos, progress: pipeline.progress }, session.companyCode);
     revalidatePath("/dev/timeline");
     revalidatePath("/dev/dashboard");
@@ -536,6 +549,8 @@ export async function deletePipelineTodo(pipelineId: string, todoId: string) {
 }
 
 export async function reorderPipelineTodos(pipelineId: string, todos: any[]) {
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   await connectToDatabase();
   const cleanTodos = todos.map((todo) => {
     // If _id is a temporary optimistic UI ID (not 24 char hex), strip it so Mongoose generates a valid ObjectId
@@ -549,7 +564,6 @@ export async function reorderPipelineTodos(pipelineId: string, todos: any[]) {
   const completedCount = cleanTodos.filter((t: any) => t.completed).length;
   const progress = total > 0 ? Math.round((completedCount / total) * 100) : 0;
   await Pipeline.findByIdAndUpdate(pipelineId, { todos: cleanTodos, progress });
-  const session = await getCurrentSession();
   await syncTenantWrite("Pipeline", "update", pipelineId, { todos: cleanTodos, progress }, session.companyCode);
   revalidatePath("/dev/timeline");
   revalidatePath("/dev/dashboard");
@@ -560,11 +574,12 @@ export async function reorderPipelineTodos(pipelineId: string, todos: any[]) {
 }
 
 export async function deletePipeline(formData: FormData) {
+  const session = await getCurrentSession();
+  assertNotGuest(session);
   const pipelineId = formData.get("pipelineId") as string;
   if (!pipelineId) return;
   await connectToDatabase();
   await Pipeline.findByIdAndDelete(pipelineId);
-  const session = await getCurrentSession();
   await syncTenantWrite("Pipeline", "delete", pipelineId, undefined, session.companyCode);
   revalidatePath("/dev/timeline");
 }

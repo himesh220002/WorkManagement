@@ -94,8 +94,26 @@ export function middleware(req: NextRequest) {
     const orgId = firstSegment;
     const subPath = segments.slice(1).join("/");
 
-    // If user is not authenticated, redirect to this organization's dedicated login portal
+    // If user is not authenticated, check if accessing the public showcase organization (ORGTTV)
     if (!isTokenValid) {
+      const isShowcaseOrg =
+        orgId.toUpperCase() === "ORGTTV" ||
+        orgId.toLowerCase() === "cyphertech" ||
+        orgId.toLowerCase() === "taskflow";
+
+      if (isShowcaseOrg) {
+        // Public showcase allowed in read-only mode
+        const targetPath = subPath ? `/${subPath}` : "/exec/dashboard";
+        const requestHeaders = new Headers(req.headers);
+        requestHeaders.set("x-tenant-org-code", "ORGTTV");
+        requestHeaders.set("x-tenant-is-guest", "true");
+        requestHeaders.set("x-tenant-user-role", "viewer");
+        return NextResponse.rewrite(new URL(targetPath, req.url), {
+          request: { headers: requestHeaders },
+        });
+      }
+
+      // Private organization workspace requires authentication
       const loginUrl = new URL(`/${orgId}/auth/login`, req.url);
       return NextResponse.redirect(loginUrl);
     }
@@ -138,9 +156,17 @@ export function middleware(req: NextRequest) {
       return NextResponse.redirect(orgScopedUrl);
     }
 
-    // If not authenticated, redirect to login
+    // If not authenticated, allow viewing in public guest showcase mode (backed by general DB showcase data)
     if (!isTokenValid) {
-      return NextResponse.redirect(new URL("/auth/login", req.url));
+      const requestHeaders = new Headers(req.headers);
+      requestHeaders.set("x-tenant-org-code", "ORGTTV");
+      requestHeaders.set("x-tenant-is-guest", "true");
+      requestHeaders.set("x-tenant-user-role", "viewer");
+      return NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      });
     }
   }
 
