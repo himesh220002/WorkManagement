@@ -4,7 +4,6 @@ import React, { createContext, useContext, useState } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { TopBar, Breadcrumbs, SubscriptionBanner } from "@/components/shell";
-import ShowcaseGuestCard from "@/components/showcase/ShowcaseGuestCard";
 
 export const ShellContext = createContext<{
   isStandalone: boolean;

@@ -33,7 +33,7 @@ const PUBLIC_MARKETING_PATHS = new Set([
   "/not-found",
 ]);
 
-// Known top-level standard routes
+// Known top-level standard dashboard routes
 const PROTECTED_ROOT_ROUTES = new Set([
   "exec",
   "projects",
@@ -45,8 +45,8 @@ const PROTECTED_ROOT_ROUTES = new Set([
   "diagrams",
   "my-work",
   "dev",
-  "about",
   "docs",
+  "lists",
   "projecthelpdemo",
 ]);
 
@@ -67,8 +67,8 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. Allow root `/auth/login` and `/auth/signup` to pass
-  if (pathname === "/auth/login" || pathname === "/auth/signup") {
+  // 2. Allow all `/auth` routes to pass (root login, signup, forgot password, etc.)
+  if (pathname.startsWith("/auth")) {
     return NextResponse.next();
   }
 
@@ -96,26 +96,8 @@ export function middleware(req: NextRequest) {
     const orgId = firstSegment;
     const subPath = segments.slice(1).join("/");
 
-    // If user is not authenticated, check if accessing the public showcase organization (ORGTTV)
+    // Unauthenticated access to tenant workspace: redirect immediately to dedicated org login
     if (!isTokenValid) {
-      const isShowcaseOrg =
-        orgId.toUpperCase() === "ORGTTV" ||
-        orgId.toLowerCase() === "cyphertech" ||
-        orgId.toLowerCase() === "taskflow";
-
-      if (isShowcaseOrg) {
-        // Public showcase allowed in read-only mode
-        const targetPath = subPath ? `/${subPath}` : "/exec/dashboard";
-        const requestHeaders = new Headers(req.headers);
-        requestHeaders.set("x-tenant-org-code", "ORGTTV");
-        requestHeaders.set("x-tenant-is-guest", "true");
-        requestHeaders.set("x-tenant-user-role", "viewer");
-        return NextResponse.rewrite(new URL(targetPath, req.url), {
-          request: { headers: requestHeaders },
-        });
-      }
-
-      // Private organization workspace requires authentication
       const loginUrl = new URL(`/${orgId}/auth/login`, req.url);
       return NextResponse.redirect(loginUrl);
     }
@@ -150,26 +132,28 @@ export function middleware(req: NextRequest) {
     });
   }
 
-  // 5. Handle direct un-prefixed routes: /exec/dashboard, /projects, etc.
+  // 5. Handle direct root dashboard routes: /exec, /projects, /teams, /sales, etc.
   if (PROTECTED_ROOT_ROUTES.has(firstSegment)) {
+    // If not authenticated, redirect by default to login first
+    if (!isTokenValid) {
+      const loginUrl = new URL("/auth/login", req.url);
+      return NextResponse.redirect(loginUrl);
+    }
+
     // If authenticated and has companyCode, attach the organization code to the URL!
-    if (isTokenValid && decoded.companyCode) {
+    if (decoded.companyCode) {
       const orgScopedUrl = new URL(`/${decoded.companyCode}${pathname}`, req.url);
       return NextResponse.redirect(orgScopedUrl);
     }
 
-    // If not authenticated, allow viewing in public guest showcase mode (backed by general DB showcase data)
-    if (!isTokenValid) {
-      const requestHeaders = new Headers(req.headers);
-      requestHeaders.set("x-tenant-org-code", "ORGTTV");
-      requestHeaders.set("x-tenant-is-guest", "true");
-      requestHeaders.set("x-tenant-user-role", "viewer");
-      return NextResponse.next({
-        request: {
-          headers: requestHeaders,
-        },
-      });
-    }
+    // Authenticated superuser or user without companyCode: allow direct route access
+    return NextResponse.next();
+  }
+
+  // 6. Catch-all: Any other unauthenticated route that is not public marketing or auth
+  if (!isTokenValid) {
+    const loginUrl = new URL("/auth/login", req.url);
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();

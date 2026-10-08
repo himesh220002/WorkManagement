@@ -425,7 +425,7 @@ export default function DevDashboardClient({
               }`}
             >
               {isGuest
-                ? "Creation Disabled in Showcase Mode"
+                ? "Sign In to Create Task"
                 : projects.length === 0
                 ? "No Projects Available"
                 : "Create Production Task"}
@@ -504,7 +504,7 @@ export default function DevDashboardClient({
               }`}
             >
               {isGuest
-                ? "Milestone Launch Disabled in Showcase Mode"
+                ? "Sign In to Launch Milestone"
                 : projects.length === 0
                 ? "No Projects Available"
                 : "Launch Milestone / Sprint"}

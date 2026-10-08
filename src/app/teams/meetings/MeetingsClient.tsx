@@ -429,16 +429,6 @@ export default function MeetingsClient({
         </div>
       )}
 
-      {/* Guest Mode Notice banner if applicable */}
-      {isGuest && (
-        <div className="p-3.5 rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 flex items-center gap-3 text-amber-800 dark:text-amber-300 text-xs">
-          <Info className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <span>
-            <strong>Showcase Guest Mode:</strong> Meetings, auto-schedulers, platform connectivity, and transcripts are loaded in read-only mode. Modification actions are disabled (styled gray). Subscribe or log in to schedule or edit meetings.
-          </span>
-        </div>
-      )}
-
       {/* Hero Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-gray-200 dark:border-gray-800">
         <div>

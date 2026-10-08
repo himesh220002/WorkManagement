@@ -14,7 +14,7 @@ function revalidatePath(path: string) {
 
 function assertNotGuest(session: { isGuest?: boolean; userId?: string | null }) {
   if (session.isGuest || !session.userId) {
-    throw new Error("Guest showcase mode is read-only. Please log in or subscribe to modify workspace data.");
+    throw new Error("Authentication required. Please log in or subscribe to modify workspace data.");
   }
 }
 

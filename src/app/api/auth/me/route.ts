@@ -8,44 +8,12 @@ export async function GET(req: NextRequest) {
   const sessionUser = await getNextAuthUser(req);
 
   if (!sessionUser) {
-    await connectToDatabase();
-    const showcaseCompany =
-      (await Company.findOne({
-        $or: [{ companyCode: "ORGTTV" }, { name: "TaskFlow Organization" }],
-      }).lean()) || (await Company.findOne().lean());
-
     return NextResponse.json({
       success: true,
       authenticated: false,
-      isGuest: true,
-      user: {
-        _id: "guest_showcase_user",
-        id: "guest_showcase_user",
-        name: "Guest Explorer",
-        email: "guest@taskflow.showcase",
-        role: "viewer",
-        position: "Showcase Previewer",
-        companyId: showcaseCompany?._id ? showcaseCompany._id.toString() : null,
-        rank: "1",
-        status: "Browsing",
-      },
-      company: showcaseCompany
-        ? {
-            id: showcaseCompany._id.toString(),
-            name: showcaseCompany.name,
-            code: showcaseCompany.companyCode || "ORGTTV",
-            slug: showcaseCompany.slug,
-            status: showcaseCompany.status,
-          }
-        : null,
-      permissions: {
-        isSuperuser: false,
-        canManageCompany: false,
-        canManageProjects: false,
-        canAssignTasks: false,
-        isEmployeeOnly: false,
-        isGuest: true,
-      },
+      user: null,
+      company: null,
+      permissions: null,
     });
   }
 

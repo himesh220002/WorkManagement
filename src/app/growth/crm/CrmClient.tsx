@@ -603,7 +603,7 @@ export default function CrmClient({
                           ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
                           : "text-gray-400 hover:text-rose-600 cursor-pointer"
                       }`}
-                      title={isGuest ? "Delete disabled in showcase mode" : "Delete account"}
+                      title={isGuest ? "Sign in to delete account" : "Delete account"}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -1074,7 +1074,7 @@ export default function CrmClient({
                       : "bg-[#0078D4] hover:bg-[#106EBE] text-white cursor-pointer shadow-sm"
                   }`}
                 >
-                  {isGuest ? "Creation Disabled in Showcase Mode" : "Establish Account"}
+                  {isGuest ? "Sign In to Establish Account" : "Establish Account"}
                 </button>
               </div>
             </form>
@@ -1356,7 +1356,7 @@ export default function CrmClient({
                       : "bg-purple-600 hover:bg-purple-700 cursor-pointer"
                   }`}
                 >
-                  {isGuest ? "Disabled in Showcase Mode" : isSubmittingMeeting ? "Scheduling..." : "Schedule & Connect"}
+                  {isGuest ? "Sign In to Schedule" : isSubmittingMeeting ? "Scheduling..." : "Schedule & Connect"}
                 </button>
               </div>
             </form>

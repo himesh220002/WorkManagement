@@ -35,7 +35,7 @@ export async function provisionMemberAction(formData: FormData): Promise<ActionR
   if (session.isGuest || !session.userId) {
     return {
       success: false,
-      error: "Guest showcase mode is read-only. Please log in or subscribe to provision accounts.",
+      error: "Authentication required. Please log in or subscribe to provision accounts.",
     };
   }
 
@@ -168,7 +168,7 @@ export async function updateMemberRoleTagAction(formData: FormData): Promise<Act
   if (session.isGuest || !session.userId) {
     return {
       success: false,
-      error: "Guest showcase mode is read-only. Please log in or subscribe to update member roles.",
+      error: "Authentication required. Please log in or subscribe to update member roles.",
     };
   }
 
@@ -221,7 +221,7 @@ export async function assignProjectStaffAction(formData: FormData): Promise<Acti
   if (session.isGuest || !session.userId) {
     return {
       success: false,
-      error: "Guest showcase mode is read-only. Please log in or subscribe to assign project staff.",
+      error: "Authentication required. Please log in or subscribe to assign project staff.",
     };
   }
 
@@ -272,7 +272,7 @@ export async function updateProjectAgendasAction(formData: FormData): Promise<Ac
   if (session.isGuest || !session.userId) {
     return {
       success: false,
-      error: "Guest showcase mode is read-only. Please log in or subscribe to update project agendas.",
+      error: "Authentication required. Please log in or subscribe to update project agendas.",
     };
   }
 
@@ -336,7 +336,7 @@ export async function submitProjectChangeRequestAction(formData: FormData): Prom
   if (session.isGuest || !session.userId) {
     return {
       success: false,
-      error: "Guest showcase mode is read-only. Please log in or subscribe to submit change requests.",
+      error: "Authentication required. Please log in or subscribe to submit change requests.",
     };
   }
 
@@ -386,7 +386,7 @@ export async function reviewProjectChangeRequestAction(formData: FormData): Prom
   if (session.isGuest || !session.userId) {
     return {
       success: false,
-      error: "Guest showcase mode is read-only. Please log in or subscribe to review change requests.",
+      error: "Authentication required. Please log in or subscribe to review change requests.",
     };
   }
 
@@ -453,7 +453,7 @@ export async function archiveMemberAction(formData: FormData): Promise<ActionRes
   if (session.isGuest || !session.userId) {
     return {
       success: false,
-      error: "Guest showcase mode is read-only. Please log in or subscribe to archive members.",
+      error: "Authentication required. Please log in or subscribe to archive members.",
     };
   }
 
@@ -515,7 +515,7 @@ export async function restoreMemberAction(formData: FormData): Promise<ActionRes
   if (session.isGuest || !session.userId) {
     return {
       success: false,
-      error: "Guest showcase mode is read-only. Please log in or subscribe to restore members.",
+      error: "Authentication required. Please log in or subscribe to restore members.",
     };
   }
 
@@ -571,7 +571,7 @@ export async function resignMemberAction(formData: FormData): Promise<ActionResu
   if (session.isGuest || !session.userId) {
     return {
       success: false,
-      error: "Guest showcase mode is read-only. Please log in or subscribe.",
+      error: "Authentication required. Please log in or subscribe.",
     };
   }
 

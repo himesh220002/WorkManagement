@@ -434,7 +434,7 @@ export default function TimelineClient({
                         : "bg-blue-600 hover:bg-blue-700 active:scale-95 text-white cursor-pointer"
                     }`}
                   >
-                    <i className="fa-solid fa-plus"></i> {isGuest ? "Creation Disabled in Showcase Mode" : "Create Pipeline"}
+                    <i className="fa-solid fa-plus"></i> {isGuest ? "Sign In to Create Pipeline" : "Create Pipeline"}
                   </button>
                 </div>
               </form>

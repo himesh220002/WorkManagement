@@ -15,7 +15,7 @@ const sections = [
   },
   {
     h: "2. Subscription & Direct Paywall",
-    p: "New organizations are provisioned upon activating an active subscription ($20 USD / month or $200 USD / year) processed via Razorpay. Direct paywall applies to all workspace initializations. You may explore the public showcase workspace for free prior to subscribing. Subscriptions can be managed or cancelled at any time.",
+    p: "New organizations are provisioned upon activating an active subscription ($20 USD / month, $55 USD / 3 months, or $200 USD / year) processed via Razorpay. Direct paywall applies to all workspace initializations. Subscriptions can be managed or cancelled at any time.",
   },
   {
     h: "3. Accounts & roles",

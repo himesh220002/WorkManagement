@@ -179,39 +179,14 @@ export async function getCurrentSession(): Promise<SessionContext> {
     }
   } catch {}
 
-  // Unauthenticated safe fallback: Public Guest Showcase Mode backed by general DB showcase company
-  try {
-    const showcaseCompany =
-      (await Company.findOne({
-        $or: [
-          { companyCode: headerOrgCode ? headerOrgCode.toUpperCase() : "ORGTTV" },
-          { companyCode: "ORGTTV" },
-          { name: "TaskFlow Organization" },
-        ],
-      }).lean()) || (await Company.findOne().lean());
-
-    if (showcaseCompany) {
-      return {
-        userId: undefined,
-        companyId: showcaseCompany._id.toString(),
-        companyCode: showcaseCompany.companyCode || "ORGTTV",
-        role: "viewer",
-        email: "guest@taskflow.showcase",
-        name: "Guest Explorer",
-        isGuest: true,
-      };
-    }
-  } catch (err) {
-    console.warn("Could not load showcase company for guest session:", err);
-  }
-
+  // Unauthenticated safe fallback: unauthenticated guest context (no showcase data attached)
   return {
     userId: undefined,
     companyId: undefined,
     companyCode: undefined,
     role: "viewer",
-    email: "guest@taskflow.showcase",
-    name: "Guest Explorer",
+    email: "",
+    name: "Guest",
     isGuest: true,
   };
 }
@@ -221,6 +196,7 @@ export async function getCurrentSession(): Promise<SessionContext> {
  * For non-superusers: isolates strictly by companyId.
  * For new organizations: isolates to that organization's companyId (clean & empty initially).
  * For superusers without an organization selected: returns {} (global access).
+ * For unauthenticated guests: isolates to impossible key preventing data leakage.
  */
 export function getTenantQueryFilter(session: SessionContext): Record<string, any> {
   if (session.role === "superuser" && !session.companyId) {
@@ -229,6 +205,6 @@ export function getTenantQueryFilter(session: SessionContext): Record<string, an
   if (session.companyId) {
     return { companyId: session.companyId };
   }
-  return {};
+  return { companyId: "unauthenticated_boundary_lock" };
 }
 
