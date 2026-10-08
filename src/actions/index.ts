@@ -547,6 +547,52 @@ export async function addResourceAllocation(formData: FormData) {
   }
 }
 
+export async function updateResourceAllocation(formData: FormData) {
+  await connectToDatabase();
+  const session = await getCurrentSession();
+  const id = formData.get("id") as string;
+  const name = formData.get("name") as string;
+  const type = (formData.get("type") as string) || "Budget";
+  const totalAllocated = Number(formData.get("totalAllocated")) || 0;
+  const totalUsed = Number(formData.get("totalUsed")) || 0;
+  const riskLevel = (formData.get("riskLevel") as string) || "Low";
+  const assignedToProjectId = formData.get("assignedToProjectId") as string;
+  const linkedDealId = formData.get("linkedDealId") as string;
+
+  if (id && name) {
+    const filter: any = { _id: id };
+    if (session.companyId) filter.companyId = session.companyId;
+
+    const updateData: any = {
+      name,
+      type,
+      totalAllocated,
+      totalUsed,
+      riskLevel,
+    };
+    if (assignedToProjectId) updateData.assignedToProjectId = assignedToProjectId;
+    else updateData.$unset = { assignedToProjectId: 1 };
+    if (linkedDealId) updateData.linkedDealId = linkedDealId;
+
+    await ResourceAllocation.updateOne(filter, updateData);
+    revalidatePath("/exec/resources");
+    revalidatePath("/revenue/dashboard");
+  }
+}
+
+export async function deleteResourceAllocation(formData: FormData) {
+  await connectToDatabase();
+  const session = await getCurrentSession();
+  const id = formData.get("id") as string;
+  if (id) {
+    const filter: any = { _id: id };
+    if (session.companyId) filter.companyId = session.companyId;
+    await ResourceAllocation.deleteOne(filter);
+    revalidatePath("/exec/resources");
+    revalidatePath("/revenue/dashboard");
+  }
+}
+
 export async function addTaskNode(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();

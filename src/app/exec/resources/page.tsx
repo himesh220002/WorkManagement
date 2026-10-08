@@ -1,8 +1,14 @@
 import connectToDatabase from "@/lib/mongodb";
-import { ResourceAllocation, Project } from "@/models";
+import { ResourceAllocation, Project, Team, User, Deal } from "@/models";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import ResourceDashboardClient from "./ResourceDashboardClient";
 import { fetchWithCache } from "@/lib/cache";
+
+export const metadata = {
+  title: "Resource Allocation & Capacity | TaskPMS",
+  description:
+    "Enterprise resource allocation envelopes, capital budgets, headcount capacity, and burn rate tracking",
+};
 
 export default async function ResourceDashboardPage() {
   await connectToDatabase();
@@ -12,29 +18,63 @@ export default async function ResourceDashboardPage() {
 
   let resources: any[] = [];
   let projects: any[] = [];
+  let teams: any[] = [];
+  let users: any[] = [];
+  let deals: any[] = [];
 
   try {
-    [resources, projects] = await Promise.all([
+    [resources, projects, teams, users, deals] = await Promise.all([
       fetchWithCache(`resource_allocations:${cId}`, 30, () =>
-        ResourceAllocation.find(tenantFilter).populate("assignedToProjectId").lean()
+        ResourceAllocation.find(tenantFilter)
+          .populate("assignedToProjectId", "name status")
+          .populate("linkedDealId", "name amount stage")
+          .populate("teamId", "name")
+          .lean()
       ),
       fetchWithCache(`resource_projects:${cId}`, 30, () =>
         Project.find(tenantFilter).lean()
       ),
+      fetchWithCache(`resource_teams:${cId}`, 30, () =>
+        Team.find(tenantFilter).lean()
+      ),
+      fetchWithCache(`resource_users:${cId}`, 30, () =>
+        User.find(tenantFilter).lean()
+      ),
+      fetchWithCache(`resource_deals:${cId}`, 30, () =>
+        Deal.find(tenantFilter).lean()
+      ),
     ]);
   } catch (err) {
-    console.error(err);
+    console.error("Error loading resource dashboard data:", err);
   }
 
-  // Convert ObjectIds to strings
+  // Convert ObjectIds to strings & clean
   const cleanResources = resources.map((r: any) => ({
     _id: r._id.toString(),
     name: r.name,
-    type: r.type,
-    totalAllocated: r.totalAllocated,
-    totalUsed: r.totalUsed,
-    riskLevel: r.riskLevel,
+    type: r.type || "Budget",
+    totalAllocated: Number(r.totalAllocated || 0),
+    totalUsed: Number(r.totalUsed || 0),
+    riskLevel: r.riskLevel || "Low",
+    assignedToProjectId: r.assignedToProjectId?._id
+      ? r.assignedToProjectId._id.toString()
+      : r.assignedToProjectId
+      ? r.assignedToProjectId.toString()
+      : null,
     assignedToProjectName: r.assignedToProjectId?.name || "Unassigned",
+    linkedDealId: r.linkedDealId?._id
+      ? r.linkedDealId._id.toString()
+      : r.linkedDealId
+      ? r.linkedDealId.toString()
+      : null,
+    linkedDealName: r.linkedDealId?.name || null,
+    teamId: r.teamId?._id
+      ? r.teamId._id.toString()
+      : r.teamId
+      ? r.teamId.toString()
+      : null,
+    teamName: r.teamId?.name || null,
+    createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
   }));
 
   const cleanProjects = projects.map((p: any) => ({
@@ -42,5 +82,38 @@ export default async function ResourceDashboardPage() {
     name: p.name,
   }));
 
-  return <ResourceDashboardClient resources={cleanResources} projects={cleanProjects} />;
+  const cleanTeams = teams.map((t: any) => ({
+    _id: t._id.toString(),
+    name: t.name,
+    membersCount: Array.isArray(t.members) ? t.members.length : 0,
+  }));
+
+  const cleanUsers = users.map((u: any) => ({
+    _id: u._id.toString(),
+    name: u.name,
+    role: u.role || "Member",
+    position: u.position || "Staff",
+    capacityHoursPerWeek: Number(u.capacityHoursPerWeek || 40),
+    status: u.status || "Working",
+    skills: Array.isArray(u.skills) ? u.skills : [],
+  }));
+
+  const cleanDeals = deals.map((d: any) => ({
+    _id: d._id.toString(),
+    name: d.name,
+    amount: Number(d.amount || d.revenue || 0),
+    stage: d.stage || "Prospect",
+  }));
+
+  return (
+    <ResourceDashboardClient
+      resources={cleanResources}
+      projects={cleanProjects}
+      teams={cleanTeams}
+      users={cleanUsers}
+      deals={cleanDeals}
+      companyCode={session.companyCode || ""}
+      userRole={session.role}
+    />
+  );
 }

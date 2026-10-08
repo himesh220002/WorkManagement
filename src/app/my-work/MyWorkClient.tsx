@@ -35,9 +35,56 @@ export default function MyWorkClient({
     return hasAssigneeId || hasLegacyName;
   });
 
+  const selectedUser = users.find((u) => u._id === selectedUserId);
+
   const filteredPipelines = initialPipelines.filter((p) => {
     if (selectedUserId === "all") return true;
-    return (p.ownerId?._id || p.ownerId) === selectedUserId;
+    const ownerIdStr = (p.ownerId?._id || p.ownerId)?.toString();
+    const isOwnerIdMatch = ownerIdStr === selectedUserId;
+    const isOwnerNameMatch =
+      selectedUser && p.owner && p.owner.toLowerCase() === selectedUser.name.toLowerCase();
+    const isMemberMatch =
+      Array.isArray(p.memberIds) &&
+      p.memberIds.some((m: any) => (m._id || m)?.toString() === selectedUserId);
+    return isOwnerIdMatch || isOwnerNameMatch || isMemberMatch;
+  });
+
+  // Calculate live dynamic progress based on current tasks and pipeline checklists
+  const pipelinesWithLiveProgress = filteredPipelines.map((p) => {
+    const pIdStr = p._id?.toString() || "";
+    const completedTodos = Array.isArray(p.todos)
+      ? p.todos.filter((t: any) => t.completed).length
+      : 0;
+    const totalTodos = Array.isArray(p.todos) ? p.todos.length : 0;
+
+    // Check live tasks state
+    const linkedTasks = tasks.filter(
+      (t: any) => t.pipelineId && (t.pipelineId._id || t.pipelineId)?.toString() === pIdStr
+    );
+    const completedLinkedTasks = linkedTasks.filter((t: any) =>
+      ["done", "completed"].includes((t.status || "").toLowerCase())
+    ).length;
+    const totalLinkedTasks = linkedTasks.length;
+
+    let dynamicProgress = Number(p.progress || 0);
+    if (totalTodos > 0 && totalLinkedTasks > 0) {
+      dynamicProgress = Math.round(
+        ((completedTodos + completedLinkedTasks) / (totalTodos + totalLinkedTasks)) * 100
+      );
+    } else if (totalTodos > 0) {
+      dynamicProgress = Math.round((completedTodos / totalTodos) * 100);
+    } else if (totalLinkedTasks > 0) {
+      dynamicProgress = Math.round((completedLinkedTasks / totalLinkedTasks) * 100);
+    }
+
+    return {
+      ...p,
+      dynamicProgress,
+      totalTodos,
+      completedTodos,
+      totalLinkedTasks,
+      completedLinkedTasks,
+    };
   });
 
   const filteredDeals = initialDeals.filter((d) => {
@@ -170,30 +217,68 @@ export default function MyWorkClient({
         {/* 2. Pipelines & Deals Column */}
         <div className="space-y-6">
           <Card
-            title={`Owned Pipelines (${filteredPipelines.length})`}
+            title={`Owned Pipelines (${pipelinesWithLiveProgress.length})`}
             seeAllHref="/dev/timeline"
           >
-            {filteredPipelines.length === 0 ? (
+            {pipelinesWithLiveProgress.length === 0 ? (
               <EmptyState
                 title="No pipelines owned"
                 description="No development pipelines owned by this member."
               />
             ) : (
               <div className="divide-y divide-[#F3F2F1] dark:divide-[#292827]">
-                {filteredPipelines.map((p) => (
-                  <div key={p._id} className="py-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-[#242424] dark:text-white truncate">
-                        {p.name}
-                      </span>
-                      <StatusBadge status={p.status} />
+                {pipelinesWithLiveProgress.map((p) => {
+                  const ownerDisplayName =
+                    p.ownerId?.name ||
+                    (p.owner && p.owner !== "Unassigned" ? p.owner : null) ||
+                    "Organization Member";
+
+                  return (
+                    <div key={p._id} className="py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-[#242424] dark:text-white truncate">
+                          {p.name}
+                        </span>
+                        <StatusBadge status={p.status} />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-[#605E5C] dark:text-[#C8C6C4] mt-1.5">
+                        <span className="capitalize">{p.category}</span>
+                        <span className="font-semibold text-[#242424] dark:text-white">
+                          {p.dynamicProgress}% progress
+                        </span>
+                      </div>
+
+                      <div className="w-full bg-[#EDEBE9] dark:bg-[#3B3A39] h-1.5 rounded-full overflow-hidden mt-1">
+                        <div
+                          className={`h-full transition-all duration-300 ${
+                            p.dynamicProgress >= 70
+                              ? "bg-[#107C10]"
+                              : p.dynamicProgress > 0
+                              ? "bg-[#0078D4]"
+                              : "bg-transparent"
+                          }`}
+                          style={{
+                            width: `${Math.min(100, Math.max(0, p.dynamicProgress))}%`,
+                          }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] text-[#8A8886] mt-1">
+                        <span>Owner: {ownerDisplayName}</span>
+                        {p.totalTodos > 0 ? (
+                          <span>
+                            {p.completedTodos}/{p.totalTodos} checklist
+                          </span>
+                        ) : p.totalLinkedTasks > 0 ? (
+                          <span>
+                            {p.completedLinkedTasks}/{p.totalLinkedTasks} tasks
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-[#605E5C] dark:text-[#C8C6C4] mt-1">
-                      <span>{p.category}</span>
-                      <span>{p.progress || 0}% progress</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </Card>

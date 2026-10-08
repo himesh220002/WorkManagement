@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     template: "%s · TaskPMS",
   },
   description:
-    "TaskPMS is a multi-tenant task project management system with isolated company databases, 5-tier permission management (RBAC), AWS S3 document vault, Gantt timelines and revenue pipelines.",
+    "TaskPMS is a multi-tenant task project management system with isolated company databases, role-based permission management (RBAC), AWS S3 document vault, Gantt timelines and revenue pipelines.",
   keywords: [
     "task management system",
     "task project management system",
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     siteName: "TaskPMS",
     title: "TaskPMS — Task Project Management System for Modern Enterprises",
     description:
-      "Isolated workspaces per company, 5-tier permission management, S3 document vault, Gantt timelines, sales and revenue pipelines. First month free.",
+      "Isolated workspaces per company, role-based permission management, S3 document vault, Gantt timelines, sales and revenue pipelines. First month free.",
     images: [{ url: "/logo.svg", width: 196, height: 40, alt: "TaskPMS logo" }],
   },
   twitter: {

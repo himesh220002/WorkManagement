@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { verifyToken } from "./jwt";
 import { JWTPayload } from "@/models/types";
 import { User, Company } from "@/models";
@@ -22,6 +22,12 @@ export interface SessionContext {
 export async function getCurrentSession(): Promise<SessionContext> {
   await connectToDatabase();
   let payload: JWTPayload | null = null;
+  let headerOrgCode: string | undefined = undefined;
+
+  try {
+    const headerStore = await headers();
+    headerOrgCode = headerStore.get("x-tenant-org-code") || undefined;
+  } catch {}
 
   try {
     const cookieStore = await cookies();
@@ -33,7 +39,7 @@ export async function getCurrentSession(): Promise<SessionContext> {
 
   // If valid token found
   if (payload && payload.userId) {
-    const sessionCacheKey = `session:${payload.userId}`;
+    const sessionCacheKey = `session:${payload.userId}:${headerOrgCode || "default"}`;
     const cachedSession = getCached<SessionContext>(sessionCacheKey);
     if (cachedSession) {
       return cachedSession;
@@ -42,13 +48,30 @@ export async function getCurrentSession(): Promise<SessionContext> {
     const user = await User.findById(payload.userId).lean();
     if (user) {
       let companyCode = payload.companyCode || undefined;
+      let companyIdStr = user.companyId ? user.companyId.toString() : undefined;
+
       if (!companyCode && user.companyId) {
         const company = await Company.findById(user.companyId).select("companyCode").lean();
         if (company) companyCode = company.companyCode;
       }
+
+      // If URL header specifies an explicit organization and user has permission, verify match
+      if (headerOrgCode && (!companyCode || companyCode.toUpperCase() !== headerOrgCode.toUpperCase())) {
+        const matchedComp = await Company.findOne({
+          $or: [
+            { companyCode: headerOrgCode.toUpperCase() },
+            { slug: headerOrgCode.toLowerCase() },
+          ],
+        }).select("_id companyCode").lean();
+        if (matchedComp) {
+          companyIdStr = matchedComp._id.toString();
+          companyCode = matchedComp.companyCode;
+        }
+      }
+
       const sessionCtx: SessionContext = {
         userId: user._id.toString(),
-        companyId: user.companyId ? user.companyId.toString() : undefined,
+        companyId: companyIdStr,
         companyCode: companyCode || undefined,
         role: normalizeRole(user.role),
         email: user.email || payload.email,
@@ -66,7 +89,7 @@ export async function getCurrentSession(): Promise<SessionContext> {
     const masterDevCookie = cookieStore.get("tf_master_dev_key")?.value;
     const masterDevEnv = process.env.MASTER_DEV_KEY;
     if (masterDevEnv && masterDevCookie && masterDevCookie === masterDevEnv) {
-      const inspectOrgCode = cookieStore.get("tf_dev_tenant_code")?.value;
+      const inspectOrgCode = cookieStore.get("tf_dev_tenant_code")?.value || headerOrgCode;
       let targetCompany: any = null;
       if (inspectOrgCode) {
         targetCompany = await Company.findOne({
@@ -93,23 +116,55 @@ export async function getCurrentSession(): Promise<SessionContext> {
     const demoRole = cookieStore.get("demo_persona_role")?.value;
     if (demoRole) {
       const normalizedDemo = normalizeRole(demoRole);
-      const demoUser = await User.findOne({
-        role: { $in: [normalizedDemo, normalizedDemo.charAt(0).toUpperCase() + normalizedDemo.slice(1)] },
-      }).lean();
+      let targetCompany: any = null;
+      const targetOrg = headerOrgCode || cookieStore.get("tf_dev_tenant_code")?.value;
+      if (targetOrg) {
+        targetCompany = await Company.findOne({
+          $or: [
+            { companyCode: targetOrg.toUpperCase() },
+            { slug: targetOrg.toLowerCase() },
+          ],
+        }).lean();
+      }
+      if (!targetCompany) {
+        targetCompany = await Company.findOne().lean();
+      }
+
+      const queryFilter: any = {
+        role: {
+          $in: [
+            normalizedDemo,
+            normalizedDemo.charAt(0).toUpperCase() + normalizedDemo.slice(1),
+          ],
+        },
+      };
+      if (targetCompany?._id) {
+        queryFilter.companyId = targetCompany._id;
+      }
+
+      let demoUser = await User.findOne(queryFilter).lean();
+      if (!demoUser) {
+        demoUser = await User.findOne({
+          role: {
+            $in: [
+              normalizedDemo,
+              normalizedDemo.charAt(0).toUpperCase() + normalizedDemo.slice(1),
+            ],
+          },
+        }).lean();
+      }
 
       if (demoUser) {
-        let companyCode: string | undefined = undefined;
-        let compId = demoUser.companyId ? demoUser.companyId.toString() : undefined;
-        if (compId) {
+        let companyCode: string | undefined = targetCompany?.companyCode;
+        let compId = demoUser.companyId
+          ? demoUser.companyId.toString()
+          : targetCompany?._id?.toString();
+
+        if (!companyCode && compId) {
           const comp = await Company.findById(compId).select("companyCode").lean();
           if (comp) companyCode = comp.companyCode;
-        } else {
-          const firstComp = await Company.findOne().select("companyCode").lean();
-          if (firstComp) {
-            compId = firstComp._id.toString();
-            companyCode = firstComp.companyCode;
-          }
         }
+
         return {
           userId: demoUser._id.toString(),
           companyId: compId,

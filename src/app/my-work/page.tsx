@@ -43,10 +43,50 @@ export default async function MyWorkPage() {
     ),
   ]);
 
+  // Compute accurate dynamic progress for each pipeline based on todos and linked tasks
+  const cleanPipelines = pipelines.map((p: any) => {
+    const pIdStr = p._id?.toString() || "";
+    const completedTodos = Array.isArray(p.todos)
+      ? p.todos.filter((t: any) => t.completed).length
+      : 0;
+    const totalTodos = Array.isArray(p.todos) ? p.todos.length : 0;
+
+    // Direct pipeline tasks
+    const linkedTasks = tasks.filter(
+      (t: any) => t.pipelineId && t.pipelineId.toString() === pIdStr
+    );
+    const completedLinkedTasks = linkedTasks.filter(
+      (t: any) => ["done", "completed"].includes((t.status || "").toLowerCase())
+    ).length;
+    const totalLinkedTasks = linkedTasks.length;
+
+    let computedProgress = 0;
+    if (totalTodos > 0 && totalLinkedTasks > 0) {
+      computedProgress = Math.round(
+        ((completedTodos + completedLinkedTasks) / (totalTodos + totalLinkedTasks)) * 100
+      );
+    } else if (totalTodos > 0) {
+      computedProgress = Math.round((completedTodos / totalTodos) * 100);
+    } else if (totalLinkedTasks > 0) {
+      computedProgress = Math.round((completedLinkedTasks / totalLinkedTasks) * 100);
+    } else {
+      computedProgress = Number(p.progress || 0);
+    }
+
+    return {
+      ...p,
+      progress: computedProgress,
+      totalTodos,
+      completedTodos,
+      totalLinkedTasks,
+      completedLinkedTasks,
+    };
+  });
+
   return (
     <MyWorkClient
       initialTasks={serializeDocs(tasks)}
-      initialPipelines={serializeDocs(pipelines)}
+      initialPipelines={serializeDocs(cleanPipelines)}
       initialDeals={serializeDocs(deals)}
       users={serializeDocs(users)}
     />

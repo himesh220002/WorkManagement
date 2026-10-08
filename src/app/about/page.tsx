@@ -23,7 +23,7 @@ import {
 export const metadata: Metadata = {
   title: "About Us",
   description:
-    "About TaskPMS: the enterprise operating system synchronizing engineering delivery, sales pipelines and revenue — multi-tenant architecture, 5-tier RBAC and S3 document vault.",
+    "About TaskPMS: the enterprise operating system synchronizing engineering delivery, sales pipelines and revenue — multi-tenant architecture, company role management and S3 document vault.",
   alternates: { canonical: "/about" },
 };
 

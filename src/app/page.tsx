@@ -120,7 +120,6 @@ const quickLinks = [
 ];
 
 const rbacTiers = [
-  { role: "Superuser", scope: "Dev engine configs, cross-tenant override", access: "ALL ACCESS", rank: "Rank 100", bar: "border-red-500", chip: "text-red-600" },
   { role: "Company Owner", scope: "Billing, member caps, tenant settings", access: "TENANT ISOLATED", rank: "Rank 80", bar: "border-orange-500", chip: "text-orange-600" },
   { role: "Manager", scope: "Coordination scope, provisions team leads", access: "GROUP ISOLATED", rank: "Rank 60", bar: "border-blue-500", chip: "text-blue-600" },
   { role: "Team Lead", scope: "Task creation, trackers, assignee rules", access: "PROJECT SCOPED", rank: "Rank 40", bar: "border-emerald-500", chip: "text-emerald-600" },
@@ -140,7 +139,7 @@ const faqs = [
   },
   {
     q: "What does PMS stand for in TaskPMS?",
-    a: "For corporate clients, PMS means Task Project Management System. For platform engineers it doubles as a Permission Management System: a 5-tier role engine (superuser, owner, manager, team lead, employee) that guards every project, member action and document behind explicit permission checks.",
+    a: "PMS means Task Project Management System — and inside every company workspace it works as a Permission Management System: a company role engine (owner, manager, team lead, employee) that guards every project, member action and document behind explicit permission checks.",
   },
   {
     q: "How does multi-tenant isolation work in TaskPMS?",
@@ -148,7 +147,7 @@ const faqs = [
   },
   {
     q: "Which roles and permissions does TaskPMS support?",
-    a: "Five ranks: superuser (100, global override), company owner (80, billing and member caps), manager (60, coordination scope), team lead (40, project-scoped task control) and employee (20, self-scoped worklogs). Owners provision managers, managers provision team leads and employees, and archiving or resignation follows the same rank guardrails.",
+    a: "Four company ranks: owner (billing and member caps), manager (coordination scope), team lead (project-scoped task control) and employee (self-scoped worklogs). Owners provision managers, managers provision team leads and employees, and archiving or resignation follows the same rank guardrails — so every company controls its own hierarchy end to end.",
   },
   {
     q: "How does the TaskPMS document vault store files securely?",
@@ -196,7 +195,7 @@ export default function Home() {
     operatingSystem: "Web",
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "First month free trial" },
     description:
-      "Multi-tenant task project management system with isolated company databases, 5-tier permission management (RBAC), AWS S3 document vault, Gantt timelines, sales pipelines and revenue targets.",
+      "Multi-tenant task project management system with isolated company databases, role-based permission management (RBAC), AWS S3 document vault, Gantt timelines, sales pipelines and revenue targets.",
   };
   return (
     <div className="min-h-screen bg-[#f2f2f2] dark:bg-[#111214] text-[#242424] dark:text-[#E4E4E7] antialiased">
@@ -237,7 +236,7 @@ export default function Home() {
             </h1>
             <p className="text-base sm:text-lg text-blue-100 font-light max-w-xl leading-relaxed">
               A multi-tenant task-flow OS with isolated per-company databases, a
-              5-tier role engine (superuser → employee), and presigned S3
+              company role engine (owner → employee), and presigned S3
               document pipelines — plus Gantt timelines, sales funnels and
               revenue targets in one continuum.
             </p>
@@ -267,7 +266,7 @@ export default function Home() {
               <div className="grid grid-cols-3 gap-2 mt-4 text-center">
                 {[
                   ["Isolated DBs", "per company"],
-                  ["5 roles", "rank 20–100"],
+                  ["4 company roles", "owner → employee"],
                   ["60s links", "secure views"],
                 ].map(([k, v]) => (
                   <div key={k} className="bg-white/10 rounded-sm px-2 py-2">
@@ -365,12 +364,12 @@ export default function Home() {
           <div className="lg:w-1/2 space-y-5">
             <h2 className="text-2xl sm:text-3xl font-light tracking-tight text-gray-900 dark:text-white">Granular RBAC, built around real team structures</h2>
             <p className="text-gray-600 dark:text-zinc-400 font-light leading-relaxed text-[15px]">
-              Unlike flat single-role trackers, permissions here follow a 5-tier hierarchy with
-              project-scoped team leads, tenant-isolated owners and a global superuser override —
-              enforced in APIs, S3 routes and member-management actions alike.
+              Unlike flat single-role trackers, permissions here follow a company role hierarchy with
+              tenant-isolated owners, coordination-scope managers, project-scoped team leads and
+              self-scoped employees — enforced in APIs, document routes and member-management actions alike.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-700 dark:text-zinc-300 font-light">
-              {["Superuser global context override", "Owner billing & member-cap control", "Manager coordination scope", "Team-lead pipeline & assignee control", "Employee self-scoped worklogs", "Archive / resign guardrails per rank"].map((t) => (
+              {["Owner billing & member-cap control", "Owner-controlled member provisioning", "Manager coordination scope", "Team-lead pipeline & assignee control", "Employee self-scoped worklogs", "Archive / resign guardrails per rank"].map((t) => (
                 <div key={t} className="flex items-center gap-2"><span className="text-green-600 font-bold">✓</span><span>{t}</span></div>
               ))}
             </div>
@@ -380,7 +379,7 @@ export default function Home() {
             </div>
           </div>
           <div className="lg:w-1/2 w-full bg-gray-50 dark:bg-[#18181B] border border-gray-200 dark:border-zinc-800 p-5 sm:p-6 rounded-sm">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-4">RBAC domain schema · ranks 20–100</h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-4">Company role schema · owner → employee</h4>
             <div className="space-y-3 font-mono text-xs">
               {rbacTiers.map((r) => (
                 <div key={r.role} className={`bg-white dark:bg-[#201F1E] p-3 border-l-4 ${r.bar} shadow-sm flex items-center justify-between gap-3 rounded-r-sm`}>
@@ -507,12 +506,11 @@ export default function Home() {
             </p>
             <p>
               The second half of the name matters just as much. PMS also stands for permission management system: a
-              five-tier role engine spanning superuser, company owner, manager, team lead and employee, with numeric
-              ranks from 20 to 100. Owners control billing and member caps, managers provision team leads and
-              employees, team leads own task creation and assignee rules inside their assigned projects, and employees
-              work from a self-scoped My Work view with logs and document uploads. Archiving, role changes and
-              resignations all follow the same rank guardrails, so offboarding is a governed workflow instead of a
-              Slack message and a prayer.
+              company role engine spanning owner, manager, team lead and employee. Owners control billing and member
+              caps, managers provision team leads and employees, team leads own task creation and assignee rules
+              inside their assigned projects, and employees work from a self-scoped My Work view with logs and
+              document uploads. Archiving, role changes and resignations all follow the same rank guardrails, so
+              offboarding is a governed workflow instead of a Slack message and a prayer.
             </p>
             <p>
               Day to day, teams live in six connected engines. Executives track objectives, key results and annual

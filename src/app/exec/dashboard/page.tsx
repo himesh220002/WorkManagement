@@ -321,6 +321,8 @@ export default async function ExecDashboard() {
     role: u.role || "Member",
     position: u.position || "",
     rank: u.rank || 1,
+    skills: Array.isArray(u.skills) ? u.skills : [],
+    details: u.details || "",
   }));
 
   // Enterprise Portfolio Summary Stats

@@ -19,7 +19,7 @@ const sections = [
   },
   {
     h: "3. Accounts & roles",
-    p: "Company owners are responsible for the accounts they provision and the roles they assign across the 5-tier hierarchy (superuser, owner, manager, team lead, employee). You must keep credentials confidential, use a valid work email, and promptly offboard members who leave your organization.",
+    p: "Company owners are responsible for the accounts they provision and the roles they assign across the company role hierarchy (owner, manager, team lead, employee). You must keep credentials confidential, use a valid work email, and promptly offboard members who leave your organization.",
   },
   {
     h: "4. Your data stays yours",

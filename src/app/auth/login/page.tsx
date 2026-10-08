@@ -23,6 +23,7 @@ import {
   Layers,
   Shield,
   Zap,
+  ChevronDown,
 } from "lucide-react";
 
 interface SessionData {
@@ -196,21 +197,29 @@ export default function AuthPage({
     setSelectedPersona(pKey);
     setError(null);
     setSuccess(null);
-    // Clear inputs
-    setLoginEmail("");
-    setLoginPassword("");
-    setLoginCompanyCode("");
+    const config = PERSONA_CONFIGS.find((p) => p.key === pKey);
+    if (config) {
+      setLoginEmail(config.demoCreds.email);
+      setLoginPassword(config.demoCreds.pass);
+      setLoginCompanyCode(
+        prefillOrgCode ? prefillOrgCode.toUpperCase() : config.demoCreds.company
+      );
+    }
   };
 
-  const fillDemoCreds = () => {
+  // Populate initial role credentials on mount
+  useEffect(() => {
     const config = PERSONA_CONFIGS.find((p) => p.key === selectedPersona);
-    if (!config) return;
-    setLoginEmail(config.demoCreds.email);
-    setLoginPassword(config.demoCreds.pass);
-    setLoginCompanyCode(config.demoCreds.company);
-    setError(null);
-    setSuccess(`Filled demo credentials for ${config.label}!`);
-  };
+    if (config && !loginEmail) {
+      setLoginEmail(config.demoCreds.email);
+      setLoginPassword(config.demoCreds.pass);
+      if (!loginCompanyCode && config.demoCreds.company) {
+        setLoginCompanyCode(
+          prefillOrgCode ? prefillOrgCode.toUpperCase() : config.demoCreds.company
+        );
+      }
+    }
+  }, [selectedPersona]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -427,97 +436,45 @@ export default function AuthPage({
         </div>
       )}
 
-      {/* ================= STEP 1: PERSONA SELECTION TOGGLE (FIRST) ================= */}
-      <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 sm:p-6 mb-6 shadow-sm">
-        <div className="mb-4">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[#0078D4] dark:text-[#479EF5] block">
-            Step 1: Select Your Access Persona &amp; Responsibility Tier
-          </span>
-          <h2 className="text-base sm:text-lg font-bold text-[#242424] dark:text-white mt-0.5">
-            Who Are You Accessing TaskFlow As?
-          </h2>
-          <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-0.5">
-            Select a persona toggle below to open the customized authentication area for your role tier.
-          </p>
-        </div>
-
-        {/* 5-way interactive persona cards toggle */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          {PERSONA_CONFIGS.map((p) => {
-            const Icon = p.icon;
-            const isSelected = selectedPersona === p.key;
-            return (
-              <button
-                key={p.key}
-                type="button"
-                onClick={() => handleSelectPersona(p.key)}
-                className={`p-3.5 rounded-[8px] border text-left transition-all cursor-pointer flex flex-col justify-between ${isSelected
-                  ? `ring-2 ring-[#0078D4] dark:ring-[#479EF5] bg-[#EBF3FC]/60 dark:bg-[#1C2B3D]/70 ${p.accentBorder} shadow-sm`
-                  : "border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#1B1A19] hover:border-[#0078D4]/60"
-                  }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div
-                      className={`w-8 h-8 rounded-[6px] flex items-center justify-center ${isSelected
-                        ? "bg-[#0078D4] text-white shadow-sm"
-                        : "bg-white dark:bg-[#201F1E] text-[#605E5C] dark:text-[#C8C6C4] border border-[#E1DFDD] dark:border-[#3B3A39]"
-                        }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    {isSelected && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#0078D4] dark:bg-[#479EF5] animate-pulse" />
-                    )}
-                  </div>
-                  <h3 className="font-bold text-xs sm:text-sm text-[#242424] dark:text-white">
-                    {p.label}
-                  </h3>
-                  <span className="text-[10px] font-semibold text-[#0078D4] dark:text-[#479EF5] block mt-0.5">
-                    {p.shortRole}
-                  </span>
-                </div>
-                <p className="text-[11px] text-[#605E5C] dark:text-[#A19F9D] mt-2 leading-relaxed">
-                  {p.tagline}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* ================= STEP 2: TAILORED LOGIN / SIGNUP AREA ================= */}
-      <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 shadow-sm">
-        {/* Banner of Chosen Persona */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-[#F3F2F1] dark:border-[#292827]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[8px] bg-[#0078D4]/10 dark:bg-[#0078D4]/20 text-[#0078D4] dark:text-[#479EF5] flex items-center justify-center">
-              <ActiveIcon className="w-5 h-5" />
+      {/* ================= UNIFIED AUTH CARD WITH ROLE SELECTOR ================= */}
+      <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 sm:p-8 mb-6 shadow-sm max-w-2xl mx-auto w-full">
+        {/* Role Selector Dropdown */}
+        <div className="pb-5 mb-5 border-b border-[#F3F2F1] dark:border-[#292827]">
+          <label
+            htmlFor="role-dropdown"
+            className="block text-xs font-bold uppercase tracking-wider text-[#605E5C] dark:text-[#C8C6C4] mb-2"
+          >
+            Select Role to Sign In
+          </label>
+          <div className="relative">
+            <select
+              id="role-dropdown"
+              value={selectedPersona}
+              onChange={(e) => handleSelectPersona(e.target.value as PersonaKey)}
+              className="w-full pl-10 pr-9 py-2.5 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] text-xs font-bold text-[#242424] dark:text-white outline-none focus:border-[#0078D4] focus:ring-1 focus:ring-[#0078D4] appearance-none cursor-pointer shadow-xs transition-colors"
+            >
+              <option value="owner">👑 Company Owner (Founder &amp; Executive Authority)</option>
+              <option value="manager">💼 Operations Manager (Staffing &amp; Roadmaps)</option>
+              <option value="teamlead">⚡ Project Team Lead (Project Governance)</option>
+              <option value="employee">👥 Company Employee (Dev / Sales / Ops Specialist)</option>
+              <option value="superuser">🛡️ Developer Superuser (Master Mode)</option>
+            </select>
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#0078D4] dark:text-[#479EF5]">
+              <ActiveIcon className="w-4 h-4" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-[#0078D4] dark:text-[#479EF5]">
-                  Active Role Portal:
-                </span>
-                <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${currentConfig.badgeStyle}`}>
-                  {currentConfig.label}
-                </span>
-              </div>
-              <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-0.5">
-                {currentConfig.tagline}
-              </p>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#8A8886]">
+              <ChevronDown className="w-4 h-4" />
             </div>
           </div>
 
-          {/* Quick Demo Credentials Fill Button */}
-          <button
-            type="button"
-            onClick={fillDemoCreds}
-            className="px-3 py-1.5 rounded-[4px] border border-[#0078D4]/40 hover:border-[#0078D4] text-[#0078D4] dark:text-[#479EF5] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 hover:bg-[#EBF3FC] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Fill Demo {currentConfig.label} Credentials</span>
-          </button>
+          <div className="flex items-center gap-2 mt-2">
+            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${currentConfig.badgeStyle}`}>
+              {currentConfig.shortRole}
+            </span>
+            <span className="text-[11px] text-[#605E5C] dark:text-[#A19F9D]">
+              {currentConfig.tagline}
+            </span>
+          </div>
         </div>
 
         {/* Alerts */}

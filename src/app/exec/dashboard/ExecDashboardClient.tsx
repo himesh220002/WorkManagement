@@ -38,6 +38,12 @@ import {
   Pencil,
   Trash2,
   ListTodo,
+  HelpCircle,
+  Lightbulb,
+  Compass,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
 } from "lucide-react";
 
 ChartJS.register(
@@ -275,15 +281,83 @@ export default function ExecDashboardClient({
     ],
   };
 
+  const [goalTitle, setGoalTitle] = useState("");
+  const [goalDesc, setGoalDesc] = useState("");
+  const [goalCategory, setGoalCategory] = useState("Company");
+  const [showOkrGuide, setShowOkrGuide] = useState(false);
+
+  // Accurately categorize company members into disciplines strictly by role and position
+  const categorizeMember = (u: any): string => {
+    const role = (u.role || "").toLowerCase().trim();
+    const pos = (u.position || "").toLowerCase();
+    const skills = Array.isArray(u.skills) ? u.skills.map((s: string) => s.toLowerCase()).join(" ") : "";
+    const details = (u.details || "").toLowerCase();
+    const combined = `${role} ${pos} ${skills} ${details}`;
+
+    // 1. Leadership (Owner, Superuser, Admin, Founder, Chief Executive)
+    if (
+      ["owner", "superuser", "admin", "founder", "ceo"].includes(role) ||
+      pos.includes("founder") ||
+      pos.includes("chief") ||
+      pos.includes("owner") ||
+      (pos.includes("executive") && !pos.includes("sales") && !pos.includes("account"))
+    ) {
+      return "Leadership";
+    }
+
+    // 2. Operations & Management (Manager, Operations)
+    if (
+      ["manager", "operations", "pm", "product manager"].includes(role) ||
+      combined.includes("operations") ||
+      combined.includes("ops") ||
+      combined.includes("logistics")
+    ) {
+      return "Operations";
+    }
+
+    // 3. Sales & Commercial (Sales, Marketing)
+    if (
+      ["sales", "sales executive", "marketing", "growth"].includes(role) ||
+      combined.includes("sales") ||
+      combined.includes("marketing") ||
+      combined.includes("account executive")
+    ) {
+      return "Sales";
+    }
+
+    // 4. Engineering & Tech (Team Lead, Developer, Engineer, Technical Employees)
+    if (
+      ["teamlead", "tl", "lead", "developer", "engineer", "lead engineer", "dev"].includes(role) ||
+      combined.includes("engineer") ||
+      combined.includes("developer") ||
+      combined.includes("software") ||
+      combined.includes("tech")
+    ) {
+      return "Engineering";
+    }
+
+    // 5. Default company employee / member
+    if (role === "employee" || role === "member") {
+      return "Engineering";
+    }
+
+    return "Leadership";
+  };
+
+  const engineeringUsers = users.filter((u) => categorizeMember(u) === "Engineering");
+  const salesUsers = users.filter((u) => categorizeMember(u) === "Sales");
+  const operationsUsers = users.filter((u) => categorizeMember(u) === "Operations");
+  const leadershipUsers = users.filter((u) => categorizeMember(u) === "Leadership");
+
   const hrBreakdownData = {
-    labels: ["Engineering", "Sales", "Operations", "Leadership / Other"],
+    labels: ["Engineering", "Sales", "Operations", "Leadership"],
     datasets: [
       {
         data: [
-          users.filter((u) => ["developer", "engineer", "lead engineer"].includes(u.role.toLowerCase())).length || 3,
-          users.filter((u) => ["sales", "sales executive"].includes(u.role.toLowerCase())).length || 2,
-          users.filter((u) => ["manager", "operations", "product manager"].includes(u.role.toLowerCase())).length || 2,
-          users.filter((u) => !["developer", "engineer", "lead engineer", "sales", "sales executive", "manager", "operations", "product manager"].includes(u.role.toLowerCase())).length || 2,
+          engineeringUsers.length,
+          salesUsers.length,
+          operationsUsers.length,
+          leadershipUsers.length,
         ],
         backgroundColor: ["#0078D4", "#107C10", "#F7630C", "#605E5C"],
       },
@@ -441,7 +515,7 @@ export default function ExecDashboardClient({
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 border-b border-[#E1DFDD] dark:border-[#3B3A39] mb-6 gap-2">
         <button
           onClick={() => setActiveTab("portfolio")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${activeTab === "portfolio"
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center justify-center gap-2 ${activeTab === "portfolio"
             ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
             : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
             }`}
@@ -452,7 +526,7 @@ export default function ExecDashboardClient({
 
         <button
           onClick={() => setActiveTab("tasks")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${activeTab === "tasks"
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center justify-center gap-2 ${activeTab === "tasks"
             ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
             : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
             }`}
@@ -463,7 +537,7 @@ export default function ExecDashboardClient({
 
         <button
           onClick={() => setActiveTab("pipelines")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${activeTab === "pipelines"
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center justify-center gap-2 ${activeTab === "pipelines"
             ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
             : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
             }`}
@@ -474,7 +548,7 @@ export default function ExecDashboardClient({
 
         <button
           onClick={() => setActiveTab("okrs")}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${activeTab === "okrs"
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center justify-center gap-2 ${activeTab === "okrs"
             ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
             : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424]"
             }`}
@@ -745,11 +819,118 @@ export default function ExecDashboardClient({
             </div>
           </div>
 
+          {/* OKR Framework Helper & Project Guidance Card */}
+          <div className="bg-[#F3F9FD] dark:bg-[#132338] border border-[#0078D4]/30 rounded-[8px] p-4 mb-6 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-[6px] bg-[#0078D4] text-white flex items-center justify-center shrink-0">
+                  <Compass className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[#242424] dark:text-white flex items-center gap-2">
+                    <span>Strategic OKR &amp; Project Guidance</span>
+                    <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-[#0078D4] dark:text-[#479EF5]">
+                      Best Practice
+                    </span>
+                  </h3>
+                  <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4]">
+                    How objectives, key results, and pipelines connect across your organization.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/projecthelpdemo"
+                  className="px-2.5 py-1 text-xs font-semibold rounded border border-[#0078D4]/40 text-[#0078D4] dark:text-[#479EF5] bg-white dark:bg-[#201F1E] hover:bg-[#EBF3FC] transition-colors flex items-center gap-1 shrink-0"
+                >
+                  <Lightbulb className="w-3.5 h-3.5" />
+                  <span>Full Demo Guide</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowOkrGuide(!showOkrGuide)}
+                  className="p-1 rounded text-[#605E5C] dark:text-[#C8C6C4] hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                >
+                  {showOkrGuide ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Collapsible Details & 1-Click Templates */}
+            {showOkrGuide && (
+              <div className="mt-4 pt-3 border-t border-[#0078D4]/20 space-y-3 animate-in fade-in">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3 rounded bg-white dark:bg-[#1C2B3D] border border-[#E1DFDD] dark:border-[#3B3A39]">
+                    <span className="font-bold text-[#0078D4] block mb-1">1. Objective (The "What")</span>
+                    <p className="text-[#605E5C] dark:text-[#C8C6C4]">
+                      Qualitative &amp; inspiring. Sets directional focus for the quarter across Company, Project, or Team.
+                    </p>
+                  </div>
+                  <div className="p-3 rounded bg-white dark:bg-[#1C2B3D] border border-[#E1DFDD] dark:border-[#3B3A39]">
+                    <span className="font-bold text-[#107C10] block mb-1">2. Key Results (The "How")</span>
+                    <p className="text-[#605E5C] dark:text-[#C8C6C4]">
+                      Quantifiable target metric (e.g. $500k revenue, 1,000 physical units, or 99.9% uptime).
+                    </p>
+                  </div>
+                  <div className="p-3 rounded bg-white dark:bg-[#1C2B3D] border border-[#E1DFDD] dark:border-[#3B3A39]">
+                    <span className="font-bold text-[#F7630C] block mb-1">3. Cascading to Pipelines</span>
+                    <p className="text-[#605E5C] dark:text-[#C8C6C4]">
+                      Connects directly to Development Pipelines and Sprints so task completion drives real KR progress.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <span className="text-[11px] font-bold text-[#242424] dark:text-white block mb-2">
+                    💡 Quick OKR Presets (Click to Auto-fill Form):
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGoalTitle("Launch Ergonomic Chair Line (Physical Product)");
+                        setGoalDesc("Produce batch of 1,000 units, maintain 40% margin, establish 5 wholesale distributors");
+                        setGoalCategory("Project");
+                      }}
+                      className="px-3 py-1.5 rounded-[4px] bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] hover:border-[#0078D4] text-xs font-medium text-[#242424] dark:text-white transition-all text-left flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <span>🪑 Physical Product Launch</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGoalTitle("Enterprise SaaS ARR & Customer Acquisition");
+                        setGoalDesc("Reach $500k ARR with 25 signed enterprise accounts and churn below 2%");
+                        setGoalCategory("Company");
+                      }}
+                      className="px-3 py-1.5 rounded-[4px] bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] hover:border-[#0078D4] text-xs font-medium text-[#242424] dark:text-white transition-all text-left flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <span>📈 SaaS ARR Growth</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGoalTitle("Sprint Velocity & Zero-Downtime Infrastructure");
+                        setGoalDesc("Deliver 100% sprint roadmap items on time with sub-100ms API response time");
+                        setGoalCategory("Team");
+                      }}
+                      className="px-3 py-1.5 rounded-[4px] bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] hover:border-[#0078D4] text-xs font-medium text-[#242424] dark:text-white transition-all text-left flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <span>⚡ Sprint Velocity &amp; SLA</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Quick Create Goal Form */}
           <form action={addGoal} className="bg-[#F3F2F1] dark:bg-[#292827] p-4 rounded-[6px] mb-6 flex gap-3 flex-wrap items-center">
             <input
               type="text"
               name="title"
+              value={goalTitle}
+              onChange={(e) => setGoalTitle(e.target.value)}
               className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] px-3 py-1.5 rounded text-sm flex-1 min-w-[200px]"
               placeholder="Objective Title (e.g. Q4 Platform Launch)..."
               required
@@ -757,17 +938,24 @@ export default function ExecDashboardClient({
             <input
               type="text"
               name="description"
+              value={goalDesc}
+              onChange={(e) => setGoalDesc(e.target.value)}
               className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] px-3 py-1.5 rounded text-sm flex-1 min-w-[200px]"
               placeholder="Key Result description..."
             />
-            <select name="category" className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] px-3 py-1.5 rounded text-sm cursor-pointer">
+            <select
+              name="category"
+              value={goalCategory}
+              onChange={(e) => setGoalCategory(e.target.value)}
+              className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] px-3 py-1.5 rounded text-sm cursor-pointer"
+            >
               <option value="Company">Company</option>
               <option value="Project">Project</option>
               <option value="Team">Team</option>
             </select>
             <button
               type="submit"
-              className="px-4 py-1.5 bg-[#0078D4] text-white rounded text-sm font-semibold hover:bg-[#006CBE] transition-colors flex items-center gap-1.5"
+              className="px-4 py-1.5 bg-[#0078D4] text-white rounded text-sm font-semibold hover:bg-[#006CBE] transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" /> Add Goal
             </button>
@@ -976,9 +1164,48 @@ export default function ExecDashboardClient({
                     position: "right",
                     labels: { boxWidth: 12, font: { size: 11 } },
                   },
+                  tooltip: {
+                    callbacks: {
+                      label: function (context: any) {
+                        const label = context.label || "";
+                        const value = context.parsed || 0;
+                        const matching = users.filter((u) => categorizeMember(u) === label);
+                        const names = matching.map((m) => `${m.name} (${m.role})`).join(", ");
+                        return `${label}: ${value} member${value === 1 ? "" : "s"}${names ? ` • ${names}` : ""}`;
+                      },
+                    },
+                  },
                 },
               }}
             />
+          </div>
+
+          {/* Member Roster Discipline Breakdown */}
+          <div className="mt-4 pt-3 border-t border-[#EDEBE9] dark:border-[#3B3A39] grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+            <div className="flex items-center justify-between p-2 rounded bg-blue-50/60 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40">
+              <span className="font-semibold text-[#0078D4]">Engineering ({engineeringUsers.length})</span>
+              <span className="text-[#605E5C] dark:text-[#C8C6C4] truncate max-w-[130px]" title={engineeringUsers.map(u => `${u.name} (${u.role})`).join(", ")}>
+                {engineeringUsers.map(u => u.name).join(", ") || "None"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between p-2 rounded bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40">
+              <span className="font-semibold text-[#107C10]">Sales ({salesUsers.length})</span>
+              <span className="text-[#605E5C] dark:text-[#C8C6C4] truncate max-w-[130px]" title={salesUsers.map(u => `${u.name} (${u.role})`).join(", ")}>
+                {salesUsers.map(u => u.name).join(", ") || "None"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between p-2 rounded bg-orange-50/60 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/40">
+              <span className="font-semibold text-[#F7630C]">Operations ({operationsUsers.length})</span>
+              <span className="text-[#605E5C] dark:text-[#C8C6C4] truncate max-w-[130px]" title={operationsUsers.map(u => `${u.name} (${u.role})`).join(", ")}>
+                {operationsUsers.map(u => u.name).join(", ") || "None"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between p-2 rounded bg-zinc-100/70 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700">
+              <span className="font-semibold text-[#605E5C] dark:text-[#C8C6C4]">Leadership ({leadershipUsers.length})</span>
+              <span className="text-[#605E5C] dark:text-[#C8C6C4] truncate max-w-[130px]" title={leadershipUsers.map(u => `${u.name} (${u.role})`).join(", ")}>
+                {leadershipUsers.map(u => u.name).join(", ") || "None"}
+              </span>
+            </div>
           </div>
         </div>
       </div>
