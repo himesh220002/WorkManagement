@@ -48,6 +48,7 @@ export const NAV_GROUPS = [
       { label: "Exec Dashboard", href: "/exec/dashboard", icon: LayoutDashboard },
       { label: "Projects Blueprint", href: "/projects", icon: FolderKanban },
       { label: "Flow Diagrams", href: "/diagrams", icon: GitGraph },
+      { label: "Roadmap & Demo Guide", href: "/projecthelpdemo", icon: GitGraph },
     ],
   },
   {

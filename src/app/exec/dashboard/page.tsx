@@ -235,10 +235,20 @@ export default async function ExecDashboard() {
   });
 
   // Normalize pipelines
-  const cleanPipelines = pipelinesRaw.map((p: any) => ({
-    _id: p._id.toString(),
-    name: p.name,
-    progress: Number(p.progress || 0),
+  const cleanPipelines = pipelinesRaw.map((p: any) => {
+    const totalTodos = Array.isArray(p.todos) ? p.todos.length : 0;
+    const completedTodos = Array.isArray(p.todos)
+      ? p.todos.filter((t: any) => t.completed).length
+      : 0;
+    const computedProgress =
+      totalTodos > 0
+        ? Math.round((completedTodos / totalTodos) * 100)
+        : Number(p.progress || 0);
+
+    return {
+      _id: p._id.toString(),
+      name: p.name,
+      progress: computedProgress,
     category: p.category || "General",
     owner: p.owner || "Unassigned",
     priority: p.priority || "Medium",
@@ -272,7 +282,8 @@ export default async function ExecDashboard() {
           assigneeName: todo.assigneeName || "",
         }))
       : [],
-  }));
+  };
+});
 
   // Clean deals and leads
   const cleanDeals = dealsRaw.map((d: any) => ({

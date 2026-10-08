@@ -39,9 +39,11 @@ const KNOWN_ROOTS = new Set([
   "404",
   "500",
   "not-found",
+  "projecthelpdemo",
 ]);
 
 const SEGMENT_METADATA: Record<string, { label: string; icon?: React.ElementType }> = {
+  projecthelpdemo: { label: "Project Roadmap & Execution Guide", icon: GitGraph },
   docs: { label: "Documentation Vault", icon: FileText },
   projects: { label: "Projects Blueprint", icon: FolderKanban },
   teams: { label: "Teams & Members", icon: Users },

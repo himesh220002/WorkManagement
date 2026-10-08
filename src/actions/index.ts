@@ -427,37 +427,77 @@ export async function updatePipelineDates(taskId: string, startDate: string, end
 
 export async function addPipelineTodo(pipelineId: string, formData: FormData) {
   const text = formData.get("text") as string;
-  const assigneeType = formData.get("assigneeType") as string || "Individual";
-  const assigneeName = formData.get("assigneeName") as string || "";
-  
+  const assigneeType = (formData.get("assigneeType") as string) || "Individual";
+  const assigneeName = (formData.get("assigneeName") as string) || "";
+
   if (!text) return;
   await connectToDatabase();
-  await Pipeline.findByIdAndUpdate(pipelineId, {
-    $push: { todos: { text, completed: false, assigneeType, assigneeName } }
-  });
-  revalidatePath("/dev/timeline");
+  const pipeline = await Pipeline.findById(pipelineId);
+  if (pipeline) {
+    if (!Array.isArray(pipeline.todos)) pipeline.todos = [];
+    pipeline.todos.push({ text, completed: false, assigneeType, assigneeName } as any);
+    const total = pipeline.todos.length;
+    const completed = pipeline.todos.filter((t: any) => t.completed).length;
+    pipeline.progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+    await pipeline.save();
+    revalidatePath("/dev/timeline");
+    revalidatePath("/dev/dashboard");
+    revalidatePath("/dev");
+    revalidatePath("/exec/dashboard");
+    revalidatePath("/exec");
+    revalidatePath("/revenue/dashboard");
+  }
 }
 
 export async function togglePipelineTodo(pipelineId: string, todoId: string, completed: boolean) {
   await connectToDatabase();
-  await Pipeline.updateOne(
-    { _id: pipelineId, "todos._id": todoId },
-    { $set: { "todos.$.completed": completed } }
-  );
-  revalidatePath("/dev/timeline");
+  const pipeline = await Pipeline.findById(pipelineId);
+  if (pipeline) {
+    const todo = pipeline.todos?.find(
+      (t: any) => t._id?.toString() === todoId?.toString()
+    );
+    if (todo) {
+      todo.completed = completed;
+    } else if (typeof (pipeline.todos as any)?.id === "function") {
+      const sub = (pipeline.todos as any).id(todoId);
+      if (sub) sub.completed = completed;
+    }
+    const total = pipeline.todos?.length || 0;
+    const completedCount = pipeline.todos?.filter((t: any) => t.completed).length || 0;
+    pipeline.progress = total > 0 ? Math.round((completedCount / total) * 100) : 0;
+    await pipeline.save();
+    revalidatePath("/dev/timeline");
+    revalidatePath("/dev/dashboard");
+    revalidatePath("/dev");
+    revalidatePath("/exec/dashboard");
+    revalidatePath("/exec");
+    revalidatePath("/revenue/dashboard");
+  }
 }
 
 export async function deletePipelineTodo(pipelineId: string, todoId: string) {
   await connectToDatabase();
-  await Pipeline.findByIdAndUpdate(pipelineId, {
-    $pull: { todos: { _id: todoId } }
-  });
-  revalidatePath("/dev/timeline");
+  const pipeline = await Pipeline.findById(pipelineId);
+  if (pipeline) {
+    pipeline.todos = (pipeline.todos || []).filter(
+      (t: any) => t._id?.toString() !== todoId?.toString()
+    ) as any;
+    const total = pipeline.todos.length;
+    const completedCount = pipeline.todos.filter((t: any) => t.completed).length;
+    pipeline.progress = total > 0 ? Math.round((completedCount / total) * 100) : 0;
+    await pipeline.save();
+    revalidatePath("/dev/timeline");
+    revalidatePath("/dev/dashboard");
+    revalidatePath("/dev");
+    revalidatePath("/exec/dashboard");
+    revalidatePath("/exec");
+    revalidatePath("/revenue/dashboard");
+  }
 }
 
 export async function reorderPipelineTodos(pipelineId: string, todos: any[]) {
   await connectToDatabase();
-  const cleanTodos = todos.map(todo => {
+  const cleanTodos = todos.map((todo) => {
     // If _id is a temporary optimistic UI ID (not 24 char hex), strip it so Mongoose generates a valid ObjectId
     if (todo._id && todo._id.length !== 24) {
       const { _id, ...rest } = todo;
@@ -465,8 +505,16 @@ export async function reorderPipelineTodos(pipelineId: string, todos: any[]) {
     }
     return todo;
   });
-  await Pipeline.findByIdAndUpdate(pipelineId, { todos: cleanTodos });
+  const total = cleanTodos.length;
+  const completedCount = cleanTodos.filter((t: any) => t.completed).length;
+  const progress = total > 0 ? Math.round((completedCount / total) * 100) : 0;
+  await Pipeline.findByIdAndUpdate(pipelineId, { todos: cleanTodos, progress });
   revalidatePath("/dev/timeline");
+  revalidatePath("/dev/dashboard");
+  revalidatePath("/dev");
+  revalidatePath("/exec/dashboard");
+  revalidatePath("/exec");
+  revalidatePath("/revenue/dashboard");
 }
 
 export async function deletePipeline(formData: FormData) {
@@ -506,7 +554,7 @@ export async function addTaskNode(formData: FormData) {
   const predefinedTask = formData.get("predefinedTask") as string;
   const name = predefinedTask ? (rawName ? `${predefinedTask} - ${rawName}` : predefinedTask) : rawName;
   const projectId = formData.get("projectId") as string;
-  const status = (formData.get("status") as string) || "open";
+  const status = (formData.get("status") as string) || "Todo";
   const severity = (formData.get("severity") as string) || "medium";
   const module = (formData.get("module") as string) || "General";
   const estimatedHours = Number(formData.get("estimatedHours")) || 0;
@@ -514,13 +562,32 @@ export async function addTaskNode(formData: FormData) {
   const pipelineId = formData.get("pipelineId") as string;
   const cycleId = formData.get("cycleId") as string;
   
-  if (name && projectId && projectId !== "all") {
-    const data: any = { name, projectId, status, severity, module, estimatedHours, actualHours, companyId: session.companyId };
+  let targetProjectId = projectId;
+  if (!targetProjectId || targetProjectId === "all") {
+    const firstProj = await Project.findOne(
+      session.companyId ? { companyId: session.companyId } : {}
+    ).lean();
+    if (firstProj) targetProjectId = (firstProj as any)._id.toString();
+  }
+
+  if (name && targetProjectId && targetProjectId !== "all") {
+    const data: any = {
+      name,
+      projectId: targetProjectId,
+      status,
+      severity,
+      module,
+      estimatedHours,
+      actualHours,
+      companyId: session.companyId,
+    };
     if (pipelineId && pipelineId !== "none") data.pipelineId = pipelineId;
     if (cycleId && cycleId !== "none") data.cycleId = cycleId;
     
     await TaskNode.create(data);
     revalidatePath("/dev/dashboard");
+    revalidatePath("/dev/timeline");
+    revalidatePath("/exec/dashboard");
   }
 }
 
@@ -558,11 +625,24 @@ export async function addCycle(formData: FormData) {
   const startDate = formData.get("startDate") as string;
   const endDate = formData.get("endDate") as string;
 
-  if (name && project && project !== "all") {
+  let targetProject = project;
+  if (!targetProject || targetProject === "all") {
+    const firstProj = await Project.findOne(
+      session.companyId ? { companyId: session.companyId } : {}
+    ).lean();
+    if (firstProj) targetProject = (firstProj as any)._id.toString();
+  }
+
+  if (name && targetProject && targetProject !== "all") {
     await Cycle.create({
-      name, project, startDate, endDate
+      name,
+      project: targetProject,
+      startDate: startDate ? new Date(startDate) : new Date(),
+      endDate: endDate ? new Date(endDate) : undefined,
     });
     revalidatePath("/dev/dashboard");
+    revalidatePath("/dev/timeline");
+    revalidatePath("/exec/dashboard");
   }
 }
 

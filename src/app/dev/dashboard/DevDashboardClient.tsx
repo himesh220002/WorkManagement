@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -62,9 +62,35 @@ export default function DevDashboardClient({
   chartData: any;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+
+  const [currentProjectId, setCurrentProjectId] = useState(selectedProjectId || "all");
+  const [taskProjectId, setTaskProjectId] = useState(
+    selectedProjectId !== "all" ? selectedProjectId : projects[0]?._id || ""
+  );
+  const [sprintProjectId, setSprintProjectId] = useState(
+    selectedProjectId !== "all" ? selectedProjectId : projects[0]?._id || ""
+  );
+
+  useEffect(() => {
+    setCurrentProjectId(selectedProjectId || "all");
+    if (selectedProjectId && selectedProjectId !== "all") {
+      setTaskProjectId(selectedProjectId);
+      setSprintProjectId(selectedProjectId);
+    } else if (projects.length > 0) {
+      setTaskProjectId((prev: string) => prev || projects[0]._id);
+      setSprintProjectId((prev: string) => prev || projects[0]._id);
+    }
+  }, [selectedProjectId, projects]);
 
   const handleProjectFilter = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    router.push(`/dev/dashboard?projectId=${e.target.value}`);
+    const val = e.target.value;
+    setCurrentProjectId(val);
+    if (val !== "all") {
+      setTaskProjectId(val);
+      setSprintProjectId(val);
+    }
+    router.push(`${pathname}?projectId=${val}`);
   };
 
   const hoursData = {
@@ -107,7 +133,7 @@ export default function DevDashboardClient({
     ],
   };
 
-  const activeProject = projects.find((p) => p._id === selectedProjectId);
+  const activeProject = projects.find((p) => p._id === currentProjectId);
 
   return (
     <main className="flex flex-col min-w-0 p-0 sm:p-4 flex-1 max-w-[1600px] mx-auto w-full">
@@ -134,7 +160,7 @@ export default function DevDashboardClient({
           <select
             id="projectFilter"
             className="bg-transparent font-semibold cursor-pointer outline-none text-[#242424] dark:text-[#FFFFFF]"
-            value={selectedProjectId}
+            value={currentProjectId}
             onChange={handleProjectFilter}
           >
             <option value="all">All Projects (Global View)</option>
@@ -253,18 +279,42 @@ export default function DevDashboardClient({
             <Plus className="w-4 h-4 text-[#0078D4]" /> Add Engineering Task
           </h3>
           <form action={addTaskNode} className="space-y-3">
-            <input type="hidden" name="projectId" value={selectedProjectId} />
+            {/* Target Project Dropdown */}
+            <div>
+              <label className="text-[11px] font-semibold text-[#605E5C] dark:text-[#C8C6C4] block mb-1">
+                Target Project *
+              </label>
+              <select
+                name="projectId"
+                value={taskProjectId}
+                onChange={(e) => setTaskProjectId(e.target.value)}
+                className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
+                required
+              >
+                {projects.map((p) => (
+                  <option key={p._id} value={p._id}>
+                    {p.name}
+                  </option>
+                ))}
+                {projects.length === 0 && (
+                  <option value="">No projects available (Create a Project first)</option>
+                )}
+              </select>
+            </div>
+
             <div className="flex flex-col sm:flex-row gap-2">
               <select
                 name="pipelineId"
                 className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
               >
                 <option value="none">No Pipeline</option>
-                {pipelines.map((p) => (
-                  <option key={p._id} value={p._id}>
-                    {p.name}
-                  </option>
-                ))}
+                {pipelines
+                  .filter((p) => !taskProjectId || !p.projectId || p.projectId._id === taskProjectId || p.projectId === taskProjectId)
+                  .map((p) => (
+                    <option key={p._id} value={p._id}>
+                      {p.name}
+                    </option>
+                  ))}
               </select>
               <select
                 name="predefinedTask"
@@ -323,24 +373,31 @@ export default function DevDashboardClient({
               </select>
             </div>
 
-            <select
-              name="cycleId"
-              className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
-            >
-              <option value="none">No Sprint Cycle</option>
-              {cycles.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <div>
+              <label className="text-[11px] font-semibold text-[#605E5C] dark:text-[#C8C6C4] block mb-1">
+                Sprint Cycle (Optional)
+              </label>
+              <select
+                name="cycleId"
+                className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
+              >
+                <option value="none">No Sprint Cycle (Backlog / General)</option>
+                {cycles
+                  .filter((c) => !taskProjectId || !c.project || c.project === taskProjectId)
+                  .map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
 
             <button
               type="submit"
-              disabled={selectedProjectId === "all"}
+              disabled={projects.length === 0}
               className="w-full py-2 bg-[#0078D4] hover:bg-[#006CBE] text-white rounded text-xs font-semibold disabled:opacity-50 transition-colors"
             >
-              {selectedProjectId === "all" ? "Select a Specific Project First" : "Create Task"}
+              {projects.length === 0 ? "No Projects Available" : "Create Task"}
             </button>
           </form>
         </div>
@@ -351,7 +408,28 @@ export default function DevDashboardClient({
             <RotateCcw className="w-4 h-4 text-[#107C10]" /> Define Sprint Cycle
           </h3>
           <form action={addCycle} className="space-y-3">
-            <input type="hidden" name="projectId" value={selectedProjectId} />
+            <div>
+              <label className="text-[11px] font-semibold text-[#605E5C] dark:text-[#C8C6C4] block mb-1">
+                Target Project *
+              </label>
+              <select
+                name="projectId"
+                value={sprintProjectId}
+                onChange={(e) => setSprintProjectId(e.target.value)}
+                className="w-full p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
+                required
+              >
+                {projects.map((p) => (
+                  <option key={p._id} value={p._id}>
+                    {p.name}
+                  </option>
+                ))}
+                {projects.length === 0 && (
+                  <option value="">No projects available (Create a Project first)</option>
+                )}
+              </select>
+            </div>
+
             <input
               type="text"
               name="name"
@@ -382,10 +460,10 @@ export default function DevDashboardClient({
 
             <button
               type="submit"
-              disabled={selectedProjectId === "all"}
+              disabled={projects.length === 0}
               className="w-full py-2 bg-[#107C10] hover:bg-[#0F7010] text-white rounded text-xs font-semibold disabled:opacity-50 transition-colors mt-4"
             >
-              {selectedProjectId === "all" ? "Select a Specific Project First" : "Create Sprint Cycle"}
+              {projects.length === 0 ? "No Projects Available" : "Create Sprint Cycle"}
             </button>
           </form>
         </div>
@@ -396,7 +474,7 @@ export default function DevDashboardClient({
         <h3 className="font-bold text-base text-[#242424] dark:text-[#FFFFFF] mb-3">
           Interactive Task Backlog & Execution
         </h3>
-        <EditableTaskList tasks={tasks} />
+        <EditableTaskList tasks={tasks} pipelines={pipelines} cycles={cycles} />
       </div>
 
       {/* Pipeline Cards Grid with Big Look Modal */}

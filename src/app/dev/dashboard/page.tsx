@@ -60,7 +60,13 @@ export default async function DevDashboardPage(
   // Calculate dynamic metrics
   let totalPipelineProgress = 0;
   pipelines.forEach((p: any) => {
-    totalPipelineProgress += (p.progress || 0);
+    let prog = Number(p.progress || 0);
+    if (Array.isArray(p.todos) && p.todos.length > 0) {
+      const completed = p.todos.filter((t: any) => t.completed).length;
+      prog = Math.round((completed / p.todos.length) * 100);
+      p.progress = prog;
+    }
+    totalPipelineProgress += prog;
   });
   const avgPipelineProgress = pipelines.length > 0
     ? (totalPipelineProgress / pipelines.length).toFixed(1)
@@ -156,12 +162,22 @@ export default async function DevDashboardPage(
 
   const cleanPipelines = pipelines
     .filter((p: any) => p.category === "Development")
-    .map((p: any) => ({
-      _id: p._id.toString(),
-      name: p.name,
-      progress: p.progress,
-      category: p.category,
-      owner: p.owner,
+    .map((p: any) => {
+      const totalTodos = Array.isArray(p.todos) ? p.todos.length : 0;
+      const completedTodos = Array.isArray(p.todos)
+        ? p.todos.filter((t: any) => t.completed).length
+        : 0;
+      const prog =
+        totalTodos > 0
+          ? Math.round((completedTodos / totalTodos) * 100)
+          : Number(p.progress || 0);
+
+      return {
+        _id: p._id.toString(),
+        name: p.name,
+        progress: prog,
+        category: p.category,
+        owner: p.owner,
       priority: p.priority,
       status: p.status,
       startDate: p.startDate ? new Date(p.startDate).toISOString() : null,
@@ -178,7 +194,8 @@ export default async function DevDashboardPage(
             assigneeName: todo.assigneeName || "",
           }))
         : [],
-    }));
+    };
+  });
 
   const cleanCycles = cycles.map((c: any) => ({
     _id: c._id.toString(),

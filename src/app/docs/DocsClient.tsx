@@ -21,13 +21,38 @@ import {
   Archive,
   RotateCcw,
   AlertTriangle,
-  HardDrive,
   ChevronLeft,
   ChevronRight,
   Eye,
+  Layers,
+  ArrowUp,
+  ArrowDown,
+  Plus,
+  Minimize2,
+  SlidersHorizontal,
+  Image as ImageIcon,
+  HardDrive,
+  Sparkles,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { DocumentCategory } from "@/models/types";
 import { DOCUMENT_CATEGORY_CONFIGS, validateDocumentFile } from "@/config/documentLimits";
+import { isImageFile, compressImageFile, mergeImagesToPdf } from "@/utils/imageCompressor";
+
+export interface BatchPageItem {
+  id: string;
+  file: File;
+  compressedFile?: File;
+  name: string;
+  size: number;
+  previewUrl: string | null;
+  isImage: boolean;
+  applySizeReducer: boolean;
+  compressedSize?: number;
+  reductionPercent?: number;
+  exceedsLimit: boolean;
+}
 
 interface EntityOption {
   id: string;
@@ -98,6 +123,8 @@ export default function DocsClient({
   );
   const [docTitle, setDocTitle] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [batchFiles, setBatchFiles] = useState<BatchPageItem[]>([]);
+  const [uploadMode, setUploadMode] = useState<"merge_pdf" | "batch_layers">("merge_pdf");
 
   // Upload progress and alerts
   const [isUploading, setIsUploading] = useState(false);
@@ -140,6 +167,53 @@ export default function DocsClient({
   const categoryConfig = DOCUMENT_CATEGORY_CONFIGS[selectedCategory];
   const isManagerOrOwner = ["superuser", "owner", "manager"].includes(currentUser.role);
 
+  // Batch Size Computations
+  const totalRawSize = useMemo(() => {
+    return batchFiles.reduce((acc, item) => acc + item.size, 0);
+  }, [batchFiles]);
+
+  const totalProjectedSize = useMemo(() => {
+    return batchFiles.reduce((acc, item) => {
+      if (item.applySizeReducer && item.compressedSize) {
+        return acc + item.compressedSize;
+      }
+      return acc + item.size;
+    }, 0);
+  }, [batchFiles]);
+
+  const hasOversizedWithoutReducer = useMemo(() => {
+    const maxBytes = categoryConfig.maxSizeMB * 1024 * 1024;
+    return batchFiles.some((item) => !item.applySizeReducer && item.size > maxBytes);
+  }, [batchFiles, categoryConfig.maxSizeMB]);
+
+  // Clean up object URLs on unmount
+  useEffect(() => {
+    return () => {
+      batchFiles.forEach((item) => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+    };
+  }, [batchFiles]);
+
+  // Helper to resolve entity display name
+  const resolveEntityName = (cat: DocumentCategory, entityId: string | null): string => {
+    if (!entityId) return "Organization General / Unassigned";
+    if (cat === "PROJECT") {
+      const found = projects.find((p) => p.id === entityId);
+      return found ? found.name : "General Project Asset";
+    } else if (cat === "EMPLOYEE") {
+      const found = users.find((u) => u.id === entityId);
+      return found ? `${found.name} (${found.role})` : "General Staff Record";
+    } else if (cat === "SALES") {
+      const found = deals.find((d) => d.id === entityId);
+      return found ? found.name : "General Sales Asset";
+    } else if (cat === "SALARY_FINANCE") {
+      const found = users.find((u) => u.id === entityId);
+      return found ? `${found.name} (Payroll)` : "Organization General Treasury";
+    }
+    return "Organization General / Unassigned";
+  };
+
   // Handle category change in upload form
   const handleCategoryChange = (cat: DocumentCategory) => {
     setSelectedCategory(cat);
@@ -147,8 +221,20 @@ export default function DocsClient({
     const defaultSub = newConfig.subtypes[0] || "";
     setSelectedSubtype(defaultSub);
     setDocTitle(defaultSub);
-    setSelectedFile(null);
     setErrorMessage("");
+
+    const newMaxBytes = newConfig.maxSizeMB * 1024 * 1024;
+    // Re-evaluate batch items for the new category limit
+    setBatchFiles((prev) =>
+      prev.map((item) => {
+        const exceeds = item.size > newMaxBytes;
+        return {
+          ...item,
+          exceedsLimit: exceeds,
+          applySizeReducer: exceeds && item.isImage ? true : item.applySizeReducer,
+        };
+      })
+    );
 
     // Set sensible default entity
     if (cat === "EMPLOYEE") {
@@ -169,194 +255,432 @@ export default function DocsClient({
     setDocTitle(subtype);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processFiles = async (fileList: FileList | File[]) => {
+    const maxBytes = categoryConfig.maxSizeMB * 1024 * 1024;
+    const newItems: BatchPageItem[] = [];
 
-    // Validate size and extension
-    const validation = validateDocumentFile(selectedCategory, file.size, file.name, file.type);
-    if (!validation.valid) {
-      setErrorMessage(validation.error || "Invalid file format or size limit exceeded.");
-      setSelectedFile(null);
-      e.target.value = "";
-      return;
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+
+      // Validate format
+      const validation = validateDocumentFile(selectedCategory, file.size, file.name, file.type);
+      if (!validation.valid && validation.error?.includes("extension")) {
+        setErrorMessage(validation.error);
+        continue;
+      }
+
+      const isImg = isImageFile(file);
+      const exceeds = file.size > maxBytes;
+      const previewUrl = isImg ? URL.createObjectURL(file) : null;
+
+      let compressedFile: File | undefined;
+      let compressedSize: number | undefined;
+      let reductionPercent: number | undefined;
+
+      // Automatically precalculate compression for images so reduction stats show immediately
+      if (isImg) {
+        try {
+          const comp = await compressImageFile(file, 0.68, 1600);
+          compressedFile = comp.file;
+          compressedSize = comp.compressedSize;
+          reductionPercent = comp.reductionPercent;
+        } catch (err) {
+          console.warn("Failed to precompute image compression:", err);
+        }
+      }
+
+      newItems.push({
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        file,
+        compressedFile,
+        name: file.name,
+        size: file.size,
+        previewUrl,
+        isImage: isImg,
+        applySizeReducer: exceeds && isImg, // auto-checked if exceeds limit so user doesn't hit wall
+        compressedSize,
+        reductionPercent,
+        exceedsLimit: exceeds,
+      });
     }
+
+    if (newItems.length === 0) return;
+
+    setBatchFiles((prev) => {
+      const updated = [...prev, ...newItems];
+      if (updated.length === 1) {
+        setSelectedFile(
+          updated[0].applySizeReducer && updated[0].compressedFile
+            ? updated[0].compressedFile
+            : updated[0].file
+        );
+      } else {
+        setSelectedFile(null);
+      }
+      return updated;
+    });
 
     setErrorMessage("");
-    setSelectedFile(file);
+
     if (!docTitle || docTitle === selectedSubtype) {
-      const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
-      setDocTitle(`${selectedSubtype || categoryConfig.label} - ${cleanName}`);
+      if (newItems.length === 1 && batchFiles.length === 0) {
+        const cleanName = newItems[0].name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
+        setDocTitle(`${selectedSubtype || categoryConfig.label} - ${cleanName}`);
+      } else {
+        const totalCount = batchFiles.length + newItems.length;
+        setDocTitle(`${selectedSubtype || categoryConfig.label} - Batch Scan (${totalCount} Pages)`);
+      }
     }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      processFiles(e.target.files);
+    }
+  };
+
+  const removeBatchItem = (id: string) => {
+    setBatchFiles((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (target?.previewUrl) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      const updated = prev.filter((item) => item.id !== id);
+      if (updated.length === 1) {
+        setSelectedFile(
+          updated[0].applySizeReducer && updated[0].compressedFile
+            ? updated[0].compressedFile
+            : updated[0].file
+        );
+      } else if (updated.length === 0) {
+        setSelectedFile(null);
+      }
+      return updated;
+    });
+  };
+
+  const toggleItemReducer = (id: string) => {
+    setBatchFiles((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        return {
+          ...item,
+          applySizeReducer: !item.applySizeReducer,
+        };
+      })
+    );
+  };
+
+  const autoReduceOversized = () => {
+    setBatchFiles((prev) =>
+      prev.map((item) => ({
+        ...item,
+        applySizeReducer: item.isImage && (item.exceedsLimit || item.applySizeReducer),
+      }))
+    );
+  };
+
+  const toggleAllReducers = (apply: boolean) => {
+    setBatchFiles((prev) =>
+      prev.map((item) => ({
+        ...item,
+        applySizeReducer: item.isImage ? apply : false,
+      }))
+    );
+  };
+
+  const moveBatchItem = (index: number, direction: "up" | "down") => {
+    setBatchFiles((prev) => {
+      const copy = [...prev];
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= copy.length) return prev;
+      const temp = copy[index];
+      copy[index] = copy[targetIndex];
+      copy[targetIndex] = temp;
+      return copy;
+    });
+  };
+
+  const clearBatch = () => {
+    batchFiles.forEach((item) => {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    });
+    setBatchFiles([]);
+    setSelectedFile(null);
+    const fileInput = document.getElementById("doc-file-upload") as HTMLInputElement;
+    if (fileInput) fileInput.value = "";
+    const addMoreInput = document.getElementById("doc-add-more-pages") as HTMLInputElement;
+    if (addMoreInput) addMoreInput.value = "";
+  };
+
+  const uploadSingleFileRecord = async (
+    fileToUpload: File,
+    title: string,
+    onProgressText?: (msg: string) => void
+  ): Promise<DocItem> => {
+    if (onProgressText) onProgressText(`Requesting S3 Presigned Upload URL for ${fileToUpload.name}...`);
+
+    const presignRes = await fetch(`/api/${companyCode}/docs/presigned-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        category: selectedCategory,
+        entityId: selectedEntityId || null,
+        fileName: fileToUpload.name,
+        mimeType: fileToUpload.type || "application/octet-stream",
+        fileSize: fileToUpload.size,
+      }),
+    });
+
+    const presignData = await presignRes.json();
+    if (!presignRes.ok || !presignData.success) {
+      throw new Error(presignData.error || `Failed to generate presigned upload URL for ${fileToUpload.name}.`);
+    }
+
+    const { uploadUrl, s3Key, isMock } = presignData.data;
+    let savedRecord: any = null;
+    let directS3Success = false;
+
+    if (!isMock) {
+      if (onProgressText) onProgressText(`Uploading ${fileToUpload.name} securely to AWS S3...`);
+      try {
+        const s3UploadRes = await fetch(uploadUrl, {
+          method: "PUT",
+          body: fileToUpload,
+          headers: {
+            "Content-Type": fileToUpload.type || "application/octet-stream",
+          },
+        });
+
+        if (s3UploadRes.ok) {
+          directS3Success = true;
+        } else {
+          console.warn(`Direct S3 upload returned HTTP ${s3UploadRes.status}. Using server upload fallback...`);
+        }
+      } catch (fetchErr) {
+        console.warn("Direct S3 upload encountered network/CORS error. Using server fallback...", fetchErr);
+      }
+    } else {
+      directS3Success = true;
+    }
+
+    if (directS3Success) {
+      if (onProgressText) onProgressText(`Saving metadata in database for ${title}...`);
+      const saveRes = await fetch(`/api/${companyCode}/docs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: selectedCategory,
+          subType: selectedSubtype,
+          entityId: selectedEntityId || null,
+          title: title.trim(),
+          originalName: fileToUpload.name,
+          mimeType: fileToUpload.type || "application/octet-stream",
+          fileSize: fileToUpload.size,
+          s3Key,
+        }),
+      });
+
+      const saveData = await saveRes.json();
+      if (!saveRes.ok || !saveData.success) {
+        throw new Error(saveData.error || `Failed to record metadata for ${fileToUpload.name}.`);
+      }
+      savedRecord = saveData.data;
+    } else {
+      if (onProgressText) onProgressText(`Direct S3 restricted; uploading ${fileToUpload.name} via server fallback...`);
+      const formData = new FormData();
+      formData.append("file", fileToUpload);
+      formData.append("category", selectedCategory);
+      formData.append("subType", selectedSubtype);
+      if (selectedEntityId) formData.append("entityId", selectedEntityId);
+      formData.append("title", title.trim());
+
+      const serverUploadRes = await fetch(`/api/${companyCode}/docs/upload-direct`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const serverData = await serverUploadRes.json();
+      if (!serverUploadRes.ok || !serverData.success) {
+        throw new Error(serverData.error || `Server upload fallback failed for ${fileToUpload.name}.`);
+      }
+      savedRecord = serverData.data;
+    }
+
+    const resolvedEntityName = resolveEntityName(selectedCategory, selectedEntityId);
+
+    return {
+      _id: savedRecord._id,
+      title: savedRecord.title,
+      originalName: savedRecord.originalName,
+      category: savedRecord.category,
+      subType: selectedSubtype || savedRecord.subType || "General Document",
+      entityId: savedRecord.entityId,
+      entityName: resolvedEntityName,
+      mimeType: savedRecord.mimeType,
+      fileSize: savedRecord.fileSize,
+      s3Key: savedRecord.s3Key,
+      uploadedByName: currentUser.name,
+      uploadedByRole: currentUser.role,
+      uploadedById: currentUser.id,
+      isArchived: false,
+      archivedAt: null,
+      createdAt: new Date().toISOString(),
+    };
   };
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFile) {
-      setErrorMessage("Please select a file to upload.");
+
+    const effectiveBatch = [...batchFiles];
+    if (effectiveBatch.length === 0 && selectedFile) {
+      const isImg = isImageFile(selectedFile);
+      effectiveBatch.push({
+        id: `${Date.now()}`,
+        file: selectedFile,
+        name: selectedFile.name,
+        size: selectedFile.size,
+        previewUrl: null,
+        isImage: isImg,
+        applySizeReducer: false,
+        exceedsLimit: selectedFile.size > categoryConfig.maxSizeMB * 1024 * 1024,
+      });
+    }
+
+    if (effectiveBatch.length === 0) {
+      setErrorMessage("Please select at least one file or page to upload.");
       return;
     }
+
     if (!docTitle.trim()) {
       setErrorMessage("Please enter a title for the document.");
       return;
     }
 
+    const maxBytes = categoryConfig.maxSizeMB * 1024 * 1024;
+
+    // Check if any file exceeds limit without size reducer applied
+    for (let i = 0; i < effectiveBatch.length; i++) {
+      const item = effectiveBatch[i];
+      const effectiveSize =
+        item.applySizeReducer && item.compressedSize ? item.compressedSize : item.file.size;
+      if (effectiveSize > maxBytes) {
+        if (!item.applySizeReducer && item.isImage) {
+          setErrorMessage(
+            `Page ${i + 1} ("${item.name}") is ${(item.file.size / 1048576).toFixed(2)} MB, exceeding the ${categoryConfig.maxSizeMB} MB limit for ${categoryConfig.label}. Please tick "Apply Size Reducer" to dull quality and compress it.`
+          );
+        } else {
+          setErrorMessage(
+            `Page ${i + 1} ("${item.name}") exceeds the ${categoryConfig.maxSizeMB} MB limit even after reduction (${(effectiveSize / 1048576).toFixed(2)} MB). Please select a smaller file.`
+          );
+        }
+        return;
+      }
+    }
+
     setIsUploading(true);
     setUploadProgress(10);
-    setUploadStatusMsg("Requesting S3 Presigned Upload URL...");
     setErrorMessage("");
     setSuccessMessage("");
 
     try {
-      // 1. Request presigned upload URL from server
-      const presignRes = await fetch(`/api/${companyCode}/docs/presigned-url`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category: selectedCategory,
-          entityId: selectedEntityId || null,
-          fileName: selectedFile.name,
-          mimeType: selectedFile.type || "application/octet-stream",
-          fileSize: selectedFile.size,
-        }),
-      });
+      // Determine if merging into single multi-page PDF
+      const canMergePdf =
+        effectiveBatch.length > 1 &&
+        uploadMode === "merge_pdf" &&
+        effectiveBatch.every((item) => item.isImage);
 
-      const presignData = await presignRes.json();
-      if (!presignRes.ok || !presignData.success) {
-        throw new Error(presignData.error || "Failed to generate presigned upload URL.");
-      }
+      if (effectiveBatch.length === 1 || canMergePdf) {
+        let finalFile: File;
 
-      const { uploadUrl, s3Key, isMock } = presignData.data;
-      setUploadProgress(40);
-      setUploadStatusMsg("Uploading file securely to AWS S3 bucket...");
+        if (canMergePdf) {
+          setUploadStatusMsg(`Combining & layering ${effectiveBatch.length} pages into 1 multi-page PDF...`);
+          setUploadProgress(20);
 
-      let savedRecord: any = null;
-
-      // 2. Upload directly to S3 via PUT (or bypass if offline mock)
-      let directS3Success = false;
-      if (!isMock) {
-        try {
-          const s3UploadRes = await fetch(uploadUrl, {
-            method: "PUT",
-            body: selectedFile,
-            headers: {
-              "Content-Type": selectedFile.type || "application/octet-stream",
-            },
-          });
-
-          if (s3UploadRes.ok) {
-            directS3Success = true;
-          } else {
-            console.warn(`Direct S3 upload returned HTTP ${s3UploadRes.status}. Attempting server upload fallback...`);
+          // Build resolved files, honoring per-file reducer tick mark
+          const resolvedFiles: File[] = [];
+          for (const item of effectiveBatch) {
+            if (item.applySizeReducer && item.compressedFile) {
+              resolvedFiles.push(item.compressedFile);
+            } else if (item.applySizeReducer && item.isImage) {
+              const comp = await compressImageFile(item.file, 0.68, 1600);
+              resolvedFiles.push(comp.file);
+            } else {
+              resolvedFiles.push(item.file);
+            }
           }
-        } catch (fetchErr) {
-          console.warn("Direct S3 upload encountered network/CORS error. Attempting server upload fallback...", fetchErr);
+
+          finalFile = await mergeImagesToPdf(resolvedFiles, docTitle.trim());
+
+          if (finalFile.size > maxBytes) {
+            throw new Error(
+              `Combined PDF is ${(finalFile.size / 1048576).toFixed(2)} MB, which exceeds the ${categoryConfig.maxSizeMB} MB limit for ${categoryConfig.label}. Please tick "Apply Size Reducer" on more pages.`
+            );
+          }
+        } else {
+          // Single file
+          const singleItem = effectiveBatch[0];
+          if (singleItem.applySizeReducer && singleItem.compressedFile) {
+            finalFile = singleItem.compressedFile;
+          } else if (singleItem.applySizeReducer && singleItem.isImage) {
+            const comp = await compressImageFile(singleItem.file, 0.68, 1600);
+            finalFile = comp.file;
+          } else {
+            finalFile = singleItem.file;
+          }
         }
-      } else {
-        directS3Success = true;
-      }
 
-      if (directS3Success) {
-        setUploadProgress(80);
-        setUploadStatusMsg("Recording document metadata in database...");
-
-        // 3. Save metadata record in MongoDB
-        const saveRes = await fetch(`/api/${companyCode}/docs`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            category: selectedCategory,
-            subType: selectedSubtype,
-            entityId: selectedEntityId || null,
-            title: docTitle.trim(),
-            originalName: selectedFile.name,
-            mimeType: selectedFile.type || "application/octet-stream",
-            fileSize: selectedFile.size,
-            s3Key,
-          }),
+        const newDoc = await uploadSingleFileRecord(finalFile, docTitle.trim(), (msg) => {
+          setUploadStatusMsg(msg);
         });
 
-        const saveData = await saveRes.json();
-        if (!saveRes.ok || !saveData.success) {
-          throw new Error(saveData.error || "Failed to record document metadata in database.");
-        }
-        savedRecord = saveData.data;
+        setDocuments((prev) => [newDoc, ...prev]);
+        setUploadProgress(100);
+        setSuccessMessage(
+          canMergePdf
+            ? `Successfully merged ${effectiveBatch.length} pages into 1 PDF ("${docTitle}") and uploaded to S3!`
+            : `Document "${docTitle}" successfully uploaded to S3 and stored in ${companyName}!`
+        );
       } else {
-        // Fallback: Upload via server-side direct pipeline
-        setUploadProgress(65);
-        setUploadStatusMsg("Direct S3 upload restricted; utilizing secure server pipeline...");
+        // Individual layered page sequence upload
+        const createdDocs: DocItem[] = [];
+        const total = effectiveBatch.length;
 
-        const formData = new FormData();
-        formData.append("file", selectedFile);
-        formData.append("category", selectedCategory);
-        formData.append("subType", selectedSubtype);
-        if (selectedEntityId) formData.append("entityId", selectedEntityId);
-        formData.append("title", docTitle.trim());
+        for (let i = 0; i < total; i++) {
+          const item = effectiveBatch[i];
+          const pageTitle = `${docTitle.trim()} (Page ${i + 1} of ${total})`;
+          setUploadProgress(Math.round(15 + ((i) / total) * 80));
 
-        const serverUploadRes = await fetch(`/api/${companyCode}/docs/upload-direct`, {
-          method: "POST",
-          body: formData,
-        });
+          let pageFile: File;
+          if (item.applySizeReducer && item.compressedFile) {
+            pageFile = item.compressedFile;
+          } else if (item.applySizeReducer && item.isImage) {
+            const comp = await compressImageFile(item.file, 0.68, 1600);
+            pageFile = comp.file;
+          } else {
+            pageFile = item.file;
+          }
 
-        const serverData = await serverUploadRes.json();
-        if (!serverUploadRes.ok || !serverData.success) {
-          throw new Error(serverData.error || "Server upload fallback failed.");
+          const newDoc = await uploadSingleFileRecord(pageFile, pageTitle, (msg) => {
+            setUploadStatusMsg(`[Page ${i + 1}/${total}] ${msg}`);
+          });
+          createdDocs.push(newDoc);
         }
-        savedRecord = serverData.data;
+
+        setDocuments((prev) => [...createdDocs, ...prev]);
+        setUploadProgress(100);
+        setSuccessMessage(
+          `Successfully uploaded all ${total} document pages as individual layers to S3!`
+        );
       }
 
-
-      setUploadProgress(100);
-      setSuccessMessage(
-        `Document '${docTitle}' successfully uploaded to S3 and stored in ${companyName}!`
-      );
-      setUploadStatusMsg("");
-      setSelectedFile(null);
-
-      // Resolve human entity name for the newly created document
-      let resolvedEntityName = "General / Unassigned";
-      if (selectedCategory === "PROJECT") {
-        const found = projects.find((p) => p.id === selectedEntityId);
-        resolvedEntityName = found ? found.name : "General Project Asset";
-      } else if (selectedCategory === "EMPLOYEE") {
-        const found = users.find((u) => u.id === selectedEntityId);
-        resolvedEntityName = found ? `${found.name} (${found.role})` : "General Staff Record";
-      } else if (selectedCategory === "SALES") {
-        const found = deals.find((d) => d.id === selectedEntityId);
-        resolvedEntityName = found ? found.name : "General Sales Asset";
-      } else if (selectedCategory === "SALARY_FINANCE") {
-        const found = users.find((u) => u.id === selectedEntityId);
-        resolvedEntityName = found ? `${found.name} (Payroll)` : "Organization General Treasury";
-      }
-
-      // Add to local state
-      const newDoc: DocItem = {
-        _id: savedRecord._id,
-        title: savedRecord.title,
-        originalName: savedRecord.originalName,
-        category: savedRecord.category,
-        subType: selectedSubtype || savedRecord.subType || "General Document",
-        entityId: savedRecord.entityId,
-        entityName: resolvedEntityName,
-        mimeType: savedRecord.mimeType,
-        fileSize: savedRecord.fileSize,
-        s3Key: savedRecord.s3Key,
-        uploadedByName: currentUser.name,
-        uploadedByRole: currentUser.role,
-        uploadedById: currentUser.id,
-        isArchived: false,
-        archivedAt: null,
-        createdAt: new Date().toISOString(),
-      };
-      setDocuments((prev) => [newDoc, ...prev]);
-
-      // Reset file input
-      const fileInput = document.getElementById("doc-file-upload") as HTMLInputElement;
-      if (fileInput) fileInput.value = "";
+      clearBatch();
+      setDocTitle(selectedSubtype);
     } catch (err: any) {
       setErrorMessage(err.message || "An unexpected error occurred during document upload.");
     } finally {
       setIsUploading(false);
+      setUploadStatusMsg("");
     }
   };
 
@@ -849,48 +1173,324 @@ export default function DocsClient({
               </div>
             </div>
 
-            {/* Step 4: File Upload & Size Limits Display */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-zinc-400 mb-2">
-                5. Select File (Direct-to-S3 Transfer)
-              </label>
+            {/* Step 4: Batch Multi-Page Upload & Size Reducer Manager */}
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-zinc-400">
+                  5. Document File(s) & Batch Page Layers *
+                </label>
+                <span className="text-xs text-gray-500 dark:text-zinc-400">
+                  Multi-page scans (2–10 pages) supported • Allowed: {categoryConfig.allowedExtensions.join(", ")}
+                </span>
+              </div>
 
-              <div className="relative border-2 border-dashed border-gray-300 dark:border-zinc-700 rounded-2xl p-6 text-center hover:border-blue-500 dark:hover:border-blue-400 transition-colors bg-gray-50/50 dark:bg-zinc-900/50">
-                <input
-                  id="doc-file-upload"
-                  type="file"
-                  onChange={handleFileChange}
-                  accept={categoryConfig.allowedExtensions.join(",")}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  disabled={isUploading}
-                />
+              {batchFiles.length === 0 ? (
+                /* Empty State Dropzone */
+                <div className="relative border-2 border-dashed border-gray-300 dark:border-zinc-700 rounded-2xl p-8 text-center hover:border-blue-500 dark:hover:border-blue-400 transition-colors bg-gray-50/50 dark:bg-zinc-900/50">
+                  <input
+                    id="doc-file-upload"
+                    type="file"
+                    multiple
+                    onChange={handleFileChange}
+                    accept={categoryConfig.allowedExtensions.join(",")}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    disabled={isUploading}
+                  />
 
-                <div className="flex flex-col items-center justify-center pointer-events-none">
-                  <div className="p-3 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 mb-3">
-                    <FileText className="w-8 h-8" />
+                  <div className="flex flex-col items-center justify-center pointer-events-none">
+                    <div className="p-3.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 mb-3 shadow-sm">
+                      <UploadCloud className="w-8 h-8" />
+                    </div>
+
+                    <p className="text-sm font-semibold text-gray-800 dark:text-zinc-200">
+                      Drag and drop single file or multi-page batch (2–10 pages), or click to browse
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-md">
+                      Snapping document photos? Upload multiple pages at once. Merge them into 1 unified layered PDF with selective quality reduction.
+                    </p>
+                    <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 dark:bg-zinc-800 text-[11px] text-gray-600 dark:text-zinc-400">
+                      <span>Vault Limit: <strong className="text-gray-900 dark:text-white">{categoryConfig.maxSizeMB} MB</strong></span>
+                      <span>•</span>
+                      <span>Formats: {categoryConfig.allowedExtensions.join(", ")}</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Batch File & Layer Manager */
+                <div className="border border-gray-200 dark:border-zinc-800 rounded-2xl p-4 sm:p-5 bg-gray-50/60 dark:bg-zinc-900/70 space-y-4">
+                  {/* Batch Summary & Controls Header */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-gray-200 dark:border-zinc-800">
+                    <div className="flex items-center gap-2.5">
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300">
+                        {batchFiles.length} {batchFiles.length === 1 ? "Page / File" : "Pages / Files"}
+                      </span>
+
+                      {batchFiles.length > 1 && (
+                        <div className="inline-flex rounded-lg border border-gray-200 dark:border-zinc-700 p-0.5 bg-white dark:bg-zinc-800 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => setUploadMode("merge_pdf")}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium transition-all ${
+                              uploadMode === "merge_pdf"
+                                ? "bg-blue-600 text-white shadow-xs"
+                                : "text-gray-600 dark:text-zinc-400 hover:text-gray-900"
+                            }`}
+                          >
+                            <Layers className="w-3.5 h-3.5" />
+                            Merge into 1 Multi-Page PDF
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setUploadMode("batch_layers")}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium transition-all ${
+                              uploadMode === "batch_layers"
+                                ? "bg-blue-600 text-white shadow-xs"
+                                : "text-gray-600 dark:text-zinc-400 hover:text-gray-900"
+                            }`}
+                          >
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                            Separate Pages
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Quick Batch Actions */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={autoReduceOversized}
+                        className="px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 hover:bg-amber-200 transition-colors flex items-center gap-1"
+                        title="Automatically tick Apply Size Reducer for files exceeding category limits"
+                      >
+                        <Minimize2 className="w-3 h-3" /> Auto-Reduce Oversized
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleAllReducers(true)}
+                        className="px-2 py-1 text-xs font-medium text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                      >
+                        Reduce All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleAllReducers(false)}
+                        className="px-2 py-1 text-xs font-medium text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                      >
+                        Keep All Original
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearBatch}
+                        className="px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors flex items-center gap-1"
+                      >
+                        <X className="w-3 h-3" /> Clear
+                      </button>
+                    </div>
                   </div>
 
-                  {selectedFile ? (
-                    <div>
-                      <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4" /> Ready: {selectedFile.name}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
-                        Size: {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB / Max Allowed: {categoryConfig.maxSizeMB} MB
-                      </p>
+                  {/* Size Stat Bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-white dark:bg-zinc-800/80 border border-gray-200 dark:border-zinc-700/80 text-xs">
+                    <div className="flex items-center gap-4">
+                      <div>
+                        <span className="text-gray-500 dark:text-zinc-400">Total Raw: </span>
+                        <span className="font-semibold text-gray-900 dark:text-white">
+                          {(totalRawSize / (1024 * 1024)).toFixed(2)} MB
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-zinc-400">Projected Upload: </span>
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                          {(totalProjectedSize / (1024 * 1024)).toFixed(2)} MB
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-zinc-400">Vault Limit: </span>
+                        <span className="font-semibold text-gray-900 dark:text-white">
+                          {categoryConfig.maxSizeMB} MB
+                        </span>
+                      </div>
                     </div>
-                  ) : (
+
                     <div>
-                      <p className="text-sm font-semibold text-gray-700 dark:text-zinc-300">
-                        Drag and drop your file here, or click to browse
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
-                        Allowed Formats: {categoryConfig.allowedExtensions.join(", ")} • Max Size: <span className="font-bold text-gray-800 dark:text-zinc-200">{categoryConfig.maxSizeMB} MB</span>
-                      </p>
+                      {hasOversizedWithoutReducer ? (
+                        <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-semibold">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          Tick "Apply Size Reducer" on oversized page(s) below
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          All pages within vault limits
+                        </span>
+                      )}
                     </div>
-                  )}
+                  </div>
+
+                  {/* Page Item Cards List */}
+                  <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                    {batchFiles.map((item, idx) => {
+                      const effectiveSize =
+                        item.applySizeReducer && item.compressedSize
+                          ? item.compressedSize
+                          : item.size;
+                      const isStillOversized =
+                        effectiveSize > categoryConfig.maxSizeMB * 1024 * 1024;
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={`p-3 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                            isStillOversized
+                              ? "bg-red-50/70 dark:bg-red-950/30 border-red-300 dark:border-red-800"
+                              : item.applySizeReducer
+                              ? "bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/60"
+                              : "bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
+                          }`}
+                        >
+                          {/* Left: Page Number, Reorder, Thumbnail, Title */}
+                          <div className="flex items-center gap-3 min-w-0">
+                            {/* Page Sequence Badge & Reorder */}
+                            <div className="flex flex-col items-center gap-0.5 shrink-0">
+                              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-zinc-700 text-gray-700 dark:text-zinc-300">
+                                #{idx + 1}
+                              </span>
+                              {batchFiles.length > 1 && (
+                                <div className="flex gap-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => moveBatchItem(idx, "up")}
+                                    disabled={idx === 0}
+                                    className="p-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title="Move Page Up"
+                                  >
+                                    <ArrowUp className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => moveBatchItem(idx, "down")}
+                                    disabled={idx === batchFiles.length - 1}
+                                    className="p-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title="Move Page Down"
+                                  >
+                                    <ArrowDown className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Thumbnail */}
+                            <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-gray-200 dark:border-zinc-700 bg-gray-100 dark:bg-zinc-700 flex items-center justify-center">
+                              {item.isImage && item.previewUrl ? (
+                                <img
+                                  src={item.previewUrl}
+                                  alt={item.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <FileText className="w-6 h-6 text-gray-400" />
+                              )}
+                            </div>
+
+                            {/* Name & Details */}
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-gray-900 dark:text-white truncate max-w-[200px] sm:max-w-[280px]" title={item.name}>
+                                {item.name}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[11px] text-gray-500 dark:text-zinc-400">
+                                  {(item.size / (1024 * 1024)).toFixed(2)} MB
+                                </span>
+                                {item.exceedsLimit && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-red-100 text-red-700 dark:bg-red-950/80 dark:text-red-300">
+                                    Exceeds {categoryConfig.maxSizeMB} MB
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Center: Per-File Size Reducer Tickmark Option */}
+                          <div className="shrink-0 md:w-80">
+                            <label
+                              className={`flex items-start gap-2.5 p-2 rounded-xl border transition-all cursor-pointer select-none ${
+                                item.applySizeReducer
+                                  ? "bg-amber-100/60 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200"
+                                  : "bg-gray-100/60 dark:bg-zinc-750 border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-zinc-300 hover:border-gray-300"
+                              } ${!item.isImage ? "opacity-60 cursor-not-allowed" : ""}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={item.applySizeReducer}
+                                onChange={() => toggleItemReducer(item.id)}
+                                disabled={!item.isImage}
+                                className="mt-0.5 w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed shrink-0"
+                              />
+                              <div className="text-xs leading-tight">
+                                <div className="font-semibold flex items-center gap-1.5">
+                                  <span>Apply Size Reducer</span>
+                                  {item.applySizeReducer ? (
+                                    <span className="text-[9px] px-1 py-0.2 rounded bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 font-bold uppercase tracking-wider">
+                                      Quality Dulled
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] px-1 py-0.2 rounded bg-gray-200 dark:bg-zinc-700 text-gray-700 dark:text-zinc-300 font-medium">
+                                      Raw 100% Quality
+                                    </span>
+                                  )}
+                                </div>
+                                {item.isImage ? (
+                                  item.applySizeReducer ? (
+                                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono mt-0.5">
+                                      Reduced: {(item.size / (1024 * 1024)).toFixed(2)} MB → {((item.compressedSize || item.size) / (1024 * 1024)).toFixed(2)} MB
+                                      {item.reductionPercent ? ` (-${item.reductionPercent}%)` : ""}
+                                    </p>
+                                  ) : (
+                                    <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5">
+                                      Full raw fidelity preserved. Tick to dull quality if over limit.
+                                    </p>
+                                  )
+                                ) : (
+                                  <p className="text-[11px] text-gray-400 mt-0.5">
+                                    Quality reducer is applicable to image / photo scans
+                                  </p>
+                                )}
+                              </div>
+                            </label>
+                          </div>
+
+                          {/* Right: Delete Page */}
+                          <div className="shrink-0 flex items-center justify-end">
+                            <button
+                              type="button"
+                              onClick={() => removeBatchItem(item.id)}
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
+                              title="Remove page"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Add More Pages Drop-Strip */}
+                  <label className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl border border-dashed border-gray-300 dark:border-zinc-700 hover:border-blue-500 hover:bg-blue-50/30 dark:hover:bg-blue-950/20 text-xs font-semibold text-gray-600 dark:text-zinc-300 cursor-pointer transition-all">
+                    <Plus className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span>Click to append more pages or camera snaps to this batch</span>
+                    <input
+                      id="doc-add-more-pages"
+                      type="file"
+                      multiple
+                      onChange={handleFileChange}
+                      accept={categoryConfig.allowedExtensions.join(",")}
+                      className="hidden"
+                      disabled={isUploading}
+                    />
+                  </label>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Error & Success Messages */}
@@ -928,16 +1528,29 @@ export default function DocsClient({
             <div className="flex justify-end pt-2">
               <button
                 type="submit"
-                disabled={isUploading || !selectedFile}
+                disabled={isUploading || batchFiles.length === 0 || hasOversizedWithoutReducer}
+                title={
+                  hasOversizedWithoutReducer
+                    ? "Tick 'Apply Size Reducer' on oversized page(s) before uploading"
+                    : undefined
+                }
                 className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow-sm hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isUploading ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" /> Uploading to S3...
                   </>
+                ) : batchFiles.length <= 1 ? (
+                  <>
+                    Upload Document to S3 <ArrowRight className="w-4 h-4" />
+                  </>
+                ) : uploadMode === "merge_pdf" ? (
+                  <>
+                    <Layers className="w-4 h-4" /> Merge & Upload 1 Layered PDF ({batchFiles.length} Pages)
+                  </>
                 ) : (
                   <>
-                    Upload to S3 Bucket <ArrowRight className="w-4 h-4" />
+                    Upload All {batchFiles.length} Pages to S3 <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>

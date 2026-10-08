@@ -99,6 +99,10 @@ export default function PipelineCard({
 
   const completedTodos = todos.filter((t: any) => t.completed).length;
   const totalTodos = todos.length;
+  const dynamicProgress =
+    totalTodos > 0
+      ? Math.round((completedTodos / totalTodos) * 100)
+      : Number(pipeline.progress || 0);
 
   return (
     <>
@@ -171,9 +175,9 @@ export default function PipelineCard({
           <div className="mb-3">
             <div className="flex justify-between items-center text-xs mb-1">
               <span className="text-[#605E5C] dark:text-[#C8C6C4] font-medium">Progress</span>
-              <span className="font-bold text-[#242424] dark:text-[#FFFFFF]">{pipeline.progress}%</span>
+              <span className="font-bold text-[#242424] dark:text-[#FFFFFF]">{dynamicProgress}%</span>
             </div>
-            <ProgressBar value={pipeline.progress} size="sm" tone={pipeline.progress >= 70 ? "success" : "brand"} />
+            <ProgressBar value={dynamicProgress} size="sm" tone={dynamicProgress >= 70 ? "success" : "brand"} />
           </div>
 
           {/* Checklist preview & Risk */}
@@ -288,9 +292,9 @@ export default function PipelineCard({
                 <div className="bg-[#FAF9F8] dark:bg-[#292827] p-4 rounded-[8px] border border-[#E1DFDD] dark:border-[#3B3A39]">
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-xs font-semibold text-[#605E5C] dark:text-[#C8C6C4] uppercase">Progress</span>
-                    <span className="font-bold text-[#0078D4] text-base">{pipeline.progress}%</span>
+                    <span className="font-bold text-[#0078D4] text-base">{dynamicProgress}%</span>
                   </div>
-                  <ProgressBar value={pipeline.progress} size="md" tone={pipeline.progress >= 70 ? "success" : "brand"} />
+                  <ProgressBar value={dynamicProgress} size="md" tone={dynamicProgress >= 70 ? "success" : "brand"} />
 
                   <div className="mt-3 pt-3 border-t border-[#E1DFDD] dark:border-[#3B3A39] text-xs space-y-1.5 text-[#605E5C] dark:text-[#C8C6C4]">
                     <div className="flex justify-between">

@@ -35,6 +35,7 @@ export default function Sidebar() {
     "about",
     "docs",
     "auth",
+    "projecthelpdemo",
   ];
   const orgPrefix =
     segments.length > 0 && !PROTECTED_ROOTS.includes(segments[0])
@@ -48,6 +49,7 @@ export default function Sidebar() {
         { label: "Exec Dashboard", href: "/exec/dashboard", icon: LayoutDashboard },
         { label: "Projects Blueprint", href: "/projects", icon: FolderKanban },
         { label: "Flow Diagrams", href: "/diagrams", icon: GitGraph },
+        { label: "Roadmap & Demo Guide", href: "/projecthelpdemo", icon: GitGraph },
       ],
     },
     {
