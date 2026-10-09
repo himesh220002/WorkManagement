@@ -21,9 +21,20 @@ export async function GET(req: NextRequest) {
   const user = await User.findById(sessionUser.userId);
   const company = sessionUser.companyId ? await Company.findById(sessionUser.companyId) : null;
 
-    const subscriptionInfo = company?.subscription
+    const baseSubscription = company?.subscription
       ? evaluateSubscriptionStatus(company.subscription)
       : null;
+    let subscriptionInfo: any = baseSubscription;
+    if (company && baseSubscription) {
+      const totalSeats = Math.max(1, Number(company.subscription?.userCount) || 1);
+      const filledSeats = await User.countDocuments({ companyId: company._id });
+      subscriptionInfo = {
+        ...baseSubscription,
+        totalSeats,
+        filledSeats,
+        availableSeats: Math.max(0, totalSeats - filledSeats),
+      };
+    }
 
     return NextResponse.json({
       success: true,

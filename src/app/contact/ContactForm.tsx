@@ -186,7 +186,7 @@ export function ContactForm() {
           </p>
           <ul className="text-[13px] text-gray-600 dark:text-zinc-300 font-light space-y-2">
             <li>· <strong>Instant Discord Alerts:</strong> Inquiries posted here alert our team on our private Discord channel in real-time.</li>
-            <li>· <strong>Subscription Onboarding:</strong> Start directly at <a href="/auth/signup" className="text-[#0078d4] hover:underline">Subscribe ($20/mo)</a></li>
+            <li>· <strong>Subscription Onboarding:</strong> Start directly at <a href="/auth/signup" className="text-[#0078d4] hover:underline">Subscribe ($3/user/mo)</a></li>
             <li>· <strong>Workspaces:</strong> Active tenants can log in at <a href="/auth/login" className="text-[#0078d4] hover:underline">Sign In</a></li>
           </ul>
         </div>

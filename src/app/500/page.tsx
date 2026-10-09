@@ -68,7 +68,7 @@ export default function Error500Page() {
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link href="/auth/login" className="text-[#0078d4] hover:underline font-medium hidden sm:inline">Sign in</Link>
             <Link href="/exec/dashboard" className="hidden md:inline-flex px-3 py-1.5 text-xs font-semibold border border-[#0078d4]/30 text-[#0078d4] rounded-sm hover:bg-[#EBF3FC] transition-colors">Open Dashboard</Link>
-            <Link href="/auth/signup" className="bg-[#0078d4] text-white px-3 sm:px-4 py-1.5 font-medium hover:bg-[#005a9e] transition-colors rounded-sm text-xs sm:text-sm">Subscribe ($20/mo)</Link>
+            <Link href="/auth/signup" className="bg-[#0078d4] text-white px-3 sm:px-4 py-1.5 font-medium hover:bg-[#005a9e] transition-colors rounded-sm text-xs sm:text-sm">Subscribe ($3/user/mo)</Link>
           </div>
         </div>
       </header>
@@ -239,7 +239,7 @@ export default function Error500Page() {
           </div>
         </div>
         <div className="border-t border-gray-200 dark:border-[#3B3A39] py-4 text-center text-xs text-gray-500 dark:text-zinc-500">
-          © 2026 TaskPMS · Task Project Management System · Direct Enterprise Subscriptions ($20/mo or $200/yr)
+          © 2026 TaskPMS · Task Project Management System · Tiered team subscriptions ($5/2 seats · $8/4 seats · +$3/seat/mo)
         </div>
       </footer>
     </div>

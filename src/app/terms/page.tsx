@@ -15,7 +15,7 @@ const sections = [
   },
   {
     h: "2. Subscription & Direct Paywall",
-    p: "New organizations are provisioned upon activating an active subscription ($5 USD / user / month, $14 USD / user / 3 months, or $50 USD / user / year) processed via Razorpay. Direct paywall applies to all workspace initializations. Subscriptions can be managed or cancelled at any time.",
+    p: "New organizations are provisioned upon activating a tiered team subscription ($5 USD / month for 1–2 seats, $8 USD / month for 3–4 seats, $8 plus $3 per extra seat / month for 5+ seats; quarterly saves 7%, annual saves 17% with 2 months free) processed via Razorpay. Direct paywall applies to all workspace initializations. Subscriptions can be managed or cancelled at any time.",
   },
   {
     h: "3. Accounts & roles",

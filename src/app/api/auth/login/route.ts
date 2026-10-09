@@ -178,19 +178,24 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Check subscription validity & account hold for non-superusers
-      if (companyData && companyData.subscription?.currentPeriodEnd) {
-        const endDate = new Date(companyData.subscription.currentPeriodEnd);
+      // Check subscription validity & account hold for non-superusers.
+      // Missing period end is treated as expired (consistent with lookup +
+      // /api/auth/me) so a hold account can never slip through login.
+      if (companyData) {
+        const rawEnd = companyData.subscription?.currentPeriodEnd;
+        const endDate = rawEnd ? new Date(rawEnd) : new Date(0);
         const now = new Date();
-        const isExpired = endDate < now;
+        const storedStatus = (companyData.subscription?.status || "").toLowerCase();
+        const isExpired = !rawEnd || endDate < now || storedStatus === "expired";
 
         if (isExpired) {
           const isOwner = (user.role || "").toLowerCase() === "owner";
+          const expiryLabel = rawEnd ? endDate.toLocaleDateString() : "expiry date missing";
           if (!isOwner) {
             return NextResponse.json(
               {
                 success: false,
-                error: `Workspace Access On Hold: Organization '${companyData.name}' subscription expired on ${endDate.toLocaleDateString()}. Workspace access is currently on hold. Please contact your Organization Owner to renew via Razorpay.`,
+                error: `Workspace Access On Hold: Organization '${companyData.name}' subscription expired on ${expiryLabel}. Workspace access is currently on hold. Please contact your Organization Owner to renew via Razorpay.`,
                 isSubscriptionExpired: true,
                 isOwner: false,
                 companyName: companyData.name,
@@ -201,13 +206,13 @@ export async function POST(req: NextRequest) {
             return NextResponse.json(
               {
                 success: false,
-                error: `Your organization subscription expired on ${endDate.toLocaleDateString()}. Please renew your subscription to reactivate workspace access for all team members.`,
+                error: `Your organization subscription expired on ${expiryLabel}. Please renew your subscription to reactivate workspace access for all team members.`,
                 isSubscriptionExpired: true,
                 isOwner: true,
                 companyCode: companyData.companyCode,
                 companyName: companyData.name,
                 ownerEmail: user.email,
-                planId: companyData.subscription.planId || "monthly",
+                planId: companyData.subscription?.planId || "monthly",
               },
               { status: 402 }
             );

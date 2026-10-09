@@ -107,7 +107,7 @@ export default function AboutPage() {
             Architectural Pillars of the Platform
           </h3>
           <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4]">
-            Five interconnected functional engines powering end-to-end enterprise operations.
+            Six interconnected functional engines powering end-to-end enterprise operations — extended by AI intelligence, forms automation and ledger-grade resource governance.
           </p>
         </div>
 
@@ -255,6 +255,72 @@ export default function AboutPage() {
               </Link>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* AI Intelligence + Forms Automation band */}
+      <div className="bg-gradient-to-r from-[#0B2A4A] to-[#0078D4] rounded-[8px] p-6 sm:p-8 mb-8 text-white shadow-sm relative overflow-hidden">
+        <div className="max-w-4xl relative z-10">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-sky-300 block mb-2">
+            AI Reports & Intel → Forms Builder
+          </span>
+          <h3 className="text-lg sm:text-xl font-bold leading-tight mb-2">
+            Gemini insight that becomes executable work
+          </h3>
+          <p className="text-sm text-blue-100 font-light leading-relaxed mb-4">
+            Leaders generate health, deadline and capacity intelligence on <strong>/reports</strong> (96% On Track
+            telemetry, benchmark tables, 1-click form schemas), then import the 6-question schema into{" "}
+            <strong>/forms</strong> Builder and collect responses via Preview and Share — the same loop showcased in
+            the homepage live demo.
+          </p>
+          <div className="flex flex-wrap gap-2.5">
+            <Link
+              href="/reports"
+              className="px-4 py-2 bg-white text-[#0B2A4A] text-xs font-bold rounded-[4px] hover:bg-sky-100 transition-colors inline-flex items-center gap-1.5"
+            >
+              <span>Open AI Reports</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+            <Link
+              href="/forms"
+              className="px-4 py-2 border border-white/40 text-white text-xs font-semibold rounded-[4px] hover:bg-white/10 transition-colors"
+            >
+              Open Forms Builder
+            </Link>
+            <Link
+              href="/#demo"
+              className="px-4 py-2 border border-white/40 text-white text-xs font-semibold rounded-[4px] hover:bg-white/10 transition-colors"
+            >
+              See live demo tour
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Subscription band — mirrors $3/user tiered checkout */}
+      <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 shadow-sm mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-base font-bold text-[#242424] dark:text-[#FFFFFF]">
+            Tiered team pricing — $3 / user / month incremental
+          </h3>
+          <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4] mt-1 font-mono">
+            $5/mo flat (1–2 seats) · $8/mo flat (3–4 seats) · $8 + $3 per extra seat/mo · 2 GB vault included
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href="/#pricing"
+            className="px-4 py-2 text-xs font-semibold bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-[4px] transition-colors inline-flex items-center gap-1.5"
+          >
+            <span>View pricing</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+          <Link
+            href="/auth/signup"
+            className="px-4 py-2 text-xs font-semibold bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] hover:bg-[#F3F2F1] text-[#242424] dark:text-[#FFFFFF] rounded-[4px] transition-colors"
+          >
+            Subscribe
+          </Link>
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectToDatabase from "@/lib/mongodb";
-import { Company } from "@/models";
+import { Company, User } from "@/models";
 import { CompanyStatus } from "@/models/enums";
 import {
   verifyPaymentVerificationToken,
@@ -16,6 +16,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { paymentToken, plan, companyCode, paymentId } = body;
+    // Explicit seat override from the repay portal stepper / checkout modal.
+    // Falls back to the verified payment token, then to the stored quota.
+    const requestedSeatsRaw =
+      body.newSeatCount ?? body.userCount ?? body.desiredSeats ?? body.seats;
 
     if (!paymentToken) {
       return NextResponse.json(
@@ -81,10 +85,32 @@ export async function POST(req: NextRequest) {
       newPeriodEnd.setMonth(newPeriodEnd.getMonth() + 1);
     }
 
-    const userCount = Math.max(
-      1,
-      Number(verification.payload?.userCount || company.subscription?.userCount) || 1
-    );
+    const tokenSeats = Number(verification.payload?.userCount) || 0;
+    const storedSeats = Number(company.subscription?.userCount) || 0;
+    const explicitSeats = Number(requestedSeatsRaw) || 0;
+    const userCount = Math.max(1, Math.floor(explicitSeats || tokenSeats || storedSeats || 1));
+
+    // Guard: cannot shrink the quota below already-occupied seats.
+    const filledSeats = await User.countDocuments({ companyId: company._id });
+    if (userCount < filledSeats) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Cannot renew with ${userCount} seats — ${filledSeats} seats are already occupied. Increase seats to at least ${filledSeats} before paying.`,
+          filledSeats,
+          requestedSeats: userCount,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (userCount > 500) {
+      return NextResponse.json(
+        { success: false, error: "Seat count cannot exceed 500 per renewal. Contact support for larger quotas." },
+        { status: 400 }
+      );
+    }
+
     const tiered = calculateTieredSubscriptionCost(userCount, planId, "USD");
     const amountUsd = tiered.totalUsd;
 
@@ -113,13 +139,14 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Organization "${company.name}" subscription successfully renewed with ${planConfig.name}!`,
+      message: `Organization "${company.name}" subscription successfully renewed with ${planConfig.name} for ${userCount} seats!`,
       company: {
         id: company._id,
         name: company.name,
         code: company.companyCode,
       },
       subscription: company.subscription,
+      seats: { total: userCount, filled: filledSeats },
     });
   } catch (error: any) {
     console.error("Renewal error:", error);

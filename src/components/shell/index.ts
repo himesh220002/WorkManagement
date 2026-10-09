@@ -5,3 +5,4 @@ export * from "./GlobalSearch";
 export * from "./MobileNavDrawer";
 export * from "./PersonaSwitcher";
 export * from "./SubscriptionBanner";
+export * from "./SubscriptionLockGuard";

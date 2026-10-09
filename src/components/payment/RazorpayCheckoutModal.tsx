@@ -38,6 +38,8 @@ interface RazorpayCheckoutModalProps {
   emailHint?: string;
   title?: string;
   subtitle?: string;
+  initialUserCount?: number;
+  minSeats?: number;
 }
 
 export default function RazorpayCheckoutModal({
@@ -50,10 +52,14 @@ export default function RazorpayCheckoutModal({
   emailHint = "",
   title = "Enterprise Direct Paywall & Subscription",
   subtitle = "Secure checkout via Razorpay · Instant organization workspace provisioning",
+  initialUserCount,
+  minSeats = 1,
 }: RazorpayCheckoutModalProps) {
   const [selectedPlan, setSelectedPlan] = useState<PlanId>(defaultPlan);
   const [currency, setCurrency] = useState<"INR" | "USD">(defaultCurrency);
-  const [userCount, setUserCount] = useState<number>(1);
+  const [userCount, setUserCount] = useState<number>(
+    Math.max(minSeats, initialUserCount && initialUserCount > 0 ? initialUserCount : 1)
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [isSandboxMode, setIsSandboxMode] = useState(false);
@@ -65,6 +71,14 @@ export default function RazorpayCheckoutModal({
   useEffect(() => {
     setCurrency(defaultCurrency);
   }, [defaultCurrency]);
+
+  // Sync seat count when opened for renewal / repay flows (e.g. 33-seat org
+  // must not fall back to 1 seat at checkout).
+  useEffect(() => {
+    if (isOpen && typeof initialUserCount === "number" && initialUserCount > 0) {
+      setUserCount(Math.max(minSeats, Math.floor(initialUserCount)));
+    }
+  }, [isOpen, initialUserCount, minSeats]);
 
   // Dynamically load Razorpay SDK script
   useEffect(() => {
@@ -365,7 +379,7 @@ export default function RazorpayCheckoutModal({
                 <div className="flex items-center border border-[#E1DFDD] dark:border-[#3B3A39] rounded-lg bg-white dark:bg-[#1E1E1E] overflow-hidden shadow-xs">
                   <button
                     type="button"
-                    onClick={() => setUserCount((c) => Math.max(1, c - 1))}
+                    onClick={() => setUserCount((c) => Math.max(minSeats, c - 1))}
                     className="px-2.5 py-1 text-sm font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
                   >
                     -

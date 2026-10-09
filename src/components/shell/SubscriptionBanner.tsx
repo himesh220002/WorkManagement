@@ -14,6 +14,9 @@ interface SubscriptionData {
   isExpiringSoon: boolean;
   isExpired: boolean;
   warningMessage?: string;
+  totalSeats?: number;
+  filledSeats?: number;
+  availableSeats?: number;
 }
 
 export function SubscriptionBanner() {
@@ -57,6 +60,7 @@ export function SubscriptionBanner() {
     paymentId: string;
     plan: PlanId;
     planName: string;
+    userCount?: number;
   }) => {
     try {
       const res = await fetch("/api/subscription/renew", {
@@ -67,6 +71,8 @@ export function SubscriptionBanner() {
           plan: paymentData.plan,
           companyCode,
           paymentId: paymentData.paymentId,
+          newSeatCount: paymentData.userCount,
+          userCount: paymentData.userCount,
         }),
       });
       const data = await res.json();
@@ -76,11 +82,16 @@ export function SubscriptionBanner() {
         setTimeout(() => {
           window.location.reload();
         }, 1500);
+      } else {
+        console.error("Renewal failed:", data.error);
       }
     } catch (e) {
       console.error("Renewal processing error:", e);
     }
   };
+
+  const renewalSeats = Math.max(1, subscription?.totalSeats ?? 1);
+  const renewalMinSeats = Math.max(1, subscription?.filledSeats ?? 1);
 
   if (renewSuccessMsg) {
     return (
@@ -104,6 +115,8 @@ export function SubscriptionBanner() {
             </span>
             <span className="hidden md:inline text-red-100 text-[11px]">
               Ended on {new Date(subscription.currentPeriodEnd).toLocaleDateString()}.
+              {typeof subscription.totalSeats === "number" &&
+                ` · ${subscription.totalSeats} seats (${subscription.filledSeats ?? 0} filled). Renew to reactivate — adjust seats at checkout if needed.`}
             </span>
           </div>
 
@@ -131,7 +144,9 @@ export function SubscriptionBanner() {
           defaultPlan={subscription.planId}
           companyNameHint={companyCode}
           title="Renew Organization Subscription"
-          subtitle="Instant workspace unfreeze & active period extension via Razorpay"
+          subtitle={`Instant workspace unfreeze for ${renewalSeats} seats — adjust seats at checkout to reduce or add before paying.`}
+          initialUserCount={renewalSeats}
+          minSeats={renewalMinSeats}
           onPaymentSuccess={handleRenewSuccess}
         />
       </>
@@ -188,7 +203,9 @@ export function SubscriptionBanner() {
         defaultPlan={subscription.planId}
         companyNameHint={companyCode}
         title="Renew Organization Subscription"
-        subtitle="Extend your active workspace period with seamless Razorpay checkout"
+        subtitle={`Extend your active workspace period for ${renewalSeats} seats with seamless Razorpay checkout`}
+        initialUserCount={renewalSeats}
+        minSeats={renewalMinSeats}
         onPaymentSuccess={handleRenewSuccess}
       />
     </>

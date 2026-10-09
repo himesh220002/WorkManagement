@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { HomeDemoShowcase } from "@/components/marketing/HomeDemoShowcase";
 import {
   ArrowRight,
   Award,
@@ -163,7 +164,7 @@ const faqs = [
   },
   {
     q: "What is the pricing model for TaskPMS?",
-    a: "TaskPMS operates with simple, transparent per-user subscription tiers: $5 USD / month per user, $14 USD / user for 3 months, or $50 USD / user per year (save 17% — 2 months free). Every organization workspace includes 2 GB free encrypted AWS S3 document vault, with elastic auto-expansion (+5 GB for $3/mo in next month's bill upon hitting storage limits).",
+    a: "TaskPMS uses tiered team pricing that matches the subscription checkout: Tier 1 is $5/month flat for 1–2 seats, Tier 2 is $8/month flat for 3–4 seats, and 5+ seats cost $8 plus $3 per extra seat per month ($3/user/mo incremental). Quarterly billing saves 7% and annual billing saves 17% (2 months free). Every workspace includes a 2 GB free encrypted AWS S3 document vault, with elastic auto-expansion (+5 GB for $3/mo in next month's bill upon hitting storage limits).",
   },
   {
     q: "What technology is TaskPMS built on?",
@@ -193,7 +194,7 @@ export default function Home() {
     url: "https://taskpms.com",
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
-    offers: { "@type": "Offer", price: "20", priceCurrency: "USD", description: "$20/month or $200/year subscription" },
+    offers: { "@type": "Offer", price: "3", priceCurrency: "USD", description: "Tiered team pricing: $5/mo (1-2 seats), $8/mo (3-4 seats), +$3 per extra seat/mo" },
     description:
       "Multi-tenant task project management system with isolated company databases, role-based permission management (RBAC), AWS S3 document vault, Gantt timelines, sales pipelines and revenue targets.",
   };
@@ -209,6 +210,7 @@ export default function Home() {
               <Image src="/logo.svg" alt="TaskPMS — Task Project Management System" width={132} height={27} className="h-[27px] w-auto" priority />
             </Link>
             <nav className="hidden lg:flex items-center gap-5 text-[#242424] dark:text-[#C8C6C4]">
+              <a href="#demo" className="hover:text-[#0078d4] border-b-2 border-transparent hover:border-[#0078d4] py-3">Live Demo</a>
               <a href="#features" className="hover:text-[#0078d4] border-b-2 border-transparent hover:border-[#0078d4] py-3">Features</a>
               <a href="#multi-tenancy" className="hover:text-[#0078d4] border-b-2 border-transparent hover:border-[#0078d4] py-3">Multi-Tenancy</a>
               <a href="#documents" className="hover:text-[#0078d4] border-b-2 border-transparent hover:border-[#0078d4] py-3">Documents</a>
@@ -218,7 +220,7 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link href="/auth/login" className="px-3 py-1.5 text-xs font-semibold border border-[#0078d4]/30 text-[#0078d4] rounded-sm hover:bg-[#EBF3FC] transition-colors">Sign In</Link>
-            <Link href="/auth/signup" className="bg-[#0078d4] text-white px-3 sm:px-4 py-1.5 font-medium hover:bg-[#005a9e] transition-colors rounded-sm text-xs sm:text-sm">Get Started ($5/user)</Link>
+            <Link href="/auth/signup" className="bg-[#0078d4] text-white px-3 sm:px-4 py-1.5 font-medium hover:bg-[#005a9e] transition-colors rounded-sm text-xs sm:text-sm">Get Started ($3/user/mo)</Link>
           </div>
         </div>
       </header>
@@ -244,11 +246,11 @@ export default function Home() {
                 Subscribe & Launch Workspace <ArrowRight className="w-4 h-4" />
               </Link>
               <Link href="#pricing" className="text-white border border-white/40 px-5 py-2.5 font-medium hover:bg-white/10 transition-colors rounded-sm">
-                View Pricing ($20/mo or $200/yr)
+                View Pricing ($3/user/mo)
               </Link>
             </div>
             <p className="text-xs text-blue-200/90">
-              Direct paywall · $20/mo or $200/yr · Instant Razorpay checkout · Dedicated tenant MongoDB isolation
+              Direct paywall · $5 (2 seats) · $8 (4 seats) · +$3/extra seat/mo · Instant Razorpay checkout · Dedicated tenant MongoDB isolation
             </p>
           </div>
           <div className="md:w-1/2 w-full flex justify-center">
@@ -301,6 +303,11 @@ export default function Home() {
           })}
         </div>
       </section>
+
+      {/* ── Live demo screens · ClickUp-style product tour ────────── */}
+      <div className="mt-12">
+        <HomeDemoShowcase />
+      </div>
 
       {/* ── Triple-pillar grid ────────────────────────────────────── */}
       <section id="features" className="max-w-7xl mx-auto px-4 sm:px-6 py-14 scroll-mt-14">
@@ -569,52 +576,69 @@ export default function Home() {
       </section>
 
       {/* ── Pricing / paywall CTA ───────────────────────────────────── */}
-      <section id="pricing" className="max-w-4xl mx-auto text-center py-16 sm:py-20 px-4 sm:px-6 scroll-mt-14">
+      <section id="pricing" className="max-w-6xl mx-auto text-center py-16 sm:py-20 px-4 sm:px-6 scroll-mt-14">
         <Building2 className="w-8 h-8 text-[#0078d4] mx-auto mb-4" />
-        <h2 className="text-2xl sm:text-3xl font-light tracking-tight text-gray-900 dark:text-white mb-3">Enterprise Per-User Subscription Pricing</h2>
-        <p className="text-gray-600 dark:text-zinc-400 font-light max-w-2xl mx-auto mb-7 text-[15px]">
-          Dedicated tenant database perimeter, AWS S3 document vault, Frappe Gantt timelines and 5 RBAC roles. $5/month per user with 2 GB cloud storage included. Direct checkout via Razorpay.
+        <h2 className="text-2xl sm:text-3xl font-light tracking-tight text-gray-900 dark:text-white mb-3">Simple team pricing — only $3 per extra user per month</h2>
+        <p className="text-gray-600 dark:text-zinc-400 font-light max-w-3xl mx-auto mb-8 text-[15px] leading-relaxed">
+          Every plan uses the same team formula from the subscription checkout. Small teams pay one flat price,
+          and larger teams simply add $3 per month for every extra user. All plans include a dedicated tenant
+          database, the secure document vault, Gantt timelines and role based access.
         </p>
-        <div className="grid sm:grid-cols-3 gap-4 text-left text-xs mb-6 max-w-4xl mx-auto">
-          <div className="bg-white dark:bg-[#201F1E] border border-gray-200 dark:border-[#3B3A39] rounded-lg p-5 shadow-sm">
-            <div className="flex justify-between items-center mb-1">
-              <span className="font-bold text-sm text-gray-900 dark:text-white">Monthly Plan</span>
+        <div className="grid md:grid-cols-3 gap-5 text-left text-sm mb-8 max-w-5xl mx-auto items-stretch">
+          <div className="bg-white dark:bg-[#201F1E] border border-gray-200 dark:border-[#3B3A39] rounded-xl p-6 sm:p-7 shadow-sm flex flex-col min-h-[340px]">
+            <div className="flex justify-between items-center mb-2">
+              <span className="font-bold text-base text-gray-900 dark:text-white">Monthly Plan</span>
               <span className="text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 font-semibold px-2 py-0.5 rounded">Flexible</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">$5 <span className="text-xs font-normal text-gray-500">USD / user / mo</span></p>
-            <p className="text-gray-500 dark:text-zinc-400 mb-3 font-light">All dashboards, unlimited parallel pipelines, presigned S3 vault, and 2 GB storage included.</p>
-            <Link href="/auth/signup?plan=monthly" className="w-full text-center block bg-[#0078d4] hover:bg-[#005a9e] text-white py-2 rounded text-xs font-bold transition-colors">
-              Subscribe Monthly ($5/user)
+            <p className="text-3xl font-bold text-gray-900 dark:text-white mb-3">From $5 <span className="text-sm font-normal text-gray-500">per month</span></p>
+            <ul className="space-y-2 text-[13px] text-gray-600 dark:text-zinc-300 font-light leading-relaxed mb-4">
+              <li><strong className="font-semibold text-gray-900 dark:text-white">1 to 2 users:</strong> flat $5 for the whole team.</li>
+              <li><strong className="font-semibold text-gray-900 dark:text-white">3 to 4 users:</strong> flat $8 for the whole team.</li>
+              <li><strong className="font-semibold text-gray-900 dark:text-white">5 or more users:</strong> $8 plus $3 per month for each extra user.</li>
+            </ul>
+            <p className="text-gray-500 dark:text-zinc-400 mb-4 font-light text-[13px]">Example: 10 users cost $26 per month. All dashboards and 2 GB storage included.</p>
+            <Link href="/auth/signup?plan=monthly" className="mt-auto w-full text-center block bg-[#0078d4] hover:bg-[#005a9e] text-white py-2.5 rounded text-sm font-bold transition-colors">
+              Subscribe Monthly (from $5)
             </Link>
           </div>
 
-          <div className="bg-white dark:bg-[#201F1E] border-2 border-[#0078d4] rounded-lg p-5 shadow-sm relative">
-            <span className="absolute -top-2.5 right-3 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0078d4] text-white">
-              Save $1/user
+          <div className="bg-white dark:bg-[#201F1E] border-2 border-[#0078d4] rounded-xl p-6 sm:p-7 shadow-sm relative flex flex-col min-h-[340px]">
+            <span className="absolute -top-3 right-4 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#0078d4] text-white">
+              Save 7 percent
             </span>
-            <div className="flex justify-between items-center mb-1">
-              <span className="font-bold text-sm text-gray-900 dark:text-white">3-Month Plan</span>
+            <div className="flex justify-between items-center mb-2">
+              <span className="font-bold text-base text-gray-900 dark:text-white">Three Month Plan</span>
               <span className="text-[10px] bg-sky-100 dark:bg-sky-900/60 text-sky-800 dark:text-sky-300 font-semibold px-2 py-0.5 rounded">Popular</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">$14 <span className="text-xs font-normal text-gray-500">USD / user / 3 mo</span></p>
-            <p className="text-gray-500 dark:text-zinc-400 mb-3 font-light">~$4.67/mo per seat. Quarterly billing cycle with full platform access and 2 GB storage included.</p>
-            <Link href="/auth/signup?plan=quarterly" className="w-full text-center block bg-[#0078d4] hover:bg-[#005a9e] text-white py-2 rounded text-xs font-bold transition-colors">
-              Subscribe Quarterly ($14/user)
+            <p className="text-3xl font-bold text-gray-900 dark:text-white mb-3">From $14 <span className="text-sm font-normal text-gray-500">for three months</span></p>
+            <ul className="space-y-2 text-[13px] text-gray-600 dark:text-zinc-300 font-light leading-relaxed mb-4">
+              <li><strong className="font-semibold text-gray-900 dark:text-white">1 to 2 users:</strong> flat $14 for all three months.</li>
+              <li><strong className="font-semibold text-gray-900 dark:text-white">3 to 4 users:</strong> one flat quarterly price, 7 percent cheaper than monthly.</li>
+              <li><strong className="font-semibold text-gray-900 dark:text-white">5 or more users:</strong> quarterly base plus $3 per extra user per month.</li>
+            </ul>
+            <p className="text-gray-500 dark:text-zinc-400 mb-4 font-light text-[13px]">Best for quarterly planning with full platform access and 2 GB storage included.</p>
+            <Link href="/auth/signup?plan=quarterly" className="mt-auto w-full text-center block bg-[#0078d4] hover:bg-[#005a9e] text-white py-2.5 rounded text-sm font-bold transition-colors">
+              Subscribe for Three Months (from $14)
             </Link>
           </div>
 
-          <div className="bg-white dark:bg-[#201F1E] border-2 border-emerald-600 rounded-lg p-5 shadow-sm relative">
-            <span className="absolute -top-2.5 right-3 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#107C10] text-white">
-              Save 17% (2 Mo Free)
+          <div className="bg-white dark:bg-[#201F1E] border-2 border-emerald-600 rounded-xl p-6 sm:p-7 shadow-sm relative flex flex-col min-h-[340px]">
+            <span className="absolute -top-3 right-4 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#107C10] text-white">
+              Save 17 percent, two months free
             </span>
-            <div className="flex justify-between items-center mb-1">
-              <span className="font-bold text-sm text-gray-900 dark:text-white">Annual Plan</span>
+            <div className="flex justify-between items-center mb-2">
+              <span className="font-bold text-base text-gray-900 dark:text-white">Annual Plan</span>
               <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 font-semibold px-2 py-0.5 rounded">Best Value</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">$50 <span className="text-xs font-normal text-gray-500">USD / user / yr</span></p>
-            <p className="text-gray-500 dark:text-zinc-400 mb-3 font-light">$4.17/mo per seat (2 months free!). Priority enterprise onboarding and 2 GB storage included.</p>
-            <Link href="/auth/signup?plan=annual" className="w-full text-center block bg-[#107C10] hover:bg-[#0E6B0E] text-white py-2 rounded text-xs font-bold transition-colors">
-              Subscribe Annual ($50/user)
+            <p className="text-3xl font-bold text-gray-900 dark:text-white mb-3">From $50 <span className="text-sm font-normal text-gray-500">per year</span></p>
+            <ul className="space-y-2 text-[13px] text-gray-600 dark:text-zinc-300 font-light leading-relaxed mb-4">
+              <li><strong className="font-semibold text-gray-900 dark:text-white">Pay for ten months, get twelve:</strong> flat $50 for 1 to 2 users.</li>
+              <li><strong className="font-semibold text-gray-900 dark:text-white">3 to 4 users:</strong> one flat yearly price with two months free.</li>
+              <li><strong className="font-semibold text-gray-900 dark:text-white">5 or more users:</strong> yearly base plus $3 per extra user per month.</li>
+            </ul>
+            <p className="text-gray-500 dark:text-zinc-400 mb-4 font-light text-[13px]">Priority onboarding and 2 GB storage included.</p>
+            <Link href="/auth/signup?plan=annual" className="mt-auto w-full text-center block bg-[#107C10] hover:bg-[#0E6B0E] text-white py-2.5 rounded text-sm font-bold transition-colors">
+              Subscribe for a Year (from $50)
             </Link>
           </div>
         </div>
@@ -672,7 +696,7 @@ export default function Home() {
           </div>
         </div>
         <div className="border-t border-gray-200 dark:border-[#3B3A39] py-4 text-center text-xs text-gray-500 dark:text-zinc-500">
-          © 2026 TaskPMS · Task Project Management System · Direct Enterprise Subscriptions ($20/mo or $200/yr)
+          © 2026 TaskPMS · Task Project Management System · Tiered team subscriptions ($5/2 seats · $8/4 seats · +$3/seat/mo)
         </div>
       </footer>
     </div>
