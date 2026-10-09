@@ -477,7 +477,7 @@ export default function ChatSpaceClient({
     if (!newGroupName.trim()) return;
     setIsCreatingGroup(true);
     try {
-      const cleanName = newGroupName.trim().replace(/^#/, "");
+      const cleanName = newGroupName.trim().replace(/^#+/, "");
       const selectedMembersData = allMembers
         .filter((m) => selectedGroupMemberIds.includes(m._id))
         .map((m) => ({
@@ -818,7 +818,7 @@ export default function ChatSpaceClient({
   };
 
   return (
-    <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-[#FAF9F8] dark:bg-[#121316] text-[#242424] dark:text-[#E1DFDD]">
+    <div className="flex h-[calc(95vh-64px)] overflow-hidden bg-[#FAF9F8] dark:bg-[#121316] text-[#242424] dark:text-[#E1DFDD]">
       {/* 1. LEFT SIDEBAR: Channels & Message Scopes */}
       <aside className="w-72 shrink-0 border-r border-[#E1DFDD] dark:border-[#26282E] bg-white dark:bg-[#18191E] flex flex-col justify-between">
         <div className="p-3.5 border-b border-[#E1DFDD] dark:border-[#26282E]">
@@ -865,11 +865,10 @@ export default function ChatSpaceClient({
                 <button
                   key={ch.id}
                   onClick={() => handleSelectChannel(ch)}
-                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-xs font-medium text-left transition-colors ${
-                    isActive
-                      ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold"
-                      : "hover:bg-gray-100 dark:hover:bg-[#22242B] text-gray-700 dark:text-gray-300"
-                  }`}
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-xs font-medium text-left transition-colors ${isActive
+                    ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold"
+                    : "hover:bg-gray-100 dark:hover:bg-[#22242B] text-gray-700 dark:text-gray-300"
+                    }`}
                 >
                   <Icon className="w-4 h-4 text-blue-500 shrink-0" />
                   <span className="truncate flex-1">{ch.name}</span>
@@ -906,11 +905,10 @@ export default function ChatSpaceClient({
                 <button
                   key={ch.channelId || ch.name}
                   onClick={() => handleSelectTeam(ch)}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-left transition-colors group ${
-                    isActive
-                      ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold"
-                      : "hover:bg-gray-100 dark:hover:bg-[#22242B] text-gray-700 dark:text-gray-300"
-                  }`}
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-left transition-colors group ${isActive
+                    ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold"
+                    : "hover:bg-gray-100 dark:hover:bg-[#22242B] text-gray-700 dark:text-gray-300"
+                    }`}
                   title={`${ch.name} (${memberCount} members) - ${ch.description || "Department team"}`}
                 >
                   <Layers className="w-3.5 h-3.5 text-purple-500 shrink-0" />
@@ -950,15 +948,14 @@ export default function ChatSpaceClient({
                 <button
                   key={ch.channelId || ch.name}
                   onClick={() => handleSelectGroup(ch)}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-left transition-colors group ${
-                    isActive
-                      ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold"
-                      : "hover:bg-gray-100 dark:hover:bg-[#22242B] text-gray-700 dark:text-gray-300"
-                  }`}
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-left transition-colors group ${isActive
+                    ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold"
+                    : "hover:bg-gray-100 dark:hover:bg-[#22242B] text-gray-700 dark:text-gray-300"
+                    }`}
                   title={`#${ch.name} (${memberCount} members) - ${ch.description || "Squad group"}`}
                 >
                   <Hash className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <span className="truncate flex-1">#{ch.name.replace(/^#/, "")}</span>
+                  <span className="truncate flex-1">#{ch.name.replace(/^#+/, "")}</span>
                   {memberCount > 0 && (
                     <span className="text-[10px] bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 px-1.5 py-0.2 rounded-full font-semibold shrink-0">
                       {memberCount}
@@ -1000,11 +997,10 @@ export default function ChatSpaceClient({
                   <button
                     key={ch.channelId}
                     onClick={() => handleSelectDirect(ch)}
-                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-left transition-colors ${
-                      isActive
-                        ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold"
-                        : "hover:bg-gray-100 dark:hover:bg-[#22242B] text-gray-700 dark:text-gray-300"
-                    }`}
+                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-left transition-colors ${isActive
+                      ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold"
+                      : "hover:bg-gray-100 dark:hover:bg-[#22242B] text-gray-700 dark:text-gray-300"
+                      }`}
                   >
                     <div className="relative shrink-0">
                       <div className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[9px] font-bold flex items-center justify-center">
@@ -1202,11 +1198,10 @@ export default function ChatSpaceClient({
                   <div
                     key={p.personUserId}
                     onClick={() => handlePickSavedPerson(p)}
-                    className={`group relative flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition-all border ${
-                      isSelected
-                        ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                        : "bg-white dark:bg-[#23252C] hover:bg-blue-50 dark:hover:bg-[#2B2E37] text-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-700 hover:border-blue-400"
-                    }`}
+                    className={`group relative flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition-all border ${isSelected
+                      ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                      : "bg-white dark:bg-[#23252C] hover:bg-blue-50 dark:hover:bg-[#2B2E37] text-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-700 hover:border-blue-400"
+                      }`}
                     title={`Click to pick @${p.personName} for delivery`}
                   >
                     <span className="w-4 h-4 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-300 text-[9px] font-bold flex items-center justify-center">
@@ -1394,11 +1389,10 @@ export default function ChatSpaceClient({
                 <div
                   key={member._id}
                   onClick={() => insertMention(member)}
-                  className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${
-                    idx === selectedMentionIdx
-                      ? "bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300"
-                      : "hover:bg-gray-50 dark:hover:bg-[#262832] text-gray-800 dark:text-gray-200"
-                  }`}
+                  className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${idx === selectedMentionIdx
+                    ? "bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300"
+                    : "hover:bg-gray-50 dark:hover:bg-[#262832] text-gray-800 dark:text-gray-200"
+                    }`}
                 >
                   <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
                     {member.initials}
@@ -1432,11 +1426,10 @@ export default function ChatSpaceClient({
                       else if (sc === "group") setComposerTargetName(activeScopeName);
                       else setComposerTargetName("Direct Recipients");
                     }}
-                    className={`px-2 py-0.5 rounded text-[11px] font-semibold capitalize transition-all ${
-                      composerScope === sc
-                        ? "bg-blue-600 text-white shadow-xs"
-                        : "bg-gray-100 dark:bg-[#24262E] text-gray-600 dark:text-gray-400 hover:bg-gray-200"
-                    }`}
+                    className={`px-2 py-0.5 rounded text-[11px] font-semibold capitalize transition-all ${composerScope === sc
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "bg-gray-100 dark:bg-[#24262E] text-gray-600 dark:text-gray-400 hover:bg-gray-200"
+                      }`}
                   >
                     {sc === "global" ? "🌐 Global" : sc === "team" ? "👥 Team" : sc === "group" ? "💬 Group" : "👤 Direct"}
                   </button>
@@ -1556,16 +1549,15 @@ export default function ChatSpaceClient({
                     <button
                       onClick={async () => {
                         if (isAlreadySaved) {
-                          await handleRemoveSavedPerson(m._id, { stopPropagation: () => {} } as any);
+                          await handleRemoveSavedPerson(m._id, { stopPropagation: () => { } } as any);
                         } else {
                           await autoSavePerson(m);
                         }
                       }}
-                      className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
-                        isAlreadySaved
-                          ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300"
-                          : "bg-blue-600 text-white hover:bg-blue-700"
-                      }`}
+                      className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${isAlreadySaved
+                        ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300"
+                        : "bg-blue-600 text-white hover:bg-blue-700"
+                        }`}
                     >
                       {isAlreadySaved ? "Pinned ✓" : "Pin"}
                     </button>
@@ -1678,11 +1670,10 @@ export default function ChatSpaceClient({
                       <div
                         key={m._id}
                         onClick={() => toggleTeamMemberSelection(m._id)}
-                        className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
-                          isSelected
-                            ? "bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/60"
-                            : "hover:bg-gray-100 dark:hover:bg-[#252830] border border-transparent"
-                        }`}
+                        className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${isSelected
+                          ? "bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/60"
+                          : "hover:bg-gray-100 dark:hover:bg-[#252830] border border-transparent"
+                          }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
@@ -1828,11 +1819,10 @@ export default function ChatSpaceClient({
                       <div
                         key={m._id}
                         onClick={() => toggleGroupMemberSelection(m._id)}
-                        className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
-                          isSelected
-                            ? "bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/60"
-                            : "hover:bg-gray-100 dark:hover:bg-[#252830] border border-transparent"
-                        }`}
+                        className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${isSelected
+                          ? "bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/60"
+                          : "hover:bg-gray-100 dark:hover:bg-[#252830] border border-transparent"
+                          }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="w-6 h-6 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">

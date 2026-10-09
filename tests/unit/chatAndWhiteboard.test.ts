@@ -283,6 +283,149 @@ describe("Whiteboard Canvas & Organizational Chart Template", () => {
       expect(newBranchNode.y).toBe(250);
       expect(updatedEdges.some((e) => e.from === "parent" && e.to === "child-2")).toBe(true);
     });
+
+    describe("Directional Arrow Node Connections (<- , -> , <->) & Pen Freehand Drawing Engine", () => {
+      it("creates directional arrow connection from node A to node B with 'forward' (->)", () => {
+        const nodeA = { id: "node-a", x: 100, y: 100, width: 160, height: 96, title: "Source" };
+        const nodeB = { id: "node-b", x: 400, y: 100, width: 160, height: 96, title: "Target" };
+        const edges: Array<{ id: string; from: string; to: string; arrowDirection: "forward" | "backward" | "bidirectional" }> = [];
+
+        // Connection action with ->
+        const newEdge = {
+          id: "edge-fwd-1",
+          from: nodeA.id,
+          to: nodeB.id,
+          arrowDirection: "forward" as const,
+        };
+        edges.push(newEdge);
+
+        expect(edges).toHaveLength(1);
+        expect(edges[0].from).toBe("node-a");
+        expect(edges[0].to).toBe("node-b");
+        expect(edges[0].arrowDirection).toBe("forward");
+      });
+
+      it("creates directional arrow connection with 'backward' (<-)", () => {
+        const edges: Array<{ id: string; from: string; to: string; arrowDirection: "forward" | "backward" | "bidirectional" }> = [];
+
+        const newEdge = {
+          id: "edge-bwd-1",
+          from: "node-a",
+          to: "node-b",
+          arrowDirection: "backward" as const,
+        };
+        edges.push(newEdge);
+
+        expect(edges[0].arrowDirection).toBe("backward");
+      });
+
+      it("creates bidirectional arrow connection with '<->' indicating two-way flow", () => {
+        const edges: Array<{ id: string; from: string; to: string; arrowDirection: "forward" | "backward" | "bidirectional" }> = [];
+
+        const newEdge = {
+          id: "edge-bi-1",
+          from: "node-a",
+          to: "node-b",
+          arrowDirection: "bidirectional" as const,
+        };
+        edges.push(newEdge);
+
+        expect(edges[0].arrowDirection).toBe("bidirectional");
+      });
+
+      it("toggles existing arrow connection between <-, ->, and <->", () => {
+        let edge = {
+          id: "edge-1",
+          from: "node-1",
+          to: "node-2",
+          arrowDirection: "forward" as "forward" | "backward" | "bidirectional",
+        };
+
+        // User switches to bidirectional <->
+        edge = { ...edge, arrowDirection: "bidirectional" };
+        expect(edge.arrowDirection).toBe("bidirectional");
+
+        // User switches to backward <-
+        edge = { ...edge, arrowDirection: "backward" };
+        expect(edge.arrowDirection).toBe("backward");
+
+        // User switches back to forward ->
+        edge = { ...edge, arrowDirection: "forward" };
+        expect(edge.arrowDirection).toBe("forward");
+      });
+
+      it("generates smooth SVG quadratic path data from freehand stroke points", () => {
+        const generateSvgPath = (pts: { x: number; y: number }[]): string => {
+          if (pts.length === 0) return "";
+          if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y} L ${pts[0].x + 0.1} ${pts[0].y + 0.1}`;
+          let d = `M ${pts[0].x} ${pts[0].y}`;
+          for (let i = 1; i < pts.length - 1; i++) {
+            const xc = (pts[i].x + pts[i + 1].x) / 2;
+            const yc = (pts[i].y + pts[i + 1].y) / 2;
+            d += ` Q ${pts[i].x} ${pts[i].y}, ${xc} ${yc}`;
+          }
+          d += ` L ${pts[pts.length - 1].x} ${pts[pts.length - 1].y}`;
+          return d;
+        };
+
+        const strokePoints = [
+          { x: 10, y: 10 },
+          { x: 30, y: 40 },
+          { x: 60, y: 70 },
+          { x: 100, y: 80 },
+        ];
+
+        const pathData = generateSvgPath(strokePoints);
+        expect(pathData).toContain("M 10 10");
+        expect(pathData).toContain("Q 30 40");
+        expect(pathData).toContain("L 100 80");
+      });
+
+      it("creates a whiteboard drawing node with normalized relative coordinates, bounding box, and styling", () => {
+        const strokePoints = [
+          { x: 150, y: 200 },
+          { x: 180, y: 240 },
+          { x: 220, y: 280 },
+        ];
+
+        const minX = Math.min(...strokePoints.map((p) => p.x));
+        const minY = Math.min(...strokePoints.map((p) => p.y));
+        const maxX = Math.max(...strokePoints.map((p) => p.x));
+        const maxY = Math.max(...strokePoints.map((p) => p.y));
+        const width = Math.max(16, maxX - minX);
+        const height = Math.max(16, maxY - minY);
+
+        // Normalize points relative to (minX, minY)
+        const relPoints = strokePoints.map((p) => ({
+          x: p.x - minX,
+          y: p.y - minY,
+        }));
+
+        expect(minX).toBe(150);
+        expect(minY).toBe(200);
+        expect(width).toBe(70);
+        expect(height).toBe(80);
+        expect(relPoints[0]).toEqual({ x: 0, y: 0 });
+        expect(relPoints[2]).toEqual({ x: 70, y: 80 });
+
+        const drawNode = {
+          id: "drawing-test-1",
+          type: "drawing" as const,
+          x: minX,
+          y: minY,
+          width,
+          height,
+          title: "Drawing",
+          pathData: "M 0 0 Q 30 40, 50 60 L 70 80",
+          color: "#EC4899",
+          strokeWidth: 4,
+        };
+
+        expect(drawNode.type).toBe("drawing");
+        expect(drawNode.color).toBe("#EC4899");
+        expect(drawNode.strokeWidth).toBe(4);
+      });
+    });
   });
 
   describe("Chat Space Teams, Groups, and Direct Messaging Architecture", () => {

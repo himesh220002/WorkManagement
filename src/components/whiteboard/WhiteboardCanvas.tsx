@@ -20,6 +20,8 @@ import {
   Diamond,
   Triangle,
   MoveRight,
+  MoveLeft,
+  ArrowLeftRight,
   StickyNote,
   Type,
   Maximize,
@@ -131,6 +133,17 @@ export default function WhiteboardCanvas({
     x: number;
     y: number;
   } | null>(null);
+
+  // Directional Arrow Connection State ("<- or -> or <->")
+  const [arrowConnectType, setArrowConnectType] = useState<"forward" | "backward" | "bidirectional">("forward");
+  const [connectingFromNodeId, setConnectingFromNodeId] = useState<string | null>(null);
+  const [connectingMousePos, setConnectingMousePos] = useState<{ x: number; y: number } | null>(null);
+
+  // Pen Freehand Drawing State ("draw by pen needed to activate")
+  const [isDrawingPen, setIsDrawingPen] = useState(false);
+  const [currentPenPoints, setCurrentPenPoints] = useState<{ x: number; y: number }[]>([]);
+  const [penColor, setPenColor] = useState<string>("#EC4899");
+  const [penStrokeWidth, setPenStrokeWidth] = useState<number>(3);
 
   // Popovers & Modals
   const [showShapePalette, setShowShapePalette] = useState(false);
@@ -442,6 +455,43 @@ export default function WhiteboardCanvas({
     setDoubleClickMenu(null);
     setEdgeSettingsPopover(null);
 
+    // 1. If Pen Draw Tool is active, start drawing even if mouse is pressed over a node
+    if (activeTool === "draw") {
+      const coords = getCanvasCoords(e.clientX, e.clientY);
+      setIsDrawingPen(true);
+      setCurrentPenPoints([coords]);
+      return;
+    }
+
+    // 2. If Arrow Connection Tool is active, connect two different nodes with <-, ->, or <->
+    if (activeTool === "arrow") {
+      if (!connectingFromNodeId) {
+        // Step 1: Click 1st node
+        setConnectingFromNodeId(node.id);
+        const coords = getCanvasCoords(e.clientX, e.clientY);
+        setConnectingMousePos(coords);
+      } else {
+        // Step 2: Click 2nd node
+        if (connectingFromNodeId !== node.id) {
+          const newEdge: IWhiteboardEdge = {
+            id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            from: connectingFromNodeId,
+            to: node.id,
+            color: "#60A5FA",
+            style: "solid",
+            arrowDirection: arrowConnectType,
+          };
+          const updatedEdges = [...edges, newEdge];
+          setEdges(updatedEdges);
+          pushHistory(nodes, updatedEdges);
+          triggerAutoSave(nodes, updatedEdges);
+        }
+        setConnectingFromNodeId(null);
+        setConnectingMousePos(null);
+      }
+      return;
+    }
+
     const isCtrl = e.ctrlKey || e.metaKey;
 
     if (isCtrl) {
@@ -482,7 +532,7 @@ export default function WhiteboardCanvas({
     setInitialGroupNodePositions(initialPositions);
   };
 
-  // Canvas Mouse Down (Panning, Deselecting, or Starting Rectangular Marquee Selection)
+  // Canvas Mouse Down (Panning, Freehand Drawing, Deselecting, or Starting Rectangular Marquee Selection)
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     setDoubleClickMenu(null);
     setEdgeSettingsPopover(null);
@@ -496,6 +546,23 @@ export default function WhiteboardCanvas({
 
     // Left click on canvas background
     if (e.button === 0) {
+      // Freehand drawing with pen
+      if (activeTool === "draw") {
+        const coords = getCanvasCoords(e.clientX, e.clientY);
+        setIsDrawingPen(true);
+        setCurrentPenPoints([coords]);
+        return;
+      }
+
+      // If in arrow connection mode, clicking empty canvas cancels active first node selection
+      if (activeTool === "arrow") {
+        if (connectingFromNodeId) {
+          setConnectingFromNodeId(null);
+          setConnectingMousePos(null);
+        }
+        return;
+      }
+
       // If clicking outside the group without Ctrl: destroy the temporary group!
       if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
         setSelectedNodeIds([]);
@@ -515,7 +582,7 @@ export default function WhiteboardCanvas({
     }
   };
 
-  // Global Mouse Move (Dragging Nodes / Group, Rectangular Selection, or Panning)
+  // Global Mouse Move (Dragging Nodes / Group, Rectangular Selection, Pen Drawing, or Panning)
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isPanning) {
       setPan({
@@ -526,6 +593,17 @@ export default function WhiteboardCanvas({
     }
 
     const coords = getCanvasCoords(e.clientX, e.clientY);
+
+    // Track cursor for dynamic arrow preview when connecting two nodes
+    if (activeTool === "arrow" && connectingFromNodeId) {
+      setConnectingMousePos(coords);
+    }
+
+    // Active pen drawing stroke
+    if (isDrawingPen) {
+      setCurrentPenPoints((prev) => [...prev, coords]);
+      return;
+    }
 
     // 1. Rectangular Marquee Selection Box
     if (isSelectingBox && selectionBox) {
@@ -572,10 +650,48 @@ export default function WhiteboardCanvas({
     }
   };
 
-  // Global Mouse Up (End Panning, Selection Box, or Group Drag)
+  // Global Mouse Up (End Panning, Selection Box, Pen Drawing, or Group Drag)
   const handleMouseUp = () => {
     if (isPanning) {
       setIsPanning(false);
+    }
+
+    // Finalize freehand pen stroke into a whiteboard node
+    if (isDrawingPen) {
+      setIsDrawingPen(false);
+      if (currentPenPoints.length > 1) {
+        const minX = Math.min(...currentPenPoints.map((p) => p.x));
+        const minY = Math.min(...currentPenPoints.map((p) => p.y));
+        const maxX = Math.max(...currentPenPoints.map((p) => p.x));
+        const maxY = Math.max(...currentPenPoints.map((p) => p.y));
+        const width = Math.max(16, maxX - minX);
+        const height = Math.max(16, maxY - minY);
+        const relPoints = currentPenPoints.map((p) => ({
+          x: p.x - minX,
+          y: p.y - minY,
+        }));
+        const pathData = generateSvgPath(relPoints);
+
+        const newDrawNode: IWhiteboardNode = {
+          id: `drawing-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          type: "drawing",
+          x: Math.round(minX),
+          y: Math.round(minY),
+          width: Math.round(width),
+          height: Math.round(height),
+          title: "Drawing",
+          pathData,
+          color: penColor,
+          strokeWidth: penStrokeWidth,
+          zIndex: nodes.length + 1,
+        };
+
+        const updated = [...nodes, newDrawNode];
+        setNodes(updated);
+        pushHistory(updated, edges);
+        triggerAutoSave(updated, edges);
+      }
+      setCurrentPenPoints([]);
     }
 
     if (isSelectingBox) {
@@ -605,6 +721,7 @@ export default function WhiteboardCanvas({
     setNodes(updatedNodes);
     setEdges(updatedEdges);
     pushHistory(updatedNodes, updatedEdges);
+    triggerAutoSave(updatedNodes, updatedEdges);
     setSelectedNodeId(null);
     setSelectedNodeIds([]);
     setEditingNodeId(null);
@@ -619,13 +736,23 @@ export default function WhiteboardCanvas({
         handleDeleteSelected();
       } else if (e.key === "Escape") {
         setSelectedNodeId(null);
+        setSelectedNodeIds([]);
+        setConnectingFromNodeId(null);
+        setConnectingMousePos(null);
         setDoubleClickMenu(null);
         setShowShapePalette(false);
         setShowStylePalette(false);
+        if (activeTool === "arrow" || activeTool === "draw") {
+          setActiveTool("select");
+        }
       } else if (e.key === "v" || e.key === "V") {
         setActiveTool("select");
       } else if (e.key === "h" || e.key === "H") {
         setActiveTool("hand");
+      } else if (e.key === "a" || e.key === "A") {
+        setActiveTool("arrow");
+      } else if (e.key === "p" || e.key === "P" || e.key === "d" || e.key === "D") {
+        setActiveTool("draw");
       } else if (e.key === "n" || e.key === "N") {
         setActiveTool("sticky");
         handleAddNode("sticky");
@@ -637,7 +764,7 @@ export default function WhiteboardCanvas({
 
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [selectedNodeId, editingNodeId, nodes, edges]);
+  }, [selectedNodeId, editingNodeId, nodes, edges, activeTool, connectingFromNodeId]);
 
   // Synchronize zoom and pan refs for wheel listener
   const zoomRef = useRef(zoom);
@@ -722,27 +849,66 @@ export default function WhiteboardCanvas({
     pushHistory(updated, edges);
   };
 
-  // Render Connector SVG lines between nodes ("aero link setting" & branch handles)
+  // Generate smooth SVG path from stroke points for freehand pen drawing
+  const generateSvgPath = (pts: { x: number; y: number }[]): string => {
+    if (pts.length === 0) return "";
+    if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y} L ${pts[0].x + 0.1} ${pts[0].y + 0.1}`;
+    let d = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const xc = (pts[i].x + pts[i + 1].x) / 2;
+      const yc = (pts[i].y + pts[i + 1].y) / 2;
+      d += ` Q ${pts[i].x} ${pts[i].y}, ${xc} ${yc}`;
+    }
+    d += ` L ${pts[pts.length - 1].x} ${pts[pts.length - 1].y}`;
+    return d;
+  };
+
+  // Render directional arrowhead polygon at (tipX, tipY) pointing from (fromX, fromY)
+  const renderArrowhead = (
+    tipX: number,
+    tipY: number,
+    fromX: number,
+    fromY: number,
+    color: string = "#60A5FA"
+  ) => {
+    const angle = Math.atan2(tipY - fromY, tipX - fromX);
+    const wingLength = 11;
+    const wingAngle = Math.PI / 6; // 30 degrees
+    const wing1X = tipX - wingLength * Math.cos(angle - wingAngle);
+    const wing1Y = tipY - wingLength * Math.sin(angle - wingAngle);
+    const wing2X = tipX - wingLength * Math.cos(angle + wingAngle);
+    const wing2Y = tipY - wingLength * Math.sin(angle + wingAngle);
+
+    return (
+      <polygon
+        points={`${tipX},${tipY} ${wing1X},${wing1Y} ${wing2X},${wing2Y}`}
+        fill={color}
+        className="pointer-events-none"
+      />
+    );
+  };
+
+  // Render Connector SVG lines between nodes ("aero link setting" & branch handles with <- or -> or <->)
   const renderEdges = () => {
     return edges.map((edge) => {
       const fromNode = nodes.find((n) => n.id === edge.from);
       const toNode = nodes.find((n) => n.id === edge.to);
       if (!fromNode || !toNode) return null;
 
-      // Start point: bottom-center of fromNode
+      const isToAbove = toNode.y + toNode.height < fromNode.y;
       const startX = fromNode.x + fromNode.width / 2;
-      const startY = fromNode.y + fromNode.height;
+      const startY = isToAbove ? fromNode.y : fromNode.y + fromNode.height;
 
-      // End point: top-center of toNode
       const endX = toNode.x + toNode.width / 2;
-      const endY = toNode.y;
+      const endY = isToAbove ? toNode.y + toNode.height : toNode.y;
 
-      // Orthogonal mid-way Y line
       const midY = startY + (endY - startY) / 2;
       const pathData = `M ${startX} ${startY} L ${startX} ${midY} L ${endX} ${midY} L ${endX} ${endY}`;
 
       const isSelectedEdge = selectedEdgeId === edge.id;
       const isHovered = hoveredEdgeId === edge.id;
+      const edgeColor = isSelectedEdge ? "#38BDF8" : isHovered ? "#93C5FD" : edge.color || "#60A5FA";
+      const dir = edge.arrowDirection || "forward";
 
       return (
         <g key={edge.id} className="group">
@@ -770,7 +936,7 @@ export default function WhiteboardCanvas({
           <path
             d={pathData}
             fill="none"
-            stroke={isSelectedEdge ? "#38BDF8" : isHovered ? "#93C5FD" : edge.color || "#60A5FA"}
+            stroke={edgeColor}
             strokeWidth={isSelectedEdge ? "3" : isHovered ? "2.5" : "2"}
             strokeDasharray={edge.style === "dashed" ? "6,4" : undefined}
             strokeLinecap="round"
@@ -778,12 +944,13 @@ export default function WhiteboardCanvas({
             className="transition-colors pointer-events-none"
           />
 
-          {/* Arrowhead marker */}
-          <polygon
-            points={`${endX},${endY} ${endX - 5},${endY - 8} ${endX + 5},${endY - 8}`}
-            fill={isSelectedEdge ? "#38BDF8" : isHovered ? "#93C5FD" : edge.color || "#60A5FA"}
-            className="pointer-events-none"
-          />
+          {/* Forward / Target Arrowhead (-> or <->) */}
+          {(dir === "forward" || dir === "bidirectional") &&
+            renderArrowhead(endX, endY, endX, midY, edgeColor)}
+
+          {/* Backward / Source Arrowhead (<- or <->) */}
+          {(dir === "backward" || dir === "bidirectional") &&
+            renderArrowhead(startX, startY, startX, midY, edgeColor)}
 
           {/* Interactive Arrow Link Setting Handle: "+" circular button at turn/midpoint */}
           <g
@@ -1153,6 +1320,70 @@ export default function WhiteboardCanvas({
                 </div>
               </div>
 
+              {/* Arrow Direction: <- , -> , <-> */}
+              <div className="pt-1">
+                <span className="text-gray-400 text-[11px] block mb-1">Arrow Direction:</span>
+                <div className="grid grid-cols-3 gap-1 bg-[#121316] p-1 rounded-lg border border-[#282B33]">
+                  <button
+                    onClick={() => {
+                      const updated = edges.map((e) =>
+                        e.id === edge.id ? { ...e, arrowDirection: "backward" as const } : e
+                      );
+                      setEdges(updated);
+                      pushHistory(nodes, updated);
+                      triggerAutoSave(nodes, updated);
+                    }}
+                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
+                      edge.arrowDirection === "backward"
+                        ? "bg-blue-600 text-white shadow"
+                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                    }`}
+                    title="Backward arrow: Target points to Source (<-)"
+                  >
+                    <MoveLeft className="w-3.5 h-3.5" />
+                    <span>&lt;-</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const updated = edges.map((e) =>
+                        e.id === edge.id ? { ...e, arrowDirection: "forward" as const } : e
+                      );
+                      setEdges(updated);
+                      pushHistory(nodes, updated);
+                      triggerAutoSave(nodes, updated);
+                    }}
+                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
+                      edge.arrowDirection === "forward" || !edge.arrowDirection
+                        ? "bg-blue-600 text-white shadow"
+                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                    }`}
+                    title="Forward arrow: Source points to Target (->)"
+                  >
+                    <span>-&gt;</span>
+                    <MoveRight className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      const updated = edges.map((e) =>
+                        e.id === edge.id ? { ...e, arrowDirection: "bidirectional" as const } : e
+                      );
+                      setEdges(updated);
+                      pushHistory(nodes, updated);
+                      triggerAutoSave(nodes, updated);
+                    }}
+                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
+                      edge.arrowDirection === "bidirectional"
+                        ? "bg-blue-600 text-white shadow"
+                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                    }`}
+                    title="Bidirectional arrow: Double-ended (<->)"
+                  >
+                    <ArrowLeftRight className="w-3.5 h-3.5" />
+                    <span>&lt;-&gt;</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Delete Link */}
               <div className="pt-2 border-t border-gray-800 flex justify-end">
                 <button
@@ -1285,7 +1516,11 @@ export default function WhiteboardCanvas({
         onMouseUp={handleMouseUp}
         onDoubleClick={handleCanvasDoubleClick}
         className={`w-full h-full relative overflow-hidden ${
-          activeTool === "hand" || isPanning ? "cursor-grab active:cursor-grabbing" : "cursor-default"
+          activeTool === "hand" || isPanning
+            ? "cursor-grab active:cursor-grabbing"
+            : activeTool === "draw" || activeTool === "arrow"
+            ? "cursor-crosshair"
+            : "cursor-default"
         }`}
         style={{
           backgroundColor: "#0D0E11",
@@ -1328,9 +1563,50 @@ export default function WhiteboardCanvas({
             left: 0,
           }}
         >
-          {/* SVG Connector Arrows */}
+          {/* SVG Connector Arrows & Live Interactions */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
             {renderEdges()}
+
+            {/* Live dynamic arrow preview while connecting two nodes */}
+            {activeTool === "arrow" && connectingFromNodeId && connectingMousePos && (() => {
+              const fromNode = nodes.find((n) => n.id === connectingFromNodeId);
+              if (!fromNode) return null;
+              const startX = fromNode.x + fromNode.width / 2;
+              const startY = fromNode.y + fromNode.height / 2;
+              const targetX = connectingMousePos.x;
+              const targetY = connectingMousePos.y;
+
+              return (
+                <g className="pointer-events-none">
+                  <line
+                    x1={startX}
+                    y1={startY}
+                    x2={targetX}
+                    y2={targetY}
+                    stroke="#38BDF8"
+                    strokeWidth="3"
+                    strokeDasharray="6,4"
+                  />
+                  {(arrowConnectType === "forward" || arrowConnectType === "bidirectional") &&
+                    renderArrowhead(targetX, targetY, startX, startY, "#38BDF8")}
+                  {(arrowConnectType === "backward" || arrowConnectType === "bidirectional") &&
+                    renderArrowhead(startX, startY, targetX, targetY, "#38BDF8")}
+                </g>
+              );
+            })()}
+
+            {/* Live active stroke while pen drawing */}
+            {isDrawingPen && currentPenPoints.length > 0 && (
+              <path
+                d={generateSvgPath(currentPenPoints)}
+                fill="none"
+                stroke={penColor}
+                strokeWidth={penStrokeWidth}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="pointer-events-none shadow-sm"
+              />
+            )}
           </svg>
 
           {/* Rectangular Drag-to-Select Marquee Box */}
@@ -1380,6 +1656,64 @@ export default function WhiteboardCanvas({
           {nodes.map((node) => {
             const isSelected = selectedNodeIds.includes(node.id) || selectedNodeId === node.id;
             const isEditing = editingNodeId === node.id;
+            const isConnectingSource = activeTool === "arrow" && connectingFromNodeId === node.id;
+            const isConnectingTargetCandidate =
+              activeTool === "arrow" && connectingFromNodeId && connectingFromNodeId !== node.id;
+
+            // 0. FREEHAND PEN DRAWING NODE ("draw by pen")
+            if (node.type === "drawing") {
+              return (
+                <div
+                  key={node.id}
+                  onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  style={{
+                    position: "absolute",
+                    left: `${node.x}px`,
+                    top: `${node.y}px`,
+                    width: `${node.width}px`,
+                    height: `${node.height}px`,
+                    pointerEvents: activeTool === "draw" ? "none" : "auto",
+                  }}
+                  className={`group/drawing cursor-pointer transition-all ${
+                    isConnectingSource
+                      ? "ring-4 ring-cyan-400 ring-offset-2 ring-offset-[#0D0E11] shadow-[0_0_20px_rgba(6,182,212,0.8)]"
+                      : isConnectingTargetCandidate
+                      ? "hover:ring-2 hover:ring-cyan-300 hover:scale-[1.01]"
+                      : isSelected
+                      ? "ring-2 ring-pink-400 ring-offset-2 ring-offset-transparent rounded-sm"
+                      : ""
+                  }`}
+                >
+                  <svg
+                    style={{
+                      width: `${node.width}px`,
+                      height: `${node.height}px`,
+                      overflow: "visible",
+                    }}
+                    className="pointer-events-none"
+                  >
+                    <path
+                      d={node.pathData || ""}
+                      fill="none"
+                      stroke={isSelected ? "#F472B6" : node.color || "#EC4899"}
+                      strokeWidth={node.strokeWidth || 3}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  {isSelected && (
+                    <div className="absolute -top-5 left-0 px-1.5 py-0.5 rounded bg-pink-600 text-white text-[9px] font-bold pointer-events-none select-none shadow">
+                      Drawing
+                    </div>
+                  )}
+                  {isConnectingSource && (
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-cyan-400 text-black text-[10px] font-extrabold whitespace-nowrap shadow-lg animate-pulse">
+                      Source Node
+                    </div>
+                  )}
+                </div>
+              );
+            }
 
             // 1. GLOWING CIRCULAR LOGO (Screenshots 2-5)
             if (node.type === "logo") {
@@ -1648,6 +1982,158 @@ export default function WhiteboardCanvas({
         </button>
       </div>
 
+      {/* 5b. FLOATING ARROW CONNECTION TOOLBAR ("connect two different nodes by arrows <- or -> or <->") */}
+      {activeTool === "arrow" && (
+        <div className="absolute bottom-18 left-1/2 -translate-x-1/2 z-40 bg-[#16171E]/95 backdrop-blur-md border border-blue-500/60 rounded-xl shadow-2xl px-3.5 py-2 flex items-center gap-3 text-xs animate-in slide-in-from-bottom-2 duration-150">
+          <div className="flex items-center gap-1.5 pr-2 border-r border-[#2A2C37]">
+            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+            <span className="font-bold text-white text-[11px] tracking-wide whitespace-nowrap">Arrow Link</span>
+          </div>
+
+          {/* Direction Selector: <- , -> , <-> */}
+          <div className="flex items-center gap-1 bg-[#101115] p-0.5 rounded-lg border border-[#262833]">
+            <button
+              onClick={() => setArrowConnectType("backward")}
+              className={`px-2.5 py-1 rounded flex items-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
+                arrowConnectType === "backward"
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                  : "text-gray-400 hover:text-white hover:bg-[#1E2028]"
+              }`}
+              title="Backward arrow: Target points to Source (<-)"
+            >
+              <MoveLeft className="w-3.5 h-3.5" />
+              <span>&lt;-</span>
+            </button>
+
+            <button
+              onClick={() => setArrowConnectType("forward")}
+              className={`px-2.5 py-1 rounded flex items-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
+                arrowConnectType === "forward"
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                  : "text-gray-400 hover:text-white hover:bg-[#1E2028]"
+              }`}
+              title="Forward arrow: Source points to Target (->)"
+            >
+              <span>-&gt;</span>
+              <MoveRight className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              onClick={() => setArrowConnectType("bidirectional")}
+              className={`px-2.5 py-1 rounded flex items-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
+                arrowConnectType === "bidirectional"
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                  : "text-gray-400 hover:text-white hover:bg-[#1E2028]"
+              }`}
+              title="Bidirectional arrow: Double-ended (<->)"
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5" />
+              <span>&lt;-&gt;</span>
+            </button>
+          </div>
+
+          {/* Status Message */}
+          <div className="flex items-center text-[11px] whitespace-nowrap px-1">
+            {connectingFromNodeId ? (
+              <span className="text-amber-300 font-semibold flex items-center gap-1 animate-pulse">
+                Click target node to connect
+              </span>
+            ) : (
+              <span className="text-gray-300">
+                Click 1st node, then click 2nd node
+              </span>
+            )}
+          </div>
+
+          {/* Cancel Button */}
+          <button
+            onClick={() => {
+              if (connectingFromNodeId) {
+                setConnectingFromNodeId(null);
+                setConnectingMousePos(null);
+              } else {
+                setActiveTool("select");
+              }
+            }}
+            className="p-1 rounded text-gray-400 hover:text-white hover:bg-[#22242D] cursor-pointer"
+            title="Cancel (Esc)"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* 5c. FLOATING PEN DRAWING TOOLBAR ("draw by pen needed to activate") */}
+      {activeTool === "draw" && (
+        <div className="absolute bottom-18 left-1/2 -translate-x-1/2 z-40 bg-[#16171E]/95 backdrop-blur-md border border-pink-500/60 rounded-xl shadow-2xl px-3.5 py-2 flex items-center gap-3 text-xs animate-in slide-in-from-bottom-2 duration-150">
+          <div className="flex items-center gap-1.5 pr-2 border-r border-[#2A2C37]">
+            <div
+              className="w-2.5 h-2.5 rounded-full shadow-sm animate-pulse"
+              style={{ backgroundColor: penColor }}
+            />
+            <span className="font-bold text-white text-[11px] tracking-wide whitespace-nowrap">Pen Tool</span>
+          </div>
+
+          {/* Color Swatches */}
+          <div className="flex items-center gap-1.5">
+            {[
+              { color: "#EC4899", name: "Pink" },
+              { color: "#3B82F6", name: "Blue" },
+              { color: "#10B981", name: "Green" },
+              { color: "#F59E0B", name: "Amber" },
+              { color: "#EF4444", name: "Red" },
+              { color: "#8B5CF6", name: "Purple" },
+              { color: "#FFFFFF", name: "White" },
+            ].map((c) => (
+              <button
+                key={c.color}
+                onClick={() => setPenColor(c.color)}
+                className={`w-5 h-5 rounded-full transition-transform cursor-pointer ${
+                  penColor === c.color ? "ring-2 ring-white scale-125" : "border border-white/20 hover:scale-110"
+                }`}
+                style={{ backgroundColor: c.color }}
+                title={c.name}
+              />
+            ))}
+          </div>
+
+          <div className="h-4 w-px bg-[#2A2C37]" />
+
+          {/* Stroke Width Selector */}
+          <div className="flex items-center gap-0.5 bg-[#101115] p-0.5 rounded-lg border border-[#262833]">
+            {[
+              { width: 2, label: "Thin" },
+              { width: 4, label: "Medium" },
+              { width: 7, label: "Thick" },
+              { width: 12, label: "Bold" },
+            ].map((sw) => (
+              <button
+                key={sw.width}
+                onClick={() => setPenStrokeWidth(sw.width)}
+                className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${
+                  penStrokeWidth === sw.width
+                    ? "bg-pink-600 text-white shadow-sm"
+                    : "text-gray-400 hover:text-white hover:bg-[#1E2028]"
+                }`}
+              >
+                {sw.label}
+              </button>
+            ))}
+          </div>
+
+          <span className="text-gray-400 text-[11px] hidden md:inline whitespace-nowrap">
+            Draw freehand on canvas
+          </span>
+
+          <button
+            onClick={() => setActiveTool("select")}
+            className="px-2 py-0.5 rounded bg-[#242630] hover:bg-[#2C2E3A] text-gray-200 hover:text-white text-[11px] font-semibold cursor-pointer whitespace-nowrap transition-colors"
+          >
+            Done
+          </button>
+        </div>
+      )}
+
       {/* 6. FLOATING BOTTOM TOOLBAR (Matching exact layout from Screenshots 2, 3, 4, 5) */}
       <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-40 bg-[#16171E]/95 backdrop-blur-md border border-[#262832] rounded-xl shadow-2xl px-3 py-1.5 flex items-center gap-1.5">
         {/* V - Select Tool */}
@@ -1694,13 +2180,13 @@ export default function WhiteboardCanvas({
 
         {/* D - Pen / Draw Tool */}
         <button
-          onClick={() => setActiveTool("draw")}
+          onClick={() => setActiveTool(activeTool === "draw" ? "select" : "draw")}
           className={`p-2 rounded-lg transition-colors ${
             activeTool === "draw"
-              ? "bg-blue-600 text-white shadow-sm"
+              ? "bg-pink-600 text-white shadow-sm ring-1 ring-pink-400"
               : "text-gray-400 hover:text-white hover:bg-[#22242D]"
           }`}
-          title="Draw (D)"
+          title="Pen Draw Tool (P or D)"
         >
           <PenTool className="w-4 h-4" />
         </button>
@@ -1756,13 +2242,21 @@ export default function WhiteboardCanvas({
 
         {/* A - Arrow / Connector Tool */}
         <button
-          onClick={() => setActiveTool("arrow")}
+          onClick={() => {
+            if (activeTool === "arrow") {
+              setActiveTool("select");
+              setConnectingFromNodeId(null);
+              setConnectingMousePos(null);
+            } else {
+              setActiveTool("arrow");
+            }
+          }}
           className={`p-2 rounded-lg transition-colors ${
             activeTool === "arrow"
-              ? "bg-blue-600 text-white shadow-sm"
+              ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-400"
               : "text-gray-400 hover:text-white hover:bg-[#22242D]"
           }`}
-          title="Arrow (A)"
+          title="Arrow Connector <- -> <-> (A)"
         >
           <MoveRight className="w-4 h-4" />
         </button>

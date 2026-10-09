@@ -59,6 +59,12 @@ export interface ICompany {
     timezone: string;
     workingDays: number[];
   };
+  aiConfig?: {
+    geminiApiKey?: string;
+    defaultModel?: string;
+    temperature?: number;
+    updatedAt?: Date;
+  };
   status: CompanyStatusType;
   createdAt?: Date;
   updatedAt?: Date;

@@ -2,7 +2,7 @@ import mongoose, { Schema, Model } from "mongoose";
 
 export interface IWhiteboardNode {
   id: string;
-  type: "task" | "shape" | "sticky" | "text" | "frame" | "logo" | "legend";
+  type: "task" | "shape" | "sticky" | "text" | "frame" | "logo" | "legend" | "drawing";
   x: number;
   y: number;
   width: number;
@@ -19,6 +19,8 @@ export interface IWhiteboardNode {
   assignee?: string;
   status?: string;
   zIndex?: number;
+  pathData?: string;
+  strokeWidth?: number;
 }
 
 export interface IWhiteboardEdge {
@@ -31,6 +33,7 @@ export interface IWhiteboardEdge {
   color?: string;
   style?: "orthogonal" | "straight" | "curved" | "solid" | "dashed";
   lineStyle?: "solid" | "dashed";
+  arrowDirection?: "forward" | "backward" | "bidirectional" | "none";
 }
 
 export interface IWhiteboard {
@@ -85,7 +88,7 @@ const whiteboardSchema = new Schema<IWhiteboard>(
         id: { type: String, required: true },
         type: {
           type: String,
-          enum: ["task", "shape", "sticky", "text", "frame", "logo", "legend"],
+          enum: ["task", "shape", "sticky", "text", "frame", "logo", "legend", "drawing"],
           default: "shape",
         },
         x: { type: Number, required: true },
@@ -121,6 +124,8 @@ const whiteboardSchema = new Schema<IWhiteboard>(
         assignee: { type: String, default: "" },
         status: { type: String, default: "" },
         zIndex: { type: Number, default: 1 },
+        pathData: { type: String, default: "" },
+        strokeWidth: { type: Number, default: 3 },
       },
     ],
     edges: [
@@ -141,6 +146,11 @@ const whiteboardSchema = new Schema<IWhiteboard>(
           type: String,
           enum: ["solid", "dashed"],
           default: "solid",
+        },
+        arrowDirection: {
+          type: String,
+          enum: ["forward", "backward", "bidirectional", "none"],
+          default: "forward",
         },
       },
     ],

@@ -38,6 +38,12 @@ const companySchema = new Schema<ICompany>(
       timezone: { type: String, default: "UTC" },
       workingDays: { type: [Number], default: [1, 2, 3, 4, 5] },
     },
+    aiConfig: {
+      geminiApiKey: { type: String },
+      defaultModel: { type: String, default: "gemini-3.7-flash" },
+      temperature: { type: Number, default: 0.7 },
+      updatedAt: { type: Date },
+    },
     status: {
       type: String,
       enum: Object.values(CompanyStatus),

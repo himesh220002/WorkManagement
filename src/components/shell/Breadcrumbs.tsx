@@ -40,6 +40,10 @@ const KNOWN_ROOTS = new Set([
   "500",
   "not-found",
   "projecthelpdemo",
+  "chat",
+  "whiteboards",
+  "forms",
+  "reports",
 ]);
 
 const SEGMENT_METADATA: Record<string, { label: string; icon?: React.ElementType }> = {
@@ -58,6 +62,10 @@ const SEGMENT_METADATA: Record<string, { label: string; icon?: React.ElementType
   revenue: { label: "Revenue & Targets", icon: TrendingUp },
   targets: { label: "Targets & Attainment", icon: Target },
   about: { label: "About TaskPMS", icon: Sparkles },
+  reports: { label: "AI Reports & Intel", icon: Sparkles },
+  forms: { label: "Forms & Surveys", icon: FileText },
+  whiteboards: { label: "Whiteboards" },
+  chat: { label: "Chat Space" },
   contact: { label: "Contact Support" },
   privacy: { label: "Privacy Policy" },
   terms: { label: "Terms of Service" },

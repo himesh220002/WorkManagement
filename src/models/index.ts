@@ -28,3 +28,5 @@ export { ChatMessage } from "./chatMessage";
 export { ChatChannel } from "./chatChannel";
 export { SavedPerson } from "./savedPerson";
 export { Whiteboard } from "./whiteboard";
+export { Form } from "./form";
+export { AIReport } from "./aiReport";

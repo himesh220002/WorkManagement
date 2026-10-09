@@ -9,22 +9,47 @@ import Razorpay from "razorpay";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const planId: "monthly" | "quarterly" | "annual" =
-      body.plan === "annual" ? "annual" : body.plan === "quarterly" ? "quarterly" : "monthly";
-    const selectedPlan = PRICING_PLANS[planId];
-    // Default to INR to enable UPI (GPay, PhonePe, Paytm, QR), Netbanking & Wallets in Razorpay
+    const purpose = body.purpose || "subscription";
     const currency = (body.currency || "INR").toUpperCase() as "USD" | "INR";
-
-    const userCount = Math.max(1, Number(body.userCount) || 1);
-
     const { keyId, keySecret, isConfigured } = getRazorpayCredentials();
 
-    // Determine tiered amount in smallest unit (paise for INR, cents for USD)
-    const tiered = calculateTieredSubscriptionCost(userCount, planId, currency);
-    const totalCurrencyAmount = currency === "INR" ? tiered.totalInr : tiered.totalUsd;
-    const amount = Math.round(totalCurrencyAmount * 100);
+    let amount = 0;
+    let receipt = "";
+    let notes: Record<string, string> = {};
+    let selectedPlan: any = null;
+    let planId: "monthly" | "quarterly" | "annual" = "monthly";
 
-    const receipt = `rcpt_${planId}_u${userCount}_${Date.now().toString(36)}`;
+    if (purpose === "add_seats") {
+      const additionalSeats = Math.max(1, Number(body.additionalSeats) || 1);
+      const unitPrice = currency === "INR" ? 255 : 3;
+      amount = Math.round(additionalSeats * unitPrice * 100);
+      receipt = `rcpt_seats_u${additionalSeats}_${Date.now().toString(36)}`;
+      notes = {
+        purpose: "add_seats",
+        additionalSeats: String(additionalSeats),
+        companyCode: body.companyCode || "",
+        companyId: body.companyId || "",
+        unitPrice: String(unitPrice),
+      };
+    } else {
+      planId = body.plan === "annual" ? "annual" : body.plan === "quarterly" ? "quarterly" : "monthly";
+      selectedPlan = PRICING_PLANS[planId];
+      const userCount = Math.max(1, Number(body.userCount) || 1);
+      const tiered = calculateTieredSubscriptionCost(userCount, planId, currency);
+      const totalCurrencyAmount = currency === "INR" ? tiered.totalInr : tiered.totalUsd;
+      amount = Math.round(totalCurrencyAmount * 100);
+      receipt = `rcpt_${planId}_u${userCount}_${Date.now().toString(36)}`;
+      notes = {
+        purpose: "subscription",
+        plan: planId,
+        planName: selectedPlan.name,
+        billingCycle: selectedPlan.billingCycle,
+        userCount: String(userCount),
+        tierFormula: tiered.tierFormulaLabel,
+        companyCode: body.companyCode || "",
+        companyId: body.companyId || "",
+      };
+    }
 
     if (isConfigured) {
       try {
@@ -37,15 +62,7 @@ export async function POST(req: NextRequest) {
           amount,
           currency,
           receipt,
-          notes: {
-            plan: planId,
-            planName: selectedPlan.name,
-            billingCycle: selectedPlan.billingCycle,
-            userCount: String(userCount),
-            tierFormula: tiered.tierFormulaLabel,
-            companyCode: body.companyCode || "",
-            companyId: body.companyId || "",
-          },
+          notes,
         });
 
         return NextResponse.json({
@@ -56,6 +73,8 @@ export async function POST(req: NextRequest) {
           keyId,
           plan: planId,
           planDetails: selectedPlan,
+          purpose,
+          additionalSeats: body.additionalSeats,
           isSandbox: false,
         });
       } catch (razorpayErr: any) {
@@ -73,6 +92,8 @@ export async function POST(req: NextRequest) {
       keyId,
       plan: planId,
       planDetails: selectedPlan,
+      purpose,
+      additionalSeats: body.additionalSeats,
       isSandbox: true,
       notice: "Razorpay running in test mode. Set RAZORPAY_KEY_ID & RAZORPAY_KEY_SECRET in .env for production.",
     });

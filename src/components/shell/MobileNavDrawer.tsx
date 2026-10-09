@@ -31,6 +31,7 @@ import {
   Video,
   MessageSquare,
   Presentation,
+  Sparkles,
 } from "lucide-react";
 import { PERSONAS } from "./PersonaSwitcher";
 
@@ -50,6 +51,7 @@ export const NAV_GROUPS = [
     group: "Overview",
     items: [
       { label: "Exec Dashboard", href: "/exec/dashboard", icon: LayoutDashboard },
+      { label: "AI Reports & Intel", href: "/reports", icon: Sparkles },
       { label: "Projects Blueprint", href: "/projects", icon: FolderKanban },
       { label: "Whiteboards", href: "/whiteboards", icon: Presentation },
       { label: "Flow Diagrams", href: "/diagrams", icon: GitGraph },
@@ -62,6 +64,7 @@ export const NAV_GROUPS = [
       { label: "My Work", href: "/my-work", icon: Briefcase },
       { label: "Dev Dashboard", href: "/dev/dashboard", icon: CheckSquare },
       { label: "Timeline & Pipelines", href: "/dev/timeline", icon: Clock },
+      { label: "Forms & Surveys", href: "/forms", icon: FileText },
       { label: "Documentation Upload", href: "/docs", icon: FileText },
     ],
   },
@@ -379,6 +382,8 @@ export function MobileNavDrawer({
               "auth",
               "chat",
               "whiteboards",
+              "forms",
+              "reports",
             ];
             const orgPrefix =
               segments.length > 0 && !PROTECTED_ROOTS.includes(segments[0])

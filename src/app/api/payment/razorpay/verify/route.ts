@@ -9,7 +9,7 @@ import {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { orderId, paymentId, signature, plan } = body;
+    const { orderId, paymentId, signature, plan, purpose } = body;
 
     if (!orderId || !paymentId) {
       return NextResponse.json(
@@ -17,10 +17,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-
-    const planId: "monthly" | "quarterly" | "annual" =
-      plan === "annual" ? "annual" : plan === "quarterly" ? "quarterly" : "monthly";
-    const selectedPlan = PRICING_PLANS[planId];
 
     const isValid = verifyRazorpaySignature(orderId, paymentId, signature || "");
     if (!isValid) {
@@ -30,8 +26,42 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const userCount = Math.max(1, Number(body.userCount) || 1);
     const currency = ((body.currency || "INR").toUpperCase()) as "USD" | "INR";
+
+    // Handle add seats payment verification
+    if (purpose === "add_seats") {
+      const additionalSeats = Math.max(1, Number(body.additionalSeats) || 1);
+      const unitPrice = currency === "INR" ? 255 : 3;
+      const amount = additionalSeats * unitPrice;
+
+      const verificationToken = createPaymentVerificationToken({
+        purpose: "add_seats",
+        additionalSeats,
+        companyCode: body.companyCode || "",
+        orderId,
+        paymentId,
+        amount,
+        currency,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Payment verified for ${additionalSeats} additional seat${additionalSeats > 1 ? "s" : ""}.`,
+        verificationToken,
+        paymentId,
+        orderId,
+        purpose: "add_seats",
+        additionalSeats,
+        amount,
+        currency,
+      });
+    }
+
+    const planId: "monthly" | "quarterly" | "annual" =
+      plan === "annual" ? "annual" : plan === "quarterly" ? "quarterly" : "monthly";
+    const selectedPlan = PRICING_PLANS[planId];
+
+    const userCount = Math.max(1, Number(body.userCount) || 1);
     const tiered = calculateTieredSubscriptionCost(userCount, planId, currency);
     const amount = currency === "INR" ? tiered.totalInr : tiered.totalUsd;
 

@@ -260,17 +260,20 @@ const PAYMENT_JWT_SECRET = process.env.JWT_SECRET || "taskflow-super-secure-jwt-
  * Issues a cryptographically signed payment verification token after successful payment
  */
 export function createPaymentVerificationToken(data: {
-  plan: PlanId;
+  plan?: PlanId;
   orderId: string;
   paymentId: string;
   amount: number;
   currency: string;
   userCount?: number;
+  purpose?: string;
+  additionalSeats?: number;
+  companyCode?: string;
 }): string {
   return jwt.sign(
     {
       ...data,
-      userCount: data.userCount || 1,
+      userCount: data.userCount || data.additionalSeats || 1,
       paidAt: new Date().toISOString(),
       type: "organization_subscription",
     },

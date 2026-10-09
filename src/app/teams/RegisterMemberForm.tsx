@@ -1,6 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 import { provisionMemberAction } from "@/actions/member";
 import {
   UserPlus,
@@ -109,6 +115,18 @@ export default function RegisterMemberForm({
   const [isAddingSeats, setIsAddingSeats] = useState(false);
   const [addSeatsError, setAddSeatsError] = useState<string | null>(null);
 
+  // Dynamically load Razorpay SDK script when Add Seats modal opens
+  useEffect(() => {
+    if (!isAddSeatsModalOpen) return;
+    if (!document.getElementById("razorpay-sdk")) {
+      const script = document.createElement("script");
+      script.id = "razorpay-sdk";
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, [isAddSeatsModalOpen]);
+
   const availableAdditions = Math.max(0, maxSeatsState - currentSeatsState);
   const isSeatLimitReached = currentSeatsState >= maxSeatsState;
   const percentageUsed = Math.min(100, Math.round((currentSeatsState / Math.max(1, maxSeatsState)) * 100));
@@ -195,18 +213,49 @@ export default function RegisterMemberForm({
     }
   };
 
-  const handleAddSeatsConfirm = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsAddingSeats(true);
-    setAddSeatsError(null);
-
+  const handleVerifyAndAddSeats = async ({
+    orderId,
+    paymentId,
+    signature,
+    seats,
+  }: {
+    orderId: string;
+    paymentId: string;
+    signature: string;
+    seats: number;
+  }) => {
     try {
+      // 1. Verify payment cryptographically with Razorpay verification route
+      const verifyRes = await fetch("/api/payment/razorpay/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          purpose: "add_seats",
+          additionalSeats: seats,
+          companyCode: defaultCompanyCode,
+          orderId,
+          paymentId,
+          signature,
+          currency: "INR",
+        }),
+      });
+
+      const verifyData = await verifyRes.json();
+      if (!verifyRes.ok || !verifyData.success) {
+        throw new Error(verifyData.error || "Payment verification failed");
+      }
+
+      // 2. Call add-seats endpoint with cryptographic payment token
       const res = await fetch("/api/subscription/add-seats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           companyCode: defaultCompanyCode,
-          additionalSeats: Number(seatsToAdd) || 1,
+          additionalSeats: seats,
+          paymentToken: verifyData.verificationToken,
+          paymentId: verifyData.paymentId || paymentId,
+          orderId,
+          signature,
         }),
       });
 
@@ -215,16 +264,94 @@ export default function RegisterMemberForm({
         throw new Error(data.error || "Failed to add seats");
       }
 
-      const newTotal = data.subscription?.userCount || maxSeatsState + Number(seatsToAdd);
+      const newTotal = data.subscription?.userCount || maxSeatsState + seats;
       setMaxSeatsState(newTotal);
       success(
-        `Added ${seatsToAdd} seat${Number(seatsToAdd) > 1 ? "s" : ""}! Total workspace capacity is now ${newTotal} seats.`
+        `Payment verified! Added ${seats} seat${seats > 1 ? "s" : ""}! Total workspace capacity is now ${newTotal} seats.`
       );
       setIsAddSeatsModalOpen(false);
       router.refresh();
     } catch (err: any) {
-      setAddSeatsError(err.message || "Failed to add seats");
+      setAddSeatsError(err.message || "Failed to complete payment verification");
     } finally {
+      setIsAddingSeats(false);
+    }
+  };
+
+  const handleAddSeatsConfirm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsAddingSeats(true);
+    setAddSeatsError(null);
+
+    const seatsCount = Math.max(1, Number(seatsToAdd) || 1);
+    const totalAmountInr = seatsCount * 255;
+
+    try {
+      // 1. Generate Razorpay payment order
+      const orderRes = await fetch("/api/payment/razorpay/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          purpose: "add_seats",
+          additionalSeats: seatsCount,
+          companyCode: defaultCompanyCode,
+          currency: "INR",
+        }),
+      });
+
+      const orderData = await orderRes.json();
+      if (!orderRes.ok || !orderData.success) {
+        throw new Error(orderData.error || "Failed to initiate payment order");
+      }
+
+      // 2. Launch Razorpay Checkout if window.Razorpay is available
+      if (typeof window !== "undefined" && window.Razorpay) {
+        const options = {
+          key: orderData.keyId,
+          amount: orderData.amount,
+          currency: orderData.currency || "INR",
+          name: "TaskPMS Enterprise",
+          description: `Add ${seatsCount} Workspace Seat${seatsCount > 1 ? "s" : ""} (₹${totalAmountInr.toLocaleString("en-IN")})`,
+          order_id: orderData.isSandbox ? undefined : orderData.orderId,
+          prefill: {
+            name: "Organization Admin",
+            email: "admin@company.com",
+          },
+          theme: {
+            color: "#059669",
+          },
+          handler: async (response: any) => {
+            await handleVerifyAndAddSeats({
+              orderId: response.razorpay_order_id || orderData.orderId,
+              paymentId: response.razorpay_payment_id || `pay_${Date.now()}`,
+              signature: response.razorpay_signature || "test_signature",
+              seats: seatsCount,
+            });
+          },
+          modal: {
+            ondismiss: () => {
+              setIsAddingSeats(false);
+            },
+          },
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.on("payment.failed", (failedRes: any) => {
+          setAddSeatsError(failedRes.error?.description || "Payment failed or was cancelled.");
+          setIsAddingSeats(false);
+        });
+        rzp.open();
+      } else {
+        // Fallback for sandbox / testing environments where external script is not loaded
+        await handleVerifyAndAddSeats({
+          orderId: orderData.orderId,
+          paymentId: `pay_sandbox_${Date.now()}`,
+          signature: "sandbox_verification_signature",
+          seats: seatsCount,
+        });
+      }
+    } catch (err: any) {
+      setAddSeatsError(err.message || "Failed to initiate payment");
       setIsAddingSeats(false);
     }
   };
@@ -652,6 +779,17 @@ export default function RegisterMemberForm({
                 </p>
               </div>
 
+              {/* Secure Payment Gateway Indicator */}
+              <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-zinc-800/60 p-2 rounded border border-gray-200/60 dark:border-zinc-700/60">
+                <div className="flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Razorpay Checkout (UPI, Cards, NetBanking, QR)</span>
+                </div>
+                <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-semibold px-1.5 py-0.5 rounded">
+                  Instant Activation
+                </span>
+              </div>
+
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -666,7 +804,7 @@ export default function RegisterMemberForm({
                   className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
                 >
                   <CreditCard className="w-3.5 h-3.5" />
-                  <span>{isAddingSeats ? "Provisioning..." : `Pay ₹${seatsToAdd * 255} & Add ${seatsToAdd} Seat${seatsToAdd > 1 ? "s" : ""}`}</span>
+                  <span>{isAddingSeats ? "Waiting for Payment..." : `Pay ₹${seatsToAdd * 255} & Add ${seatsToAdd} Seat${seatsToAdd > 1 ? "s" : ""}`}</span>
                 </button>
               </div>
             </form>

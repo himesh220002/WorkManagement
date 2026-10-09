@@ -75,4 +75,35 @@ describe("Subscription Seats & Repay Quota Math", () => {
 
     expect(newPeriodEnd.toISOString().startsWith("2026-11-09")).toBe(true);
   });
+
+  it("generates and verifies cryptographic payment token for add_seats", async () => {
+    const { createPaymentVerificationToken, verifyPaymentVerificationToken } = await import("@/lib/razorpay");
+
+    const token = createPaymentVerificationToken({
+      purpose: "add_seats",
+      additionalSeats: 10,
+      companyCode: "ORG001",
+      orderId: "order_test_seats_10",
+      paymentId: "pay_test_seats_10",
+      amount: 2550,
+      currency: "INR",
+    });
+
+    expect(typeof token).toBe("string");
+    expect(token.length).toBeGreaterThan(20);
+
+    const verified = verifyPaymentVerificationToken(token);
+    expect(verified.valid).toBe(true);
+    expect(verified.payload?.purpose).toBe("add_seats");
+    expect(verified.payload?.additionalSeats).toBe(10);
+    expect(verified.payload?.paymentId).toBe("pay_test_seats_10");
+  });
+
+  it("rejects forged or invalid payment tokens for add_seats", async () => {
+    const { verifyPaymentVerificationToken } = await import("@/lib/razorpay");
+
+    const invalid = verifyPaymentVerificationToken("fake.invalid.token");
+    expect(invalid.valid).toBe(false);
+    expect(invalid.error).toBeDefined();
+  });
 });

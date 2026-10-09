@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectToDatabase from "@/lib/mongodb";
 import { Company } from "@/models";
-import { verifyPaymentVerificationToken } from "@/lib/razorpay";
+import { verifyPaymentVerificationToken, verifyRazorpaySignature } from "@/lib/razorpay";
 import { getCurrentSession } from "@/server/auth/session";
-import { syncTenantWrite } from "@/lib/tenantDb";
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,20 +14,52 @@ export async function POST(req: NextRequest) {
       additionalSeats = 1,
       paymentToken,
       paymentId,
+      orderId,
+      signature,
       amountPaidUsd,
     } = await req.json();
 
-    const seatsToAdd = Math.max(1, Number(additionalSeats) || 1);
+    const requestedSeats = Math.max(1, Number(additionalSeats) || 1);
 
-    // Verify token if provided
+    // Mandatory payment verification: Require either a signed paymentToken or verified Razorpay signature
+    if (!paymentToken && !(orderId && paymentId && signature)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Payment verification required before adding seats. Please complete payment via Razorpay.",
+        },
+        { status: 402 }
+      );
+    }
+
+    let verifiedSeatsToAdd = requestedSeats;
+    let verifiedPaymentId = paymentId;
+
     if (paymentToken) {
       const verification = verifyPaymentVerificationToken(paymentToken);
       if (!verification.valid) {
         return NextResponse.json(
-          { success: false, error: verification.error || "Invalid payment token" },
+          { success: false, error: verification.error || "Invalid or expired payment token" },
           { status: 402 }
         );
       }
+      if (verification.payload?.purpose === "add_seats") {
+        if (verification.payload.additionalSeats) {
+          verifiedSeatsToAdd = Number(verification.payload.additionalSeats);
+        }
+        if (verification.payload.paymentId) {
+          verifiedPaymentId = verification.payload.paymentId;
+        }
+      }
+    } else if (orderId && paymentId && signature) {
+      const isValid = verifyRazorpaySignature(orderId, paymentId, signature);
+      if (!isValid) {
+        return NextResponse.json(
+          { success: false, error: "Razorpay payment signature verification failed" },
+          { status: 402 }
+        );
+      }
+      verifiedPaymentId = paymentId;
     }
 
     let query: any = {};
@@ -53,7 +84,7 @@ export async function POST(req: NextRequest) {
     }
 
     const currentSeats = company.subscription?.userCount || 2;
-    const newTotalSeats = currentSeats + seatsToAdd;
+    const newTotalSeats = currentSeats + verifiedSeatsToAdd;
 
     company.subscription = {
       planId: company.subscription?.planId || "monthly",
@@ -70,14 +101,14 @@ export async function POST(req: NextRequest) {
       nextBillingAmountUSD: company.subscription?.nextBillingAmountUSD || 0,
       ...(company.subscription || {}),
       userCount: newTotalSeats,
-      razorpayPaymentId: paymentId || company.subscription?.razorpayPaymentId || "pay_seat_addon",
+      razorpayPaymentId: verifiedPaymentId || company.subscription?.razorpayPaymentId || "pay_seat_addon",
     } as any;
 
     await company.save();
 
     return NextResponse.json({
       success: true,
-      message: `Successfully added ${seatsToAdd} seat${seatsToAdd > 1 ? "s" : ""} to organization ${company.name}! Total capacity is now ${newTotalSeats} seats.`,
+      message: `Successfully added ${verifiedSeatsToAdd} seat${verifiedSeatsToAdd > 1 ? "s" : ""} to organization ${company.name}! Total capacity is now ${newTotalSeats} seats.`,
       company: {
         id: company._id,
         name: company.name,
@@ -85,7 +116,7 @@ export async function POST(req: NextRequest) {
       },
       subscription: {
         userCount: newTotalSeats,
-        addedSeats: seatsToAdd,
+        addedSeats: verifiedSeatsToAdd,
         currentSeats,
       },
     });

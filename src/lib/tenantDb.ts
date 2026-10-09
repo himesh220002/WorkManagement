@@ -28,6 +28,7 @@ import {
   ChatMessage,
   SavedPerson,
   Whiteboard,
+  Form,
 } from "@/models";
 
 export interface TenantModels {
@@ -57,6 +58,7 @@ export interface TenantModels {
   ChatMessage: Model<any>;
   SavedPerson: Model<any>;
   Whiteboard: Model<any>;
+  Form: Model<any>;
 }
 
 /**
@@ -123,6 +125,7 @@ export async function getTenantModels(companyCode: string): Promise<TenantModels
     ChatMessage: getOrCompile("ChatMessage", ChatMessage),
     SavedPerson: getOrCompile("SavedPerson", SavedPerson),
     Whiteboard: getOrCompile("Whiteboard", Whiteboard),
+    Form: getOrCompile("Form", Form),
   };
 
   tenantModelsCache.set(dbName, models);
