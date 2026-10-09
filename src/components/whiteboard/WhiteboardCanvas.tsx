@@ -189,11 +189,31 @@ export default function WhiteboardCanvas({
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const rafIdRef = useRef<number | null>(null);
 
-  // Auto-save debounce
+  // Auto-save with instant localStorage cache and debounced server sync
   const triggerAutoSave = useCallback(
     (newNodes: IWhiteboardNode[], newEdges: IWhiteboardEdge[], newTitle?: string) => {
       setSaveStatus("unsaved");
+
+      // 1. Instant local persistence cache (0ms latency, eliminates data loss on crash/reload)
+      try {
+        if (typeof window !== "undefined" && boardId) {
+          localStorage.setItem(
+            `taskflow_wb_cache_${boardId}`,
+            JSON.stringify({
+              title: newTitle || title,
+              nodes: newNodes,
+              edges: newEdges,
+              savedAt: Date.now(),
+            })
+          );
+        }
+      } catch {
+        // Handle storage quota exceeded gracefully
+      }
+
+      // 2. Debounced background sync to MongoDB (1.5s avoids network/thread congestion while moving items)
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
       saveTimeoutRef.current = setTimeout(async () => {
@@ -214,10 +234,37 @@ export default function WhiteboardCanvas({
           console.error("Auto-save failed:", err);
           setSaveStatus("unsaved");
         }
-      }, 1000);
+      }, 1500);
     },
     [boardId, title, isFavorite]
   );
+
+  // Hydrate from localStorage on initial load if local cache is newer or initial board was empty
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined" && boardId) {
+        const cachedStr = localStorage.getItem(`taskflow_wb_cache_${boardId}`);
+        if (cachedStr) {
+          const cached = JSON.parse(cachedStr);
+          if (cached && Array.isArray(cached.nodes) && cached.nodes.length > 0) {
+            if (!initialBoard.nodes || initialBoard.nodes.length === 0) {
+              setNodes(cached.nodes);
+              if (Array.isArray(cached.edges)) setEdges(cached.edges);
+              if (cached.title) setTitle(cached.title);
+            }
+          }
+        }
+      }
+    } catch {}
+  }, [boardId, initialBoard.nodes]);
+
+  // Clean up RAF and timer on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+    };
+  }, []);
 
   // Push history state
   const pushHistory = (newNodes: IWhiteboardNode[], newEdges: IWhiteboardEdge[]) => {
@@ -845,13 +892,16 @@ export default function WhiteboardCanvas({
         newH = Math.round(init.height - clampedDy);
       }
 
-      setNodes((prev) =>
-        prev.map((n) =>
-          n.id === resizing.nodeId
-            ? { ...n, x: newX, y: newY, width: newW, height: newH }
-            : n
-        )
-      );
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = requestAnimationFrame(() => {
+        setNodes((prev) =>
+          prev.map((n) =>
+            n.id === resizing.nodeId
+              ? { ...n, x: newX, y: newY, width: newW, height: newH }
+              : n
+          )
+        );
+      });
       return;
     }
 
@@ -880,28 +930,36 @@ export default function WhiteboardCanvas({
       return;
     }
 
-    // 2. Dragging Nodes as a Group
+    // 2. Dragging Nodes as a Group (Throttled via requestAnimationFrame for silky 60fps/120fps hardware acceleration)
     if (isDraggingGroup && groupDragStartCoords) {
       const dx = coords.x - groupDragStartCoords.x;
       const dy = coords.y - groupDragStartCoords.y;
 
-      setNodes((prev) =>
-        prev.map((n) => {
-          if (initialGroupNodePositions[n.id]) {
-            return {
-              ...n,
-              x: initialGroupNodePositions[n.id].x + dx,
-              y: initialGroupNodePositions[n.id].y + dy,
-            };
-          }
-          return n;
-        })
-      );
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = requestAnimationFrame(() => {
+        setNodes((prev) =>
+          prev.map((n) => {
+            if (initialGroupNodePositions[n.id]) {
+              return {
+                ...n,
+                x: initialGroupNodePositions[n.id].x + dx,
+                y: initialGroupNodePositions[n.id].y + dy,
+              };
+            }
+            return n;
+          })
+        );
+      });
     }
   };
 
   // Global Mouse Up (End Panning, Selection Box, Pen Drawing, or Group Drag)
   const handleMouseUp = () => {
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+
     if (isPanning) {
       setIsPanning(false);
     }
@@ -939,7 +997,6 @@ export default function WhiteboardCanvas({
         const updated = [...nodes, newDrawNode];
         setNodes(updated);
         pushHistory(updated, edges);
-        triggerAutoSave(updated, edges);
       }
       setCurrentPenPoints([]);
     }
@@ -952,7 +1009,6 @@ export default function WhiteboardCanvas({
     if (resizing) {
       setResizing(null);
       pushHistory(nodes, edges);
-      triggerAutoSave(nodes, edges);
     }
 
     if (isDraggingGroup) {

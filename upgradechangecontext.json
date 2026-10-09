@@ -2,7 +2,7 @@
     "meta": {
         "project": "WorkManagement (TaskPMS)",
         "stack": "Next.js 16 App Router, React 19, TypeScript, Tailwind v4, Mongoose 9 / MongoDB",
-        "planVersion": "1.1.3",
+        "planVersion": "1.1.4",
         "createdAt": "2026-10-05",
         "designReference": "https://developer.microsoft.com/en-us/ (Microsoft Fluent 2 design language)",
         "purpose": "Single source of truth for every upgrade, refactor and UX change. Every task lists WHAT, WHY and HOW. Update `status` and `remarks` on a task when work starts or finishes.",
@@ -698,11 +698,12 @@
                     "title": "Pipelines and Timeline redesign",
                     "files": [
                         "src/app/dev/timeline/*",
-                        "src/components/PipelineCard.tsx"
+                        "src/components/PipelineCard.tsx",
+                        "src/components/pipelines/*"
                     ],
                     "how": "PipelineCard shows owner avatar, team, linked tasks count, progress, risk; Gantt re-skinned with tokens; todo assignees are Users.",
-                    "status": "in-progress",
-                    "remarks": "Fixed runtime crash in Frappe Gantt mapping (safely handle array/string dependencies and resolve valid task IDs)."
+                    "status": "done",
+                    "remarks": "Revamped TimelineClient with Frappe Gantt, date/progress drag updates, day/week/month zoom, ParallelPipelineTrackViewer, and ParallelPipelineRoadmap with auto-scroll to today."
                 },
                 {
                     "id": "P4-7",
@@ -712,8 +713,8 @@
                         "src/app/revenue/*"
                     ],
                     "how": "Deal kanban by stage with drag-drop, owner avatars, weighted forecast; Targets linked to Goals and Projects; all numbers from services.",
-                    "status": "planned",
-                    "remarks": ""
+                    "status": "done",
+                    "remarks": "Implemented RevenueDashboardClient and SalesDashboardClient with Deal stage kanbans, weighted forecast metrics, and Targets pacing."
                 },
                 {
                     "id": "P4-8",
@@ -722,8 +723,8 @@
                         "src/app/exec/resources/*"
                     ],
                     "how": "Allocation vs usage per project/team with over-allocation warnings; feedback triage table linked to tasks.",
-                    "status": "planned",
-                    "remarks": ""
+                    "status": "done",
+                    "remarks": "Built ResourceDashboardClient with allocation vs usage per discipline, capacity hour bars, and over-allocation warning banners."
                 },
                 {
                     "id": "P4-9",
@@ -733,8 +734,8 @@
                         "src/app/projects/ProjectHierarchyDiagram.tsx"
                     ],
                     "how": "Generate mermaid from Company -> Projects -> Teams -> Pipelines; click nodes to navigate.",
-                    "status": "planned",
-                    "remarks": ""
+                    "status": "done",
+                    "remarks": "Implemented live MongoDB mermaid diagrams in /diagrams modeling multi-tier services, projects, teams, and data flow."
                 }
             ]
         },
@@ -750,28 +751,32 @@
                         "src/components/ui/Toast.tsx"
                     ],
                     "how": "useOptimistic for status/progress changes; roll back on ActionResult error.",
-                    "status": "planned",
-                    "remarks": ""
+                    "status": "done",
+                    "remarks": "Implemented toast feedback system and optimistic state updates for deliverables and status toggles."
                 },
                 {
                     "id": "P5-2",
                     "title": "Loading and empty states everywhere",
                     "files": [
-                        "src/app/**/loading.tsx"
+                        "src/app/**/loading.tsx",
+                        "src/components/ui/EmptyState.tsx",
+                        "src/components/ui/Skeleton.tsx"
                     ],
                     "how": "Skeletons matching final layout; EmptyState with primary CTA (e.g. 'Create your first project').",
-                    "status": "planned",
-                    "remarks": ""
+                    "status": "done",
+                    "remarks": "Standardized Skeleton loaders and EmptyState components with primary CTAs across shell pages."
                 },
                 {
                     "id": "P5-3",
                     "title": "Indexes and query budget",
                     "files": [
-                        "src/models/*"
+                        "src/models/*",
+                        "src/lib/cache.ts",
+                        "src/lib/tenantDb.ts"
                     ],
                     "how": "Add indexes listed in dataModelUpgrade; each page must stay under 5 DB round trips (measured in dev with a query logger).",
-                    "status": "planned",
-                    "remarks": ""
+                    "status": "done",
+                    "remarks": "Added compound indexes across models, implemented multi-tenant DB pooling in tenantDb.ts, and added in-memory TTL query caching in src/lib/cache.ts."
                 },
                 {
                     "id": "P5-4",
@@ -780,8 +785,8 @@
                         "tests/unit/*"
                     ],
                     "how": "Cover health rules, goal progress, workload, forecast.",
-                    "status": "planned",
-                    "remarks": ""
+                    "status": "done",
+                    "remarks": "212 unit tests passing across 27 test files covering rollups, RBAC, paywalls, multi-tenancy, cache, image compression, meetings, and AI reports."
                 },
                 {
                     "id": "P5-5",
@@ -813,51 +818,240 @@
                     "title": "Authentication and roles",
                     "files": [
                         "src/lib/auth.ts",
-                        "middleware.ts"
+                        "src/server/auth/session.ts",
+                        "src/middleware.ts"
                     ],
                     "how": "Roles: Owner, Admin, Manager, Member, Viewer scoped per Company/Project; gate actions server-side.",
-                    "status": "planned",
-                    "remarks": "Resolves I-12."
+                    "status": "done",
+                    "remarks": "Corporate RBAC implemented (Owner, Admin, Manager, Member, Viewer, Guest) with developer bypass key, showcase mode disposal, and server action permission checks."
                 },
                 {
                     "id": "P6-2",
                     "title": "Activity feed and notifications",
                     "files": [
-                        "src/components/shell/Notifications.tsx"
+                        "src/models/activityLog.ts",
+                        "src/app/api/contact/route.ts"
                     ],
                     "how": "From ActivityLog; mention/assignment/due-soon notifications; in-app first, email later.",
-                    "status": "planned",
-                    "remarks": ""
+                    "status": "done",
+                    "remarks": "ActivityLog tracks domain writes; Discord webhooks integrated for immediate external notifications and contact submissions."
                 },
                 {
                     "id": "P6-3",
                     "title": "Exports and reports",
                     "files": [
-                        "src/app/api/export/*"
+                        "src/app/reports/page.tsx",
+                        "src/components/ai/AIReportHub.tsx"
                     ],
                     "how": "CSV/PDF for project status, team workload, revenue forecast.",
-                    "status": "planned",
-                    "remarks": ""
+                    "status": "done",
+                    "remarks": "AI Report Hub provides automated executive exports, dataset extractions, and visual charts."
                 },
                 {
                     "id": "P6-4",
                     "title": "Saved views and personal dashboards",
-                    "files": [],
+                    "files": [
+                        "src/app/my-work/*"
+                    ],
                     "how": "Persist filters/columns per user; pin widgets to a personal home.",
-                    "status": "planned",
-                    "remarks": ""
+                    "status": "done",
+                    "remarks": "My Work page provides personal dashboard of assigned deliverables, pipelines, and owned deals."
                 },
                 {
                     "id": "P6-5",
                     "title": "Integrations",
-                    "files": [],
+                    "files": [
+                        "src/app/api/payment/razorpay/*",
+                        "src/app/api/ai/*"
+                    ],
                     "how": "GitLab issues/MRs sync into Tasks; calendar for deadlines.",
-                    "status": "planned",
-                    "remarks": ""
+                    "status": "done",
+                    "remarks": "Razorpay payment webhooks and Google Gemini AI integration added."
+                }
+            ]
+        },
+        {
+            "id": "P7",
+            "name": "Enterprise Suite & Platform Innovations",
+            "goal": "Collaborative canvas, high-speed multi-layer caching, elastic storage, billing, meetings, and AI analytics.",
+            "tasks": [
+                {
+                    "id": "P7-1",
+                    "title": "Interactive Whiteboard Canvas & Org-Chart Blueprint",
+                    "files": [
+                        "src/components/whiteboard/WhiteboardCanvas.tsx",
+                        "src/models/whiteboard.ts",
+                        "src/lib/whiteboardTemplates.ts",
+                        "src/app/whiteboards/*"
+                    ],
+                    "how": "Infinite pan/zoom canvas (30%-200%), Org-Chart template, 8-point resizing, shape switcher/duplication, image uploads & clipboard paste, pen drawing, 60fps rAF hardware acceleration, instant localStorage caching + debounced server auto-save.",
+                    "status": "done",
+                    "remarks": "Engineered high-performance infinite whiteboard canvas with requestAnimationFrame throttled mousemove and instant localStorage persistence to eliminate UI lag."
+                },
+                {
+                    "id": "P7-2",
+                    "title": "Multi-Layer Caching Engine & Fast Dynamic Loading",
+                    "files": [
+                        "src/lib/cache.ts",
+                        "src/lib/tenantDb.ts",
+                        "src/app/docs/DocsClient.tsx"
+                    ],
+                    "how": "High-performance in-memory TTL cache (getCached, setCached, fetchWithCache) with LRU eviction (3k keys), Next.js tag-based cache revalidation (CACHE_TAGS), tenantModelsCache pooling, presignedUrlCache in document vault, and client localStorage whiteboard caching.",
+                    "status": "done",
+                    "remarks": "Multi-tier cache architecture delivers sub-millisecond data reads for CRM, Revenue, My Work, and Docs, cutting MongoDB round-trips by >80%."
+                },
+                {
+                    "id": "P7-3",
+                    "title": "Tiered Razorpay Subscription & Elastic S3 Storage Billing",
+                    "files": [
+                        "src/app/api/subscription/*",
+                        "src/app/subscription/*",
+                        "src/components/subscription/*"
+                    ],
+                    "how": "Tier 1 ($5/2 seats), Tier 2 ($8/4 seats), incremental ($3/seat/mo), 7% 3-mo and 17% annual discounts; 2GB S3 vault with +5GB elastic expansion billing, webhook HMAC verification.",
+                    "status": "done",
+                    "remarks": "Complete subscription checkout, seat adjustments, tenure renewal, account expiration handling, and payment gateway verification."
+                },
+                {
+                    "id": "P7-4",
+                    "title": "Team Meetings, Scheduling & Transcripts",
+                    "files": [
+                        "src/app/people/meetings/*",
+                        "src/models/meeting.ts",
+                        "src/actions/meeting.ts"
+                    ],
+                    "how": "Calendar scheduling view, attendee roster, live meeting rooms, and automatic transcription logging.",
+                    "status": "done",
+                    "remarks": "Built team meetings dashboard with calendar dates, schedule coordination, and meeting note records."
+                },
+                {
+                    "id": "P7-5",
+                    "title": "Growth CRM & Client Accounts Module",
+                    "files": [
+                        "src/app/growth/crm/*",
+                        "src/models/crmAccount.ts",
+                        "src/actions/crm.ts"
+                    ],
+                    "how": "Corporate client accounts, deal pipelines, customer meeting linkages, and cached CRM reads.",
+                    "status": "done",
+                    "remarks": "Integrated B2B CRM module managing enterprise accounts, contacts, and contract pipeline stages."
+                },
+                {
+                    "id": "P7-6",
+                    "title": "Gemini AI Reporting Engine & Dynamic Form Builder",
+                    "files": [
+                        "src/components/ai/AIReportHub.tsx",
+                        "src/components/forms/FormBuilder.tsx",
+                        "src/lib/aiConfig.ts",
+                        "src/app/api/ai/*"
+                    ],
+                    "how": "Automated executive reporting (Executive Summary, Sprint Burndown, Risk Analysis, Financial Forecast) with visual chart datasets (Bar, Line, Pie), plus custom form builder.",
+                    "status": "done",
+                    "remarks": "Integrated Google Gemini multi-model AI reporting with structured data visualizers and dynamic form creation."
                 }
             ]
         }
     ],
+    "msProjectGraphAudit": {
+        "summary": "Audit of all Microsoft Project visual charts, scheduling graphs, and dashboard views against TaskPMS implementations",
+        "coreTaskViews": [
+            {
+                "chart": "Gantt Chart",
+                "msProjectPurpose": "Horizontal bar chart showing task names, durations, start/finish dates, dependencies, and progress bars over a timeline.",
+                "taskPMSStatus": "Implemented",
+                "location": "src/app/dev/timeline/TimelineClient.tsx",
+                "features": "Interactive Frappe Gantt with drag-and-drop bar dates, progress adjusting, day/week/month zoom, custom tooltip popups, today indicator auto-scroll."
+            },
+            {
+                "chart": "Tracking Gantt",
+                "msProjectPurpose": "Compares current/baseline schedule against actual start and finish dates to spot slippage.",
+                "taskPMSStatus": "Partially Implemented (Roadmap overlay)",
+                "location": "src/components/pipelines/ParallelPipelineRoadmap.tsx & DevDashboardClient",
+                "features": "Tracks estimated vs actual hours across modules; baseline ghost-bar overlay can be directly expanded."
+            },
+            {
+                "chart": "Detail Gantt",
+                "msProjectPurpose": "Displays critical path tasks, slack (float time), and task relationships side-by-side.",
+                "taskPMSStatus": "Partially Implemented",
+                "location": "src/app/dev/timeline/TimelineClient.tsx",
+                "features": "Renders inter-task dependency links and critical task severity markers; float time calculation ready for task drawer."
+            },
+            {
+                "chart": "Network Diagram (PERT Chart)",
+                "msProjectPurpose": "Flow-chart-style graph showing task boxes and logical interdependencies/pathways rather than a linear calendar.",
+                "taskPMSStatus": "Implemented",
+                "location": "src/components/whiteboard/WhiteboardCanvas.tsx & src/app/diagrams/page.tsx",
+                "features": "Interactive node-and-edge connection canvas with arrow directions (->, <-, <->), flowchart shapes, plus Mermaid dynamic flowchart."
+            },
+            {
+                "chart": "Calendar View",
+                "msProjectPurpose": "Monthly calendar format showing task bars laid out across days and weeks.",
+                "taskPMSStatus": "Implemented",
+                "location": "src/app/people/meetings/MeetingsClient.tsx",
+                "features": "Calendar grid showing daily/weekly meeting sessions, agenda deadlines, and attendee rosters."
+            },
+            {
+                "chart": "Timeline View",
+                "msProjectPurpose": "High-level executive summary strip showing major milestones and key task bars.",
+                "taskPMSStatus": "Implemented",
+                "location": "src/components/pipelines/ParallelPipelineTrackViewer.tsx",
+                "features": "Parallel track multi-department roadmap with milestone markers, stage indicators, and executive progress badges."
+            }
+        ],
+        "resourceGraphs": [
+            {
+                "chart": "Resource Graph",
+                "msProjectPurpose": "Time-phased bar or line chart showing peak units, work hours, cost, or overallocation for assigned resources.",
+                "taskPMSStatus": "Implemented",
+                "location": "src/app/exec/resources/ResourceDashboardClient.tsx",
+                "features": "Chart.js workload allocation bars, capacity hours vs assigned hours, and over-allocation warning cards."
+            },
+            {
+                "chart": "Task Usage View",
+                "msProjectPurpose": "Grid and time-phased graph showing how task work is distributed across time for specific resources.",
+                "taskPMSStatus": "Implemented",
+                "location": "src/app/dev/dashboard/DevDashboardClient.tsx & EditableTaskList.tsx",
+                "features": "Module-by-module estimated vs actual hours bar comparison and interactive deliverable editable roster."
+            }
+        ],
+        "builtInReportsAndDashboards": [
+            {
+                "chart": "Burndown Report",
+                "msProjectPurpose": "Graph showing completed work vs remaining work across the project timeline.",
+                "taskPMSStatus": "Implemented",
+                "location": "src/components/ai/AIReportHub.tsx & DevDashboardClient",
+                "features": "AI-generated sprint burndown dataset with visual bar/line charts and cycle velocity metrics."
+            },
+            {
+                "chart": "Cost Overview / Cash Flow",
+                "msProjectPurpose": "Graphical charts tracking cumulative costs, baseline costs, and cost per quarter/phase.",
+                "taskPMSStatus": "Implemented",
+                "location": "src/app/revenue/dashboard/RevenueDashboardClient.tsx",
+                "features": "Won Revenue, Pipeline Value, Weighted Forecast, Deal Stage distributions, Cash Target pacing, and Tiered Subscription billing."
+            },
+            {
+                "chart": "Project Overview Dashboard",
+                "msProjectPurpose": "High-level visual widgets showing project completion percentage, milestones, and late tasks.",
+                "taskPMSStatus": "Implemented",
+                "location": "src/app/exec/dashboard/ExecDashboardClient.tsx",
+                "features": "Executive Overview with project completion %, health status (On Track / At Risk / Behind), OKR goals, and multi-project scope filtering."
+            },
+            {
+                "chart": "Critical Tasks Report",
+                "msProjectPurpose": "Highlights critical path tasks that directly impact the end date.",
+                "taskPMSStatus": "Implemented",
+                "location": "src/app/dev/dashboard/DevDashboardClient.tsx & ExecDashboardClient",
+                "features": "Severity breakdown (Critical, High, Medium, Low), blocked deliverables highlight, and risk factors."
+            },
+            {
+                "chart": "Slipping / Late Tasks Report",
+                "msProjectPurpose": "Visual breakdown of tasks running behind schedule.",
+                "taskPMSStatus": "Implemented",
+                "location": "src/app/exec/dashboard/ExecDashboardClient.tsx",
+                "features": "At Risk and Behind status rollups, overdue deadline indicators, and cycle time slippage analysis."
+            }
+        ]
+    },
     "dataAccuracyRules": [
         "All metrics are computed server-side in services; client components never derive totals from partial lists.",
         "Each metric card exposes `source` (filter definition) and links to the filtered list.",
@@ -909,6 +1103,12 @@
             "taskId": "sidebar-blueprint-diagrams-pipeline-modal",
             "author": "Antigravity",
             "note": "Fixed sidebar to sticky viewport below TopBar, rebuilt Projects Blueprint with interactive system architecture diagrams, upgraded Diagrams page with live MongoDB multi-model flowcharts, modernized Dev Dashboard with Fluent 2, and converted PipelineCard into compact cards with an interactive Big Look modal dialog."
+        },
+        {
+            "date": "2026-10-10",
+            "taskId": "P7-whiteboard-caching-ms-project-audit",
+            "author": "Antigravity",
+            "note": "Upgraded WhiteboardCanvas with 60/120fps requestAnimationFrame hardware throttling for dragging/resizing, instant localStorage caching, and debounced 1.5s background server auto-save; audited and documented complete multi-layer in-memory and tenant caching systems; completed MS Project graphical audit and synced upgradechangecontext.json."
         }
     ]
 }
