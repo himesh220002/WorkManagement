@@ -624,7 +624,7 @@ export default function Home() {
             </ul>
             <p className="text-gray-500 dark:text-zinc-400 mb-4 font-light text-[13px]">Best for quarterly planning with full platform access and 2 GB storage included.</p>
             <Link href="/auth/signup?plan=quarterly" className="mt-auto w-full text-center block bg-[#0078d4] hover:bg-[#005a9e] text-white py-2.5 rounded text-sm font-bold transition-colors">
-              Subscribe for Three Months (from $14)
+              Subscribe for 3 Months (from $14)
             </Link>
           </div>
 
