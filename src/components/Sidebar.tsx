@@ -18,6 +18,8 @@ import {
   ShieldCheck,
   Contact2,
   Video,
+  MessageSquare,
+  Presentation,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -40,6 +42,8 @@ export default function Sidebar() {
     "docs",
     "auth",
     "projecthelpdemo",
+    "chat",
+    "whiteboards",
   ];
   const orgPrefix =
     segments.length > 0 && !PROTECTED_ROOTS.includes(segments[0])
@@ -52,6 +56,7 @@ export default function Sidebar() {
       items: [
         { label: "Exec Dashboard", href: "/exec/dashboard", icon: LayoutDashboard },
         { label: "Projects Blueprint", href: "/projects", icon: FolderKanban },
+        { label: "Whiteboards", href: "/whiteboards", icon: Presentation },
         { label: "Flow Diagrams", href: "/diagrams", icon: GitGraph },
         { label: "Roadmap & Demo Guide", href: "/projecthelpdemo", icon: GitGraph },
       ],
@@ -68,6 +73,7 @@ export default function Sidebar() {
     {
       group: "People",
       items: [
+        { label: "Chat Space", href: "/chat", icon: MessageSquare },
         { label: "Teams & Members", href: "/teams", icon: Users },
         { label: "Meetings & Discussions", href: "/teams/meetings", icon: Video },
       ],

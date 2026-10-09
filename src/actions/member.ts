@@ -85,17 +85,36 @@ export async function provisionMemberAction(formData: FormData): Promise<ActionR
   let companyName = "TaskFlow Organization";
 
   if (companyId) {
-    const comp = await Company.findById(companyId).select("companyCode name").lean();
+    const comp = await Company.findById(companyId).select("companyCode name subscription").lean();
     if (comp) {
       companyCode = comp.companyCode || companyCode;
       companyName = comp.name || companyName;
+
+      // Enforce Organization Seat Limit ($3/additional seat quota)
+      const maxSeats = Math.max(1, (comp as any).subscription?.userCount || 2);
+      const currentUsersCount = await User.countDocuments({ companyId });
+      if (currentUsersCount >= maxSeats) {
+        return {
+          success: false,
+          error: `Seat limit reached (${currentUsersCount}/${maxSeats} seats occupied). Please add more seats ($3/seat) to onboard more team members.`,
+        };
+      }
     }
   } else {
-    const firstComp = await Company.findOne().select("companyCode name").lean();
+    const firstComp = await Company.findOne().select("companyCode name subscription").lean();
     if (firstComp) {
       companyId = firstComp._id.toString();
       companyCode = firstComp.companyCode;
       companyName = firstComp.name;
+
+      const maxSeats = Math.max(1, (firstComp as any).subscription?.userCount || 2);
+      const currentUsersCount = await User.countDocuments({ companyId });
+      if (currentUsersCount >= maxSeats) {
+        return {
+          success: false,
+          error: `Seat limit reached (${currentUsersCount}/${maxSeats} seats occupied). Please add more seats ($3/seat) to onboard more team members.`,
+        };
+      }
     }
   }
 

@@ -16,6 +16,9 @@ import {
   AlertCircle,
   Building,
   ExternalLink,
+  CreditCard,
+  X,
+  ArrowRight,
 } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 
@@ -72,11 +75,20 @@ export const ROLE_CATEGORIES: Record<string, string[]> = {
 
 const CATEGORY_KEYS = Object.keys(ROLE_CATEGORIES);
 
+import { useRouter } from "next/navigation";
+
 interface RegisterMemberFormProps {
   defaultCompanyCode?: string;
+  maxSeats?: number;
+  currentSeatsCount?: number;
 }
 
-export default function RegisterMemberForm({ defaultCompanyCode }: RegisterMemberFormProps) {
+export default function RegisterMemberForm({
+  defaultCompanyCode,
+  maxSeats = 2,
+  currentSeatsCount = 1,
+}: RegisterMemberFormProps) {
+  const router = useRouter();
   const { success, error } = useToast();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -88,6 +100,18 @@ export default function RegisterMemberForm({ defaultCompanyCode }: RegisterMembe
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Seat Quota States
+  const [maxSeatsState, setMaxSeatsState] = useState(maxSeats);
+  const [currentSeatsState, setCurrentSeatsState] = useState(currentSeatsCount);
+  const [isAddSeatsModalOpen, setIsAddSeatsModalOpen] = useState(false);
+  const [seatsToAdd, setSeatsToAdd] = useState(1);
+  const [isAddingSeats, setIsAddingSeats] = useState(false);
+  const [addSeatsError, setAddSeatsError] = useState<string | null>(null);
+
+  const availableAdditions = Math.max(0, maxSeatsState - currentSeatsState);
+  const isSeatLimitReached = currentSeatsState >= maxSeatsState;
+  const percentageUsed = Math.min(100, Math.round((currentSeatsState / Math.max(1, maxSeatsState)) * 100));
 
   // State to store successfully provisioned credentials card
   const [createdCredentials, setCreatedCredentials] = useState<{
@@ -146,6 +170,7 @@ export default function RegisterMemberForm({ defaultCompanyCode }: RegisterMembe
       const res = await provisionMemberAction(formData);
 
       if (res.success && res.data) {
+        setCurrentSeatsState((prev) => prev + 1);
         success(res.message || "Member provisioned successfully!");
         setCreatedCredentials({
           name: res.data.name,
@@ -167,6 +192,40 @@ export default function RegisterMemberForm({ defaultCompanyCode }: RegisterMembe
       error(err.message || "An unexpected error occurred");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleAddSeatsConfirm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsAddingSeats(true);
+    setAddSeatsError(null);
+
+    try {
+      const res = await fetch("/api/subscription/add-seats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyCode: defaultCompanyCode,
+          additionalSeats: Number(seatsToAdd) || 1,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to add seats");
+      }
+
+      const newTotal = data.subscription?.userCount || maxSeatsState + Number(seatsToAdd);
+      setMaxSeatsState(newTotal);
+      success(
+        `Added ${seatsToAdd} seat${Number(seatsToAdd) > 1 ? "s" : ""}! Total workspace capacity is now ${newTotal} seats.`
+      );
+      setIsAddSeatsModalOpen(false);
+      router.refresh();
+    } catch (err: any) {
+      setAddSeatsError(err.message || "Failed to add seats");
+    } finally {
+      setIsAddingSeats(false);
     }
   };
 
@@ -197,6 +256,64 @@ export default function RegisterMemberForm({ defaultCompanyCode }: RegisterMembe
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Workspace Seat Quota & Capacity Bar */}
+      <div className="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39]">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-[#242424] dark:text-white">
+              Workspace Seat Quota:
+            </span>
+            <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#EBF3FC] text-[#0078D4] dark:bg-[#1C2B3D] dark:text-[#479EF5]">
+              {currentSeatsState} / {maxSeatsState} seats used
+            </span>
+            <span
+              className={`text-[11px] font-semibold ${
+                availableAdditions > 0
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-rose-600 dark:text-rose-400"
+              }`}
+            >
+              ({availableAdditions} member addition{availableAdditions !== 1 ? "s" : ""} available)
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsAddSeatsModalOpen(true);
+              setAddSeatsError(null);
+            }}
+            className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>+ Add More Seats ($3/seat)</span>
+          </button>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="w-full bg-gray-200 dark:bg-zinc-700 h-2 rounded-full overflow-hidden">
+          <div
+            className={`h-full transition-all duration-300 rounded-full ${
+              isSeatLimitReached
+                ? "bg-rose-500"
+                : percentageUsed > 80
+                ? "bg-amber-500"
+                : "bg-[#0078D4]"
+            }`}
+            style={{ width: `${percentageUsed}%` }}
+          />
+        </div>
+
+        {isSeatLimitReached && (
+          <div className="mt-2 text-[11px] text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            <span>
+              All {maxSeatsState} seats occupied. Add more seats to unlock additional team onboarding.
+            </span>
+          </div>
+        )}
       </div>
 
       {createdCredentials && (
@@ -445,14 +562,117 @@ export default function RegisterMemberForm({ defaultCompanyCode }: RegisterMembe
 
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isSeatLimitReached}
             className="px-4 py-2 bg-[#0078D4] hover:bg-[#106EBE] disabled:opacity-50 text-white rounded-[4px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>{isSubmitting ? "Provisioning..." : "Provision Member & Pass"}</span>
+            <span>
+              {isSubmitting
+                ? "Provisioning..."
+                : isSeatLimitReached
+                ? "Seat Limit Reached (Add Seats)"
+                : "Provision Member & Pass"}
+            </span>
           </button>
         </div>
       </form>
+
+      {/* Add Seats Modal ($3/seat) */}
+      {isAddSeatsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-[#1E1E1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-xl shadow-2xl max-w-md w-full p-5 text-[#242424] dark:text-white">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-zinc-800">
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-bold text-sm">Add Seats to Workspace</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddSeatsModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {addSeatsError && (
+              <div className="mt-3 p-2.5 rounded bg-rose-50 text-rose-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{addSeatsError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAddSeatsConfirm} className="mt-4 space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold mb-1">
+                  Number of Additional Seats to Provision:
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={seatsToAdd}
+                    onChange={(e) => setSeatsToAdd(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-20 p-2 border border-gray-300 dark:border-zinc-700 rounded text-center font-bold text-sm bg-gray-50 dark:bg-zinc-800"
+                  />
+                  <div className="flex gap-1.5">
+                    {[1, 2, 5, 10].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setSeatsToAdd(num)}
+                        className={`px-2.5 py-1.5 rounded font-bold border transition-colors cursor-pointer ${
+                          seatsToAdd === num
+                            ? "bg-[#0078D4] text-white border-[#0078D4]"
+                            : "bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-zinc-700"
+                        }`}
+                      >
+                        +{num}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Pricing breakdown: $3/seat (₹255/seat) */}
+              <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-gray-600 dark:text-gray-300">Unit Price:</span>
+                  <span className="font-semibold text-emerald-700 dark:text-emerald-300">$3.00 USD (₹255 INR) / seat</span>
+                </div>
+                <div className="flex justify-between items-center text-sm font-bold border-t border-emerald-200/60 dark:border-emerald-800/60 pt-1.5 mt-1.5">
+                  <span>Total Amount:</span>
+                  <span className="text-emerald-700 dark:text-emerald-300">
+                    ₹{(seatsToAdd * 255).toLocaleString("en-IN")} (${seatsToAdd * 3} USD)
+                  </span>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Expands your organization limit immediately. Current: {maxSeatsState} → New: {maxSeatsState + seatsToAdd} seats.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddSeatsModalOpen(false)}
+                  className="px-3 py-1.5 rounded border border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAddingSeats}
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>{isAddingSeats ? "Provisioning..." : `Pay ₹${seatsToAdd * 255} & Add ${seatsToAdd} Seat${seatsToAdd > 1 ? "s" : ""}`}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

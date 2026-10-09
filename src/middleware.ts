@@ -48,6 +48,8 @@ const PROTECTED_ROOT_ROUTES = new Set([
   "docs",
   "lists",
   "projecthelpdemo",
+  "chat",
+  "whiteboards",
 ]);
 
 export function middleware(req: NextRequest) {

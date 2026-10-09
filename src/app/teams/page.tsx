@@ -1,5 +1,5 @@
 import connectToDatabase from "@/lib/mongodb";
-import { Team, User } from "@/models";
+import { Team, User, Company } from "@/models";
 import RegisterMemberForm from "@/app/teams/RegisterMemberForm";
 import EstablishTeamForm from "@/app/teams/EstablishTeamForm";
 import GlobalMemberDirectory from "@/app/teams/GlobalMemberDirectory";
@@ -45,14 +45,20 @@ export default async function TeamsPage() {
   const tenantFilter = getTenantQueryFilter(session);
   const cId = session.companyId || "default";
 
-  const [teamsRaw, allUsersData] = await Promise.all([
+  const [teamsRaw, allUsersData, companyData] = await Promise.all([
     fetchWithCache(`teams_list:${cId}`, 30, () =>
       Team.find(tenantFilter).populate("members").lean()
     ),
     fetchWithCache(`teams_users:${cId}`, 30, () =>
       User.find(tenantFilter).lean()
     ),
+    session.companyId
+      ? Company.findById(session.companyId).select("name companyCode subscription").lean()
+      : Company.findOne().select("name companyCode subscription").lean(),
   ]);
+
+  const maxSeats = Math.max(1, (companyData as any)?.subscription?.userCount || 2);
+  const currentSeatsCount = allUsersData.length;
 
   // Sanitize for client components
   const allUsers = allUsersData.map((u: any) => ({
@@ -191,7 +197,11 @@ export default async function TeamsPage() {
       {["owner", "manager", "superuser"].includes((session.role || "").toLowerCase()) ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {/* Register Global Member */}
-          <RegisterMemberForm defaultCompanyCode={session.companyCode} />
+          <RegisterMemberForm
+            defaultCompanyCode={session.companyCode}
+            maxSeats={maxSeats}
+            currentSeatsCount={currentSeatsCount}
+          />
 
           {/* Establish Team Form with Multi-Select initial members and Squad Type prefixing */}
           <EstablishTeamForm userOptions={userOptions} action={addTeam} />

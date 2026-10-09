@@ -25,6 +25,9 @@ import {
   Company,
   ClientAccount,
   Meeting,
+  ChatMessage,
+  SavedPerson,
+  Whiteboard,
 } from "@/models";
 
 export interface TenantModels {
@@ -51,6 +54,9 @@ export interface TenantModels {
   Document: Model<any>;
   ClientAccount: Model<any>;
   Meeting: Model<any>;
+  ChatMessage: Model<any>;
+  SavedPerson: Model<any>;
+  Whiteboard: Model<any>;
 }
 
 /**
@@ -114,6 +120,9 @@ export async function getTenantModels(companyCode: string): Promise<TenantModels
     Document: getOrCompile("Document", Document),
     ClientAccount: getOrCompile("ClientAccount", ClientAccount),
     Meeting: getOrCompile("Meeting", Meeting),
+    ChatMessage: getOrCompile("ChatMessage", ChatMessage),
+    SavedPerson: getOrCompile("SavedPerson", SavedPerson),
+    Whiteboard: getOrCompile("Whiteboard", Whiteboard),
   };
 
   tenantModelsCache.set(dbName, models);
@@ -128,7 +137,7 @@ export async function migrateCompanyToDedicatedDb(companyCode: string, companyId
   const tenantConn = await getTenantConnection(companyCode);
   const tenantModels = await getTenantModels(companyCode);
 
-  // Pre-initialize and physically create all 21 collection folders in the dedicated tenant DB
+  // Pre-initialize and physically create all collection folders in the dedicated tenant DB
   // Ensures MongoDB Atlas and Compass immediately display every collection folder for the registered company
   const allCollectionNames = [
     "users",
@@ -154,6 +163,9 @@ export async function migrateCompanyToDedicatedDb(companyCode: string, companyId
     "documents",
     "clientaccounts",
     "meetings",
+    "chatmessages",
+    "savedpersons",
+    "whiteboards",
   ];
 
   for (const col of allCollectionNames) {
