@@ -251,7 +251,7 @@ export default function RepayServiceModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/65 backdrop-blur-md animate-fade-in overflow-y-auto">
-      <div className="bg-white dark:bg-[#18181B] border border-gray-200/80 dark:border-zinc-800 rounded-2xl shadow-2xl shadow-black/30 max-w-2xl w-full p-4 sm:p-6 md:p-7 text-[#242424] dark:text-white my-6 max-h-[92vh] overflow-y-auto overflow-x-hidden">
+      <div className="bg-white dark:bg-[#18181B] border border-gray-200/80 dark:border-zinc-800 rounded-[4px] shadow-2xl shadow-black/30 max-w-4xl w-full p-4 sm:p-6 md:p-7 text-[#242424] dark:text-white my-6 max-h-[92vh] overflow-y-auto overflow-x-hidden">
         {/* Header */}
         <div className="flex items-start justify-between pb-4 sm:pb-5 border-b border-gray-100 dark:border-zinc-800/80 gap-3">
           <div className="flex items-start gap-3 min-w-0">
@@ -429,7 +429,7 @@ export default function RepayServiceModal({
 
               <div className="flex items-center gap-2 self-start sm:self-center">
                 <div
-                  className={`px-3 py-1 rounded-full text-[2px] font-bold uppercase ${lookupData.subscription.isExpired
+                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${lookupData.subscription.isExpired
                     ? "bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-300 dark:border-rose-800"
                     : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
                     }`}

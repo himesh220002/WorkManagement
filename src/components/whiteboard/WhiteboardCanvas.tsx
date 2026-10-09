@@ -19,6 +19,7 @@ import {
   Circle,
   Diamond,
   Triangle,
+  Hexagon,
   MoveRight,
   MoveLeft,
   ArrowLeftRight,
@@ -46,6 +47,12 @@ import {
   Kanban,
   LayoutGrid,
   Layers,
+  Upload,
+  Minimize2,
+  Copy,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
 } from "lucide-react";
 import { IWhiteboardNode, IWhiteboardEdge } from "@/models/whiteboard";
 import { WHITEBOARD_TEMPLATES, createFunctionalArea } from "@/lib/whiteboardTemplates";
@@ -162,6 +169,24 @@ export default function WhiteboardCanvas({
   const [activeFillType, setActiveFillType] = useState<"solid" | "tint" | "pattern" | "none">("solid");
   const [activeColor, setActiveColor] = useState<string>("#0078D4");
 
+  // Fullscreen state (True edge-to-edge full screen with zero borders/margins)
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Interactive Resizing State (8-point resize handles)
+  const [resizing, setResizing] = useState<{
+    nodeId: string;
+    handle: string;
+    startX: number;
+    startY: number;
+    initialNode: { x: number; y: number; width: number; height: number };
+  } | null>(null);
+
+  // Shape switcher popover for selected shape node
+  const [showShapeSwitcher, setShowShapeSwitcher] = useState(false);
+
+  // Direct file upload ref for images, SVGs, graphs, diagrams
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -247,6 +272,181 @@ export default function WhiteboardCanvas({
     }
   };
 
+  // Toggle Fullscreen (True edge-to-edge full screen with zero borders/margins)
+  const toggleFullscreen = () => {
+    if (!isFullscreen) {
+      setIsFullscreen(true);
+      try {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
+      } catch {}
+    } else {
+      setIsFullscreen(false);
+      try {
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+      } catch {}
+    }
+  };
+
+  // Listen to Escape key & browser fullscreen change to keep isFullscreen in sync
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    const handleFsChange = () => {
+      if (!document.fullscreenElement && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("fullscreenchange", handleFsChange);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("fullscreenchange", handleFsChange);
+    };
+  }, [isFullscreen]);
+
+  // Direct File Upload & Drag-and-Drop Handler (Images, SVGs, Graphs, Diagrams)
+  const processUploadedFiles = useCallback(
+    (files: FileList | File[], clientX?: number, clientY?: number) => {
+      const coords =
+        clientX !== undefined && clientY !== undefined
+          ? getCanvasCoords(clientX, clientY)
+          : { x: Math.round(-pan.x / zoom + 400), y: Math.round(-pan.y / zoom + 300) };
+
+      Array.from(files).forEach((file, index) => {
+        if (!file.type.startsWith("image/") && !file.name.toLowerCase().endsWith(".svg")) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const result = event.target?.result as string;
+          if (!result) return;
+
+          const img = new window.Image();
+          img.onload = () => {
+            let w = img.width || 320;
+            let h = img.height || 220;
+            const maxDim = 400;
+            if (w > maxDim || h > maxDim) {
+              if (w > h) {
+                h = Math.round((h * maxDim) / w);
+                w = maxDim;
+              } else {
+                w = Math.round((w * maxDim) / h);
+                h = maxDim;
+              }
+            }
+
+            const newId = `image-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`;
+            const newNode: IWhiteboardNode = {
+              id: newId,
+              type: "image",
+              x: coords.x + index * 40,
+              y: coords.y + index * 40,
+              width: Math.max(120, w),
+              height: Math.max(80, h),
+              title: file.name.replace(/\.[^/.]+$/, ""),
+              imageUrl: result,
+              zIndex: nodes.length + index + 2,
+            };
+
+            setNodes((prev) => {
+              const updated = [...prev, newNode];
+              pushHistory(updated, edges);
+              return updated;
+            });
+            setSelectedNodeId(newId);
+            setSelectedNodeIds([newId]);
+          };
+
+          img.onerror = () => {
+            const newId = `image-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`;
+            const newNode: IWhiteboardNode = {
+              id: newId,
+              type: "image",
+              x: coords.x + index * 40,
+              y: coords.y + index * 40,
+              width: 320,
+              height: 220,
+              title: file.name.replace(/\.[^/.]+$/, ""),
+              imageUrl: result,
+              zIndex: nodes.length + index + 2,
+            };
+
+            setNodes((prev) => {
+              const updated = [...prev, newNode];
+              pushHistory(updated, edges);
+              return updated;
+            });
+            setSelectedNodeId(newId);
+            setSelectedNodeIds([newId]);
+          };
+
+          img.src = result;
+        };
+        reader.readAsDataURL(file);
+      });
+    },
+    [pan, zoom, nodes, edges]
+  );
+
+  // Global Clipboard Paste Listener (Ctrl+V paste screenshots/images directly from PC)
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+        processUploadedFiles(e.clipboardData.files);
+      }
+    };
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [processUploadedFiles]);
+
+  // Duplicate Selected Node
+  const handleDuplicateNode = (nodeId?: string) => {
+    const targetId = nodeId || selectedNodeId;
+    if (!targetId) return;
+    const sourceNode = nodes.find((n) => n.id === targetId);
+    if (!sourceNode) return;
+
+    const newId = `${sourceNode.type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const clonedNode: IWhiteboardNode = {
+      ...sourceNode,
+      id: newId,
+      x: sourceNode.x + 35,
+      y: sourceNode.y + 35,
+      title: sourceNode.title ? `${sourceNode.title} (Copy)` : "Copy",
+      zIndex: nodes.length + 2,
+    };
+
+    const updated = [...nodes, clonedNode];
+    setNodes(updated);
+    pushHistory(updated, edges);
+    setSelectedNodeId(newId);
+    setSelectedNodeIds([newId]);
+  };
+
+  // Interactive 8-Point Resize Mouse Down
+  const handleResizeMouseDown = (node: IWhiteboardNode, handle: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setResizing({
+      nodeId: node.id,
+      handle,
+      startX: e.clientX,
+      startY: e.clientY,
+      initialNode: {
+        x: node.x,
+        y: node.y,
+        width: node.width,
+        height: node.height,
+      },
+    });
+  };
+
   // Node Double Click -> Enter inline editing & format bar
   const handleNodeDoubleClick = (node: IWhiteboardNode, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -276,7 +476,7 @@ export default function WhiteboardCanvas({
         body: "Type your notes or pro-tips here...",
         color: customColor || "#EC4899",
         fillType: "tint",
-        zIndex: 2,
+        zIndex: nodes.length + 1,
       };
     } else if (type === "task") {
       newNode = {
@@ -290,7 +490,8 @@ export default function WhiteboardCanvas({
         subtitle: "Team Member / Role",
         color: customColor || "#0078D4",
         fillType: "solid",
-        zIndex: 2,
+        status: "Active",
+        zIndex: nodes.length + 1,
       };
     } else if (type === "text") {
       newNode = {
@@ -303,22 +504,34 @@ export default function WhiteboardCanvas({
         title: "Text Block",
         color: "#FFFFFF",
         fillType: "none",
-        zIndex: 2,
+        zIndex: nodes.length + 1,
+      };
+    } else if (type === "image") {
+      newNode = {
+        id: newId,
+        type: "image",
+        x: coords.x - 120,
+        y: coords.y - 80,
+        width: 240,
+        height: 160,
+        title: "Image",
+        imageUrl: "",
+        zIndex: nodes.length + 1,
       };
     } else {
       newNode = {
         id: newId,
         type: "shape",
-        shapeType: shapeType as any,
+        shapeType: (shapeType || "rectangle") as any,
         x: coords.x - 80,
         y: coords.y - 60,
-        width: 160,
-        height: 120,
+        width: shapeType === "circle" ? 140 : 160,
+        height: shapeType === "circle" ? 140 : 120,
         title: shapeType.charAt(0).toUpperCase() + shapeType.slice(1),
         body: "",
         color: customColor || activeColor,
         fillType: activeFillType,
-        zIndex: 2,
+        zIndex: nodes.length + 1,
       };
     }
 
@@ -605,6 +818,43 @@ export default function WhiteboardCanvas({
       return;
     }
 
+    // 0. Resizing Node via 8-Point Resize Handles
+    if (resizing) {
+      const dx = (e.clientX - resizing.startX) / zoom;
+      const dy = (e.clientY - resizing.startY) / zoom;
+      const init = resizing.initialNode;
+      let newX = init.x;
+      let newY = init.y;
+      let newW = init.width;
+      let newH = init.height;
+
+      if (resizing.handle.includes("e")) {
+        newW = Math.max(50, Math.round(init.width + dx));
+      }
+      if (resizing.handle.includes("s")) {
+        newH = Math.max(30, Math.round(init.height + dy));
+      }
+      if (resizing.handle.includes("w")) {
+        const clampedDx = Math.min(dx, init.width - 50);
+        newX = Math.round(init.x + clampedDx);
+        newW = Math.round(init.width - clampedDx);
+      }
+      if (resizing.handle.includes("n")) {
+        const clampedDy = Math.min(dy, init.height - 30);
+        newY = Math.round(init.y + clampedDy);
+        newH = Math.round(init.height - clampedDy);
+      }
+
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.id === resizing.nodeId
+            ? { ...n, x: newX, y: newY, width: newW, height: newH }
+            : n
+        )
+      );
+      return;
+    }
+
     // 1. Rectangular Marquee Selection Box
     if (isSelectingBox && selectionBox) {
       setSelectionBox((prev) => (prev ? { ...prev, currentX: coords.x, currentY: coords.y } : null));
@@ -697,6 +947,12 @@ export default function WhiteboardCanvas({
     if (isSelectingBox) {
       setIsSelectingBox(false);
       setSelectionBox(null);
+    }
+
+    if (resizing) {
+      setResizing(null);
+      pushHistory(nodes, edges);
+      triggerAutoSave(nodes, edges);
     }
 
     if (isDraggingGroup) {
@@ -863,6 +1119,157 @@ export default function WhiteboardCanvas({
     return d;
   };
 
+  // Geometric Shape Geometry SVG Vector Renderer
+  const renderShapeGeometry = (node: IWhiteboardNode) => {
+    const w = node.width;
+    const h = node.height;
+    const fill =
+      node.fillType === "solid"
+        ? node.color || "#0078D4"
+        : node.fillType === "tint"
+        ? `${node.color || "#0078D4"}33`
+        : "transparent";
+    const stroke = node.color || "#0078D4";
+    const strokeWidth = 2;
+
+    switch (node.shapeType) {
+      case "circle":
+        return (
+          <svg width="100%" height="100%" className="overflow-visible pointer-events-none drop-shadow-md">
+            <ellipse
+              cx={w / 2}
+              cy={h / 2}
+              rx={Math.max(2, w / 2 - strokeWidth)}
+              ry={Math.max(2, h / 2 - strokeWidth)}
+              fill={fill}
+              stroke={stroke}
+              strokeWidth={strokeWidth}
+            />
+          </svg>
+        );
+      case "diamond":
+        return (
+          <svg width="100%" height="100%" className="overflow-visible pointer-events-none drop-shadow-md">
+            <polygon
+              points={`${w / 2},${strokeWidth} ${w - strokeWidth},${h / 2} ${w / 2},${h - strokeWidth} ${strokeWidth},${h / 2}`}
+              fill={fill}
+              stroke={stroke}
+              strokeWidth={strokeWidth}
+              strokeLinejoin="round"
+            />
+          </svg>
+        );
+      case "triangle":
+        return (
+          <svg width="100%" height="100%" className="overflow-visible pointer-events-none drop-shadow-md">
+            <polygon
+              points={`${w / 2},${strokeWidth} ${w - strokeWidth},${h - strokeWidth} ${strokeWidth},${h - strokeWidth}`}
+              fill={fill}
+              stroke={stroke}
+              strokeWidth={strokeWidth}
+              strokeLinejoin="round"
+            />
+          </svg>
+        );
+      case "star": {
+        const cx = w / 2,
+          cy = h / 2,
+          outerR = Math.min(w, h) / 2 - strokeWidth,
+          innerR = outerR * 0.42;
+        const pts: string[] = [];
+        for (let i = 0; i < 10; i++) {
+          const angle = (i * Math.PI) / 5 - Math.PI / 2;
+          const r = i % 2 === 0 ? outerR : innerR;
+          pts.push(`${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`);
+        }
+        return (
+          <svg width="100%" height="100%" className="overflow-visible pointer-events-none drop-shadow-md">
+            <polygon
+              points={pts.join(" ")}
+              fill={fill}
+              stroke={stroke}
+              strokeWidth={strokeWidth}
+              strokeLinejoin="round"
+            />
+          </svg>
+        );
+      }
+      case "hexagon": {
+        const cx = w / 2,
+          cy = h / 2,
+          rx = w / 2 - strokeWidth,
+          ry = h / 2 - strokeWidth;
+        const pts: string[] = [];
+        for (let i = 0; i < 6; i++) {
+          const angle = (i * Math.PI) / 3;
+          pts.push(`${cx + rx * Math.cos(angle)},${cy + ry * Math.sin(angle)}`);
+        }
+        return (
+          <svg width="100%" height="100%" className="overflow-visible pointer-events-none drop-shadow-md">
+            <polygon
+              points={pts.join(" ")}
+              fill={fill}
+              stroke={stroke}
+              strokeWidth={strokeWidth}
+              strokeLinejoin="round"
+            />
+          </svg>
+        );
+      }
+      case "rounded":
+        return (
+          <div
+            className="w-full h-full rounded-2xl border-2 transition-all drop-shadow-md"
+            style={{
+              backgroundColor: fill,
+              borderColor: stroke,
+            }}
+          />
+        );
+      case "rectangle":
+      default:
+        return (
+          <div
+            className="w-full h-full rounded-md border-2 transition-all drop-shadow-md"
+            style={{
+              backgroundColor: fill,
+              borderColor: stroke,
+            }}
+          />
+        );
+    }
+  };
+
+  // Render 8 Interactive Resize Handles around any selected node
+  const renderResizeHandles = (node: IWhiteboardNode) => {
+    if (selectedNodeId !== node.id || selectedNodeIds.length > 1) return null;
+
+    const handles = [
+      { name: "nw", cursor: "nwse-resize", style: { top: "-5px", left: "-5px" } },
+      { name: "n", cursor: "ns-resize", style: { top: "-5px", left: "calc(50% - 5px)" } },
+      { name: "ne", cursor: "nesw-resize", style: { top: "-5px", right: "-5px" } },
+      { name: "e", cursor: "ew-resize", style: { top: "calc(50% - 5px)", right: "-5px" } },
+      { name: "se", cursor: "nwse-resize", style: { bottom: "-5px", right: "-5px" } },
+      { name: "s", cursor: "ns-resize", style: { bottom: "-5px", left: "calc(50% - 5px)" } },
+      { name: "sw", cursor: "nesw-resize", style: { bottom: "-5px", left: "-5px" } },
+      { name: "w", cursor: "ew-resize", style: { top: "calc(50% - 5px)", left: "-5px" } },
+    ];
+
+    return (
+      <div className="pointer-events-auto">
+        {handles.map((h) => (
+          <div
+            key={h.name}
+            onMouseDown={(e) => handleResizeMouseDown(node, h.name, e)}
+            style={{ ...h.style, cursor: h.cursor }}
+            className="absolute w-2.5 h-2.5 bg-white border border-blue-600 rounded-[2px] shadow-md z-30 hover:scale-125 transition-transform"
+            title={`Resize ${h.name.toUpperCase()}`}
+          />
+        ))}
+      </div>
+    );
+  };
+
   // Render directional arrowhead polygon at (tipX, tipY) pointing from (fromX, fromY)
   const renderArrowhead = (
     tipX: number,
@@ -895,20 +1302,60 @@ export default function WhiteboardCanvas({
       const toNode = nodes.find((n) => n.id === edge.to);
       if (!fromNode || !toNode) return null;
 
-      const isToAbove = toNode.y + toNode.height < fromNode.y;
-      const startX = fromNode.x + fromNode.width / 2;
-      const startY = isToAbove ? fromNode.y : fromNode.y + fromNode.height;
+      const fromCenterX = fromNode.x + fromNode.width / 2;
+      const fromCenterY = fromNode.y + fromNode.height / 2;
+      const toCenterX = toNode.x + toNode.width / 2;
+      const toCenterY = toNode.y + toNode.height / 2;
 
-      const endX = toNode.x + toNode.width / 2;
-      const endY = isToAbove ? toNode.y + toNode.height : toNode.y;
+      const dx = toCenterX - fromCenterX;
+      const dy = toCenterY - fromCenterY;
 
-      const midY = startY + (endY - startY) / 2;
-      const pathData = `M ${startX} ${startY} L ${startX} ${midY} L ${endX} ${midY} L ${endX} ${endY}`;
+      let startX: number, startY: number, endX: number, endY: number;
+      let pathData: string;
+      let tipFromX: number, tipFromY: number;
+
+      if (Math.abs(dx) > Math.abs(dy)) {
+        // Horizontal dominance: connect closest horizontal edges directly
+        if (dx > 0) {
+          startX = fromNode.x + fromNode.width;
+          startY = fromCenterY;
+          endX = toNode.x;
+          endY = toCenterY;
+        } else {
+          startX = fromNode.x;
+          startY = fromCenterY;
+          endX = toNode.x + toNode.width;
+          endY = toCenterY;
+        }
+        const midX = startX + (endX - startX) / 2;
+        pathData = `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`;
+        tipFromX = midX;
+        tipFromY = endY;
+      } else {
+        // Vertical dominance: connect closest vertical edges directly
+        if (dy > 0) {
+          startX = fromCenterX;
+          startY = fromNode.y + fromNode.height;
+          endX = toCenterX;
+          endY = toNode.y;
+        } else {
+          startX = fromCenterX;
+          startY = fromNode.y;
+          endX = toCenterX;
+          endY = toNode.y + toNode.height;
+        }
+        const midY = startY + (endY - startY) / 2;
+        pathData = `M ${startX} ${startY} L ${startX} ${midY} L ${endX} ${midY} L ${endX} ${endY}`;
+        tipFromX = endX;
+        tipFromY = midY;
+      }
 
       const isSelectedEdge = selectedEdgeId === edge.id;
       const isHovered = hoveredEdgeId === edge.id;
       const edgeColor = isSelectedEdge ? "#38BDF8" : isHovered ? "#93C5FD" : edge.color || "#60A5FA";
       const dir = edge.arrowDirection || "forward";
+      const midPointX = (startX + endX) / 2;
+      const midPointY = (startY + endY) / 2;
 
       return (
         <g key={edge.id} className="group">
@@ -926,8 +1373,8 @@ export default function WhiteboardCanvas({
               setSelectedEdgeId(edge.id);
               setEdgeSettingsPopover({
                 edgeId: edge.id,
-                x: endX,
-                y: midY,
+                x: midPointX,
+                y: midPointY,
               });
             }}
           />
@@ -946,54 +1393,87 @@ export default function WhiteboardCanvas({
 
           {/* Forward / Target Arrowhead (-> or <->) */}
           {(dir === "forward" || dir === "bidirectional") &&
-            renderArrowhead(endX, endY, endX, midY, edgeColor)}
+            renderArrowhead(endX, endY, tipFromX, tipFromY, edgeColor)}
 
           {/* Backward / Source Arrowhead (<- or <->) */}
           {(dir === "backward" || dir === "bidirectional") &&
-            renderArrowhead(startX, startY, startX, midY, edgeColor)}
+            renderArrowhead(startX, startY, midPointX, midPointY, edgeColor)}
 
-          {/* Interactive Arrow Link Setting Handle: "+" circular button at turn/midpoint */}
-          <g
-            className="pointer-events-auto cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedEdgeId(edge.id);
-              setEdgeSettingsPopover({
-                edgeId: edge.id,
-                x: endX,
-                y: midY,
-              });
-            }}
-          >
-            <title>Arrow Link Setting: Click to add branch or adjust link</title>
-            <circle
-              cx={endX}
-              cy={midY}
-              r="10"
-              fill="#121316"
-              stroke={isSelectedEdge ? "#38BDF8" : isHovered ? "#60A5FA" : "#3B82F6"}
-              strokeWidth="2"
-              className="hover:scale-125 transition-transform"
-            />
-            <text
-              x={endX}
-              y={midY + 3.5}
-              textAnchor="middle"
-              fill="#FFFFFF"
-              fontSize="12"
-              fontWeight="bold"
-              className="select-none pointer-events-none"
+          {/* Interactive Arrow Link Setting Handle: "+" circular button - ONLY VISIBLE ON HOVER OR SELECTED */}
+          {(isSelectedEdge || isHovered) && (
+            <g
+              className="pointer-events-auto cursor-pointer animate-in fade-in-50"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedEdgeId(edge.id);
+                setEdgeSettingsPopover({
+                  edgeId: edge.id,
+                  x: midPointX,
+                  y: midPointY,
+                });
+              }}
             >
-              +
-            </text>
-          </g>
+              <title>Arrow Link Setting: Click to add branch or adjust link</title>
+              <circle
+                cx={midPointX}
+                cy={midPointY}
+                r="11"
+                fill="#121316"
+                stroke={isSelectedEdge ? "#38BDF8" : "#60A5FA"}
+                strokeWidth="2"
+                className="hover:scale-125 transition-transform"
+              />
+              <text
+                x={midPointX}
+                y={midPointY + 4}
+                textAnchor="middle"
+                fill="#FFFFFF"
+                fontSize="12"
+                fontWeight="bold"
+                className="select-none pointer-events-none"
+              >
+                +
+              </text>
+            </g>
+          )}
         </g>
       );
     });
   };
 
   return (
-    <div className="relative w-full h-[calc(100vh-64px)] overflow-hidden bg-[#0D0E11] text-[#E1DFDD] select-none">
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          processUploadedFiles(e.dataTransfer.files, e.clientX, e.clientY);
+        }
+      }}
+      className={`${
+        isFullscreen
+          ? "fixed inset-0 z-[999999] w-screen h-screen m-0 p-0"
+          : "relative w-full h-[calc(100vh-64px)]"
+      } overflow-hidden bg-[#0D0E11] text-[#E1DFDD] select-none`}
+    >
+      {/* Hidden File Input for Image, SVG, Graph, Diagram upload from PC */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,.svg"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            processUploadedFiles(e.target.files);
+          }
+          e.target.value = "";
+        }}
+      />
+
       {/* 1. TOP HEADER BAR (Breadcrumb, Title, Favorite, Author Avatar, Share, Fullscreen) */}
       <header className="absolute top-0 left-0 right-0 h-13 px-4 bg-[#121316]/90 backdrop-blur-md border-b border-[#22242B] flex items-center justify-between z-30 shadow-md">
         <div className="flex items-center gap-3">
@@ -1064,127 +1544,489 @@ export default function WhiteboardCanvas({
             <span>Share</span>
           </button>
 
+          {/* Edge-to-Edge True Fullscreen Maximize Toggle */}
           <button
-            onClick={() => {
-              if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen();
-              } else {
-                document.exitFullscreen();
-              }
-            }}
-            className="p-1.5 rounded-md hover:bg-[#202228] text-gray-400 hover:text-white transition-colors"
-            title="Toggle Fullscreen"
+            onClick={toggleFullscreen}
+            className={`p-1.5 rounded-md hover:bg-[#202228] transition-colors ${
+              isFullscreen ? "text-cyan-400 bg-[#202228]" : "text-gray-400 hover:text-white"
+            }`}
+            title={isFullscreen ? "Exit Fullscreen (Esc)" : "Full Screen (Zero Spaces)"}
           >
-            <Maximize2 className="w-4 h-4" />
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
         </div>
       </header>
 
-      {/* 2. FLOATING FORMAT BAR (Shown above selected node - Matching Screenshot 3 & 5) */}
+      {/* 2. FLOATING FORMAT BAR (Shown above selected node - Differentiated by Object Type) */}
       {selectedNode && (
         <div
-          className="absolute z-40 bg-[#1A1C22] border border-[#2D3039] rounded-lg shadow-2xl px-2 py-1.5 flex items-center gap-1.5 text-xs text-gray-300 animate-in fade-in-50"
+          className="absolute z-40 bg-[#1A1C22] border border-[#2D3039] rounded-lg shadow-2xl px-2.5 py-1.5 flex items-center gap-2 text-xs text-gray-300 animate-in fade-in-50"
           style={{
-            left: Math.max(20, Math.min(window.innerWidth - 380, selectedNode.x * zoom + pan.x)),
+            left: Math.max(20, Math.min(window.innerWidth - 480, selectedNode.x * zoom + pan.x)),
             top: Math.max(60, selectedNode.y * zoom + pan.y - 48),
           }}
         >
-          <span className="px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400 text-[10px] font-bold uppercase">
-            {selectedNode.type}
+          <span className="px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400 text-[10px] font-bold uppercase tracking-wider">
+            {selectedNode.type === "shape" ? selectedNode.shapeType || "shape" : selectedNode.type}
           </span>
 
           <div className="h-4 w-px bg-[#30333D]" />
 
-          {/* Text Style Controls */}
-          <button
-            onClick={() =>
-              updateSelectedNode({
-                fontWeight: selectedNode.fontWeight === "bold" ? "normal" : "bold",
-              })
-            }
-            className={`p-1 rounded hover:bg-[#282A33] ${
-              selectedNode.fontWeight === "bold" ? "text-blue-400 bg-[#282A33]" : ""
-            }`}
-            title="Bold"
-          >
-            <Bold className="w-3.5 h-3.5" />
-          </button>
+          {/* A. SHAPE CONTROLS */}
+          {selectedNode.type === "shape" && (
+            <>
+              {/* Shape Type Switcher */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowShapeSwitcher(!showShapeSwitcher)}
+                  className="p-1 rounded hover:bg-[#282A33] text-gray-300 hover:text-white flex items-center gap-1"
+                  title="Switch Shape Geometry"
+                >
+                  {selectedNode.shapeType === "circle" ? (
+                    <Circle className="w-3.5 h-3.5 text-blue-400" />
+                  ) : selectedNode.shapeType === "diamond" ? (
+                    <Diamond className="w-3.5 h-3.5 text-blue-400" />
+                  ) : selectedNode.shapeType === "triangle" ? (
+                    <Triangle className="w-3.5 h-3.5 text-blue-400" />
+                  ) : selectedNode.shapeType === "hexagon" ? (
+                    <Hexagon className="w-3.5 h-3.5 text-blue-400" />
+                  ) : selectedNode.shapeType === "star" ? (
+                    <Star className="w-3.5 h-3.5 text-blue-400" />
+                  ) : (
+                    <Square className="w-3.5 h-3.5 text-blue-400" />
+                  )}
+                </button>
 
-          <button
-            onClick={() =>
-              updateSelectedNode({
-                fontSize: selectedNode.fontSize === "Large" ? "Medium" : "Large",
-              })
-            }
-            className="px-1.5 py-0.5 rounded hover:bg-[#282A33] text-[11px] font-semibold"
-            title="Font Size"
-          >
-            Aa
-          </button>
+                {showShapeSwitcher && (
+                  <div className="absolute top-full left-0 mt-2 p-1.5 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl grid grid-cols-4 gap-1 z-50 w-36">
+                    {[
+                      { type: "rectangle", icon: Square, label: "Rectangle" },
+                      { type: "rounded", icon: Square, label: "Rounded" },
+                      { type: "circle", icon: Circle, label: "Circle" },
+                      { type: "diamond", icon: Diamond, label: "Diamond" },
+                      { type: "triangle", icon: Triangle, label: "Triangle" },
+                      { type: "hexagon", icon: Hexagon, label: "Hexagon" },
+                      { type: "star", icon: Star, label: "Star" },
+                    ].map((st) => {
+                      const Icon = st.icon;
+                      return (
+                        <button
+                          key={st.type}
+                          onClick={() => {
+                            updateSelectedNode({ shapeType: st.type as any });
+                            setShowShapeSwitcher(false);
+                          }}
+                          className={`p-1.5 rounded hover:bg-[#282A33] flex items-center justify-center ${
+                            selectedNode.shapeType === st.type ? "bg-blue-600 text-white" : "text-gray-300"
+                          }`}
+                          title={st.label}
+                        >
+                          <Icon className="w-3.5 h-3.5" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
-          {/* Fill Type Selector */}
-          <div className="flex items-center gap-1 bg-[#121316] p-0.5 rounded border border-[#282B33]">
-            {(["solid", "tint", "none"] as const).map((ft) => (
+              {/* Bold & Aa */}
               <button
-                key={ft}
-                onClick={() => {
-                  setActiveFillType(ft);
-                  updateSelectedNode({ fillType: ft });
-                }}
-                className={`px-1.5 py-0.5 rounded text-[10px] capitalize ${
-                  selectedNode.fillType === ft
-                    ? "bg-blue-600 text-white font-bold"
-                    : "text-gray-400 hover:text-white"
+                onClick={() =>
+                  updateSelectedNode({
+                    fontWeight: selectedNode.fontWeight === "bold" ? "normal" : "bold",
+                  })
+                }
+                className={`p-1 rounded hover:bg-[#282A33] ${
+                  selectedNode.fontWeight === "bold" ? "text-blue-400 bg-[#282A33]" : ""
                 }`}
+                title="Bold text"
               >
-                {ft}
+                <Bold className="w-3.5 h-3.5" />
               </button>
-            ))}
-          </div>
 
-          {/* Color Swatch Button */}
-          <div className="relative">
-            <button
-              onClick={() => setShowStylePalette(!showStylePalette)}
-              className="w-4 h-4 rounded-full border border-white/40 shadow-xs"
-              style={{ backgroundColor: selectedNode.color || "#0078D4" }}
-              title="Change Color"
-            />
+              <button
+                onClick={() =>
+                  updateSelectedNode({
+                    fontSize: selectedNode.fontSize === "Large" ? "Medium" : "Large",
+                  })
+                }
+                className="px-1.5 py-0.5 rounded hover:bg-[#282A33] text-[11px] font-semibold"
+                title="Font Size"
+              >
+                Aa
+              </button>
 
-            {showStylePalette && (
-              <div className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50">
-                {COLOR_PALETTE.map((c) => (
+              {/* Fill Type */}
+              <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33]">
+                {(["solid", "tint", "none"] as const).map((ft) => (
+                  <button
+                    key={ft}
+                    onClick={() => {
+                      setActiveFillType(ft);
+                      updateSelectedNode({ fillType: ft });
+                    }}
+                    className={`px-1.5 py-0.5 rounded text-[10px] capitalize ${
+                      selectedNode.fillType === ft
+                        ? "bg-blue-600 text-white font-bold"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    {ft}
+                  </button>
+                ))}
+              </div>
+
+              {/* Color Swatch */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowStylePalette(!showStylePalette)}
+                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs"
+                  style={{ backgroundColor: selectedNode.color || "#0078D4" }}
+                  title="Change Color"
+                />
+
+                {showStylePalette && (
+                  <div className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50">
+                    {COLOR_PALETTE.map((c) => (
+                      <button
+                        key={c.name}
+                        onClick={() => {
+                          setActiveColor(c.value);
+                          updateSelectedNode({ color: c.value });
+                          setShowStylePalette(false);
+                        }}
+                        className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20"
+                        style={{ backgroundColor: c.value }}
+                        title={c.name}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => handleAddBranchFromNode(selectedNode.id)}
+                className="px-2 py-1 bg-blue-600/30 hover:bg-blue-600 text-blue-300 hover:text-white rounded text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                title="Add Branch Node (+)"
+              >
+                <GitFork className="w-3.5 h-3.5" />
+                <span>+ Branch</span>
+              </button>
+            </>
+          )}
+
+          {/* B. TASK CONTROLS */}
+          {selectedNode.type === "task" && (
+            <>
+              {/* Status pills */}
+              <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33]">
+                {(["Active", "In Progress", "Completed", "Backlog"] as const).map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => updateSelectedNode({ status: st, subtitle: st })}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all ${
+                      (selectedNode.status || "Active").toLowerCase() === st.toLowerCase()
+                        ? "bg-blue-600 text-white font-bold"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
+
+              {/* Color Swatch */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowStylePalette(!showStylePalette)}
+                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs"
+                  style={{ backgroundColor: selectedNode.color || "#0078D4" }}
+                  title="Change Color"
+                />
+
+                {showStylePalette && (
+                  <div className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50">
+                    {COLOR_PALETTE.map((c) => (
+                      <button
+                        key={c.name}
+                        onClick={() => {
+                          setActiveColor(c.value);
+                          updateSelectedNode({ color: c.value });
+                          setShowStylePalette(false);
+                        }}
+                        className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20"
+                        style={{ backgroundColor: c.value }}
+                        title={c.name}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => handleAddBranchFromNode(selectedNode.id)}
+                className="px-2 py-1 bg-blue-600/30 hover:bg-blue-600 text-blue-300 hover:text-white rounded text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                title="Add Branch Node (+)"
+              >
+                <GitFork className="w-3.5 h-3.5" />
+                <span>+ Branch</span>
+              </button>
+            </>
+          )}
+
+          {/* C. STICKY NOTE CONTROLS */}
+          {selectedNode.type === "sticky" && (
+            <>
+              {/* Pastel Color Swatches */}
+              <div className="flex items-center gap-1">
+                {[
+                  { color: "#F472B6", name: "Pink" },
+                  { color: "#FBBF24", name: "Yellow" },
+                  { color: "#34D399", name: "Green" },
+                  { color: "#38BDF8", name: "Cyan" },
+                  { color: "#A78BFA", name: "Purple" },
+                  { color: "#F87171", name: "Red" },
+                ].map((c) => (
                   <button
                     key={c.name}
-                    onClick={() => {
-                      setActiveColor(c.value);
-                      updateSelectedNode({ color: c.value });
-                      setShowStylePalette(false);
-                    }}
-                    className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20"
-                    style={{ backgroundColor: c.value }}
+                    onClick={() => updateSelectedNode({ color: c.color })}
+                    className={`w-4 h-4 rounded-full transition-transform ${
+                      selectedNode.color === c.color ? "ring-2 ring-white scale-110" : "hover:scale-110"
+                    }`}
+                    style={{ backgroundColor: c.color }}
                     title={c.name}
                   />
                 ))}
               </div>
-            )}
-          </div>
+
+              <div className="h-4 w-px bg-[#30333D]" />
+
+              <button
+                onClick={() => updateSelectedNode({ textAlign: "left" })}
+                className={`p-1 rounded hover:bg-[#282A33] ${
+                  selectedNode.textAlign === "left" || !selectedNode.textAlign ? "text-blue-400 bg-[#282A33]" : ""
+                }`}
+                title="Align Left"
+              >
+                <AlignLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => updateSelectedNode({ textAlign: "center" })}
+                className={`p-1 rounded hover:bg-[#282A33] ${
+                  selectedNode.textAlign === "center" ? "text-blue-400 bg-[#282A33]" : ""
+                }`}
+                title="Align Center"
+              >
+                <AlignCenter className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => updateSelectedNode({ textAlign: "right" })}
+                className={`p-1 rounded hover:bg-[#282A33] ${
+                  selectedNode.textAlign === "right" ? "text-blue-400 bg-[#282A33]" : ""
+                }`}
+                title="Align Right"
+              >
+                <AlignRight className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+
+          {/* D. TEXT BLOCK CONTROLS */}
+          {selectedNode.type === "text" && (
+            <>
+              {/* Font Size */}
+              <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33]">
+                {(["Small", "Medium", "Large", "Huge"] as const).map((sz) => (
+                  <button
+                    key={sz}
+                    onClick={() => updateSelectedNode({ fontSize: sz })}
+                    className={`px-1.5 py-0.5 rounded text-[10px] ${
+                      (selectedNode.fontSize || "Medium") === sz
+                        ? "bg-blue-600 text-white font-bold"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    {sz[0]}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() =>
+                  updateSelectedNode({
+                    fontWeight: selectedNode.fontWeight === "bold" ? "normal" : "bold",
+                  })
+                }
+                className={`p-1 rounded hover:bg-[#282A33] ${
+                  selectedNode.fontWeight === "bold" ? "text-blue-400 bg-[#282A33]" : ""
+                }`}
+                title="Bold"
+              >
+                <Bold className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                onClick={() => updateSelectedNode({ textAlign: "left" })}
+                className={`p-1 rounded hover:bg-[#282A33] ${
+                  selectedNode.textAlign === "left" || !selectedNode.textAlign ? "text-blue-400 bg-[#282A33]" : ""
+                }`}
+                title="Align Left"
+              >
+                <AlignLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => updateSelectedNode({ textAlign: "center" })}
+                className={`p-1 rounded hover:bg-[#282A33] ${
+                  selectedNode.textAlign === "center" ? "text-blue-400 bg-[#282A33]" : ""
+                }`}
+                title="Align Center"
+              >
+                <AlignCenter className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => updateSelectedNode({ textAlign: "right" })}
+                className={`p-1 rounded hover:bg-[#282A33] ${
+                  selectedNode.textAlign === "right" ? "text-blue-400 bg-[#282A33]" : ""
+                }`}
+                title="Align Right"
+              >
+                <AlignRight className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Color Swatch */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowStylePalette(!showStylePalette)}
+                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs"
+                  style={{ backgroundColor: selectedNode.color || "#FFFFFF" }}
+                  title="Change Text Color"
+                />
+
+                {showStylePalette && (
+                  <div className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50">
+                    {COLOR_PALETTE.map((c) => (
+                      <button
+                        key={c.name}
+                        onClick={() => {
+                          updateSelectedNode({ color: c.value });
+                          setShowStylePalette(false);
+                        }}
+                        className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20"
+                        style={{ backgroundColor: c.value }}
+                        title={c.name}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* E. IMAGE CONTROLS */}
+          {selectedNode.type === "image" && (
+            <>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#252834] hover:bg-[#2E3242] text-white text-[11px] font-medium"
+                title="Replace Image or Diagram"
+              >
+                <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Replace</span>
+              </button>
+            </>
+          )}
+
+          {/* F. DRAWING CONTROLS */}
+          {selectedNode.type === "drawing" && (
+            <>
+              <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33]">
+                {[2, 4, 8].map((sw) => (
+                  <button
+                    key={sw}
+                    onClick={() => updateSelectedNode({ strokeWidth: sw })}
+                    className={`px-1.5 py-0.5 rounded text-[10px] ${
+                      (selectedNode.strokeWidth || 3) === sw
+                        ? "bg-pink-600 text-white font-bold"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    {sw}px
+                  </button>
+                ))}
+              </div>
+
+              {/* Stroke Color */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowStylePalette(!showStylePalette)}
+                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs"
+                  style={{ backgroundColor: selectedNode.color || "#EC4899" }}
+                  title="Stroke Color"
+                />
+
+                {showStylePalette && (
+                  <div className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50">
+                    {COLOR_PALETTE.map((c) => (
+                      <button
+                        key={c.name}
+                        onClick={() => {
+                          updateSelectedNode({ color: c.value });
+                          setShowStylePalette(false);
+                        }}
+                        className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20"
+                        style={{ backgroundColor: c.value }}
+                        title={c.name}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* G. LOGO / LEGEND CONTROLS */}
+          {(selectedNode.type === "logo" || selectedNode.type === "legend") && (
+            <>
+              <div className="relative">
+                <button
+                  onClick={() => setShowStylePalette(!showStylePalette)}
+                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs"
+                  style={{ backgroundColor: selectedNode.color || "#06B6D4" }}
+                  title="Change Color"
+                />
+
+                {showStylePalette && (
+                  <div className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50">
+                    {COLOR_PALETTE.map((c) => (
+                      <button
+                        key={c.name}
+                        onClick={() => {
+                          updateSelectedNode({ color: c.value });
+                          setShowStylePalette(false);
+                        }}
+                        className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20"
+                        style={{ backgroundColor: c.value }}
+                        title={c.name}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           <div className="h-4 w-px bg-[#30333D]" />
 
-          {/* Add Branch Button directly from selected node */}
+          {/* Universal Duplicate Button */}
           <button
-            onClick={() => handleAddBranchFromNode(selectedNode.id)}
-            className="px-2 py-1 bg-blue-600/30 hover:bg-blue-600 text-blue-300 hover:text-white rounded text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-            title="Add Branch Node (+)"
+            onClick={() => handleDuplicateNode(selectedNode.id)}
+            className="p-1 text-gray-400 hover:text-white hover:bg-[#282A33] rounded transition-colors cursor-pointer"
+            title="Duplicate node (Ctrl+D)"
           >
-            <GitFork className="w-3.5 h-3.5" />
-            <span>+ Branch</span>
+            <Copy className="w-3.5 h-3.5" />
           </button>
 
-          <div className="h-4 w-px bg-[#30333D]" />
-
-          {/* Delete Button */}
+          {/* Universal Delete Button */}
           <button
             onClick={handleDeleteSelected}
             className="p-1 text-gray-400 hover:text-red-400 hover:bg-[#282A33] rounded transition-colors cursor-pointer"
@@ -1504,6 +2346,16 @@ export default function WhiteboardCanvas({
               <Type className="w-3.5 h-3.5 text-gray-400" />
               <span>Text</span>
             </button>
+            <button
+              onClick={() => {
+                fileInputRef.current?.click();
+                setDoubleClickMenu(null);
+              }}
+              className="col-span-2 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-emerald-300 hover:bg-[#22242D] hover:text-white border border-emerald-500/30 transition-colors"
+            >
+              <Upload className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Upload Image / Diagram</span>
+            </button>
           </div>
         </div>
       )}
@@ -1766,7 +2618,7 @@ export default function WhiteboardCanvas({
                     width: `${node.width}px`,
                     height: `${node.height}px`,
                   }}
-                  className={`p-3.5 rounded-md border-2 border-white/80 bg-[#0D0E11]/80 backdrop-blur-sm cursor-pointer shadow-xl ${
+                  className={`p-3.5 rounded-md border-2 border-white/80 bg-[#0D0E11]/80 backdrop-blur-sm cursor-pointer shadow-xl relative ${
                     isSelected ? "ring-2 ring-blue-500" : ""
                   }`}
                 >
@@ -1792,6 +2644,7 @@ export default function WhiteboardCanvas({
                       </span>
                     </div>
                   </div>
+                  {isSelected && renderResizeHandles(node)}
                 </div>
               );
             }
@@ -1809,10 +2662,10 @@ export default function WhiteboardCanvas({
                     top: `${node.y}px`,
                     width: `${node.width}px`,
                     height: `${node.height}px`,
-                    backgroundColor: "rgba(236, 72, 153, 0.15)",
+                    backgroundColor: `${node.color || "#EC4899"}26`,
                     borderColor: node.color || "#EC4899",
                   }}
-                  className={`p-4 rounded-xl border-2 cursor-pointer shadow-lg flex flex-col justify-between transition-all ${
+                  className={`p-4 rounded-xl border-2 cursor-pointer shadow-lg flex flex-col justify-between transition-all relative ${
                     isSelected ? "ring-2 ring-pink-400" : ""
                   }`}
                 >
@@ -1825,17 +2678,22 @@ export default function WhiteboardCanvas({
                         setEditingNodeId(null);
                       }}
                       className="w-full h-full bg-transparent text-xs text-pink-200 focus:outline-none resize-none leading-relaxed"
+                      style={{ textAlign: node.textAlign || "left" }}
                     />
                   ) : (
-                    <p className="text-[11px] text-pink-200 leading-relaxed font-sans">
+                    <p
+                      className="text-[11px] text-pink-200 leading-relaxed font-sans"
+                      style={{ textAlign: node.textAlign || "left" }}
+                    >
                       {node.body || "Click to add text..."}
                     </p>
                   )}
+                  {isSelected && renderResizeHandles(node)}
                 </div>
               );
             }
 
-            // 4. TASK CARD / ORG CHART POSITION NODE (Screenshots 2-5: Gold Task Header + Blue Position Box)
+            // 4. TASK CARD / ORG CHART POSITION NODE (Gold Task Header + Blue Position Box)
             if (node.type === "task") {
               return (
                 <div
@@ -1849,43 +2707,45 @@ export default function WhiteboardCanvas({
                     width: `${node.width}px`,
                     height: `${node.height}px`,
                   }}
-                  className={`rounded-md overflow-hidden cursor-pointer shadow-2xl transition-all relative group/node ${
+                  className={`rounded-md cursor-pointer shadow-2xl transition-all relative group/node ${
                     isSelected ? "ring-2 ring-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.4)]" : ""
                   }`}
                 >
-                  {/* Top Task Banner (Gold bordered) */}
-                  <div className="h-14 p-2 bg-[#1A1813] border-2 border-amber-500/80 rounded-t-md flex items-center justify-center text-center">
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        defaultValue={node.title}
-                        onBlur={(e) => updateSelectedNode({ title: e.target.value })}
-                        className="bg-transparent text-[10px] text-amber-200 text-center w-full focus:outline-none font-medium"
-                      />
-                    ) : (
-                      <span className="text-[10px] text-amber-200/90 font-medium leading-tight line-clamp-2">
-                        {node.title || "Add a task here to represent this team member!"}
-                      </span>
-                    )}
-                  </div>
+                  <div className="w-full h-full flex flex-col rounded-md overflow-hidden">
+                    {/* Top Task Banner (Gold bordered) */}
+                    <div className="h-14 p-2 bg-[#1A1813] border-2 border-amber-500/80 rounded-t-md flex items-center justify-center text-center">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          defaultValue={node.title}
+                          onBlur={(e) => updateSelectedNode({ title: e.target.value })}
+                          className="bg-transparent text-[10px] text-amber-200 text-center w-full focus:outline-none font-medium"
+                        />
+                      ) : (
+                        <span className="text-[10px] text-amber-200/90 font-medium leading-tight line-clamp-2">
+                          {node.title || "Add a task here to represent this team member!"}
+                        </span>
+                      )}
+                    </div>
 
-                  {/* Bottom Position Box (Blue bordered) */}
-                  <div className="h-10 bg-[#0F1E36] border-2 border-t-0 border-blue-500/80 rounded-b-md flex items-center justify-center text-center">
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        defaultValue={node.subtitle}
-                        onBlur={(e) => {
-                          updateSelectedNode({ subtitle: e.target.value });
-                          setEditingNodeId(null);
-                        }}
-                        className="bg-transparent text-xs text-blue-200 text-center w-full focus:outline-none font-bold"
-                      />
-                    ) : (
-                      <span className="text-xs font-bold text-blue-200">
-                        {node.subtitle || "Position"}
-                      </span>
-                    )}
+                    {/* Bottom Position Box (Blue bordered) */}
+                    <div className="flex-1 min-h-[36px] bg-[#0F1E36] border-2 border-t-0 border-blue-500/80 rounded-b-md flex items-center justify-center text-center">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          defaultValue={node.subtitle}
+                          onBlur={(e) => {
+                            updateSelectedNode({ subtitle: e.target.value });
+                            setEditingNodeId(null);
+                          }}
+                          className="bg-transparent text-xs text-blue-200 text-center w-full focus:outline-none font-bold"
+                        />
+                      ) : (
+                        <span className="text-xs font-bold text-blue-200">
+                          {node.subtitle || "Position"}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Quick Branch Connector Handle on Node Bottom */}
@@ -1902,11 +2762,131 @@ export default function WhiteboardCanvas({
                   >
                     +
                   </button>
+
+                  {isSelected && renderResizeHandles(node)}
                 </div>
               );
             }
 
-            // 5. GEOMETRIC SHAPES (Square, Diamond, Circle, etc.)
+            // 5. IMAGE / MEDIA / SVG / DIAGRAM NODE (Direct Upload or Drag-and-Drop)
+            if (node.type === "image") {
+              return (
+                <div
+                  key={node.id}
+                  onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
+                  style={{
+                    position: "absolute",
+                    left: `${node.x}px`,
+                    top: `${node.y}px`,
+                    width: `${node.width}px`,
+                    height: `${node.height}px`,
+                  }}
+                  className={`group/img cursor-pointer rounded-lg overflow-hidden transition-all relative ${
+                    isSelected
+                      ? "ring-2 ring-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.3)]"
+                      : "shadow-xl border border-[#2D3039]"
+                  }`}
+                >
+                  {node.imageUrl ? (
+                    <img
+                      src={node.imageUrl}
+                      alt={node.title || "Whiteboard Media"}
+                      className="w-full h-full object-contain pointer-events-none select-none bg-black/30"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-[#181A22] text-gray-400 p-4">
+                      <ImageIcon className="w-8 h-8 mb-2 text-gray-500" />
+                      <span className="text-xs font-medium">Click to upload media</span>
+                    </div>
+                  )}
+
+                  {node.title && (
+                    <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-xs py-0.5 px-2 text-[10px] text-gray-300 truncate pointer-events-none text-center">
+                      {node.title}
+                    </div>
+                  )}
+
+                  {isSelected && renderResizeHandles(node)}
+                </div>
+              );
+            }
+
+            // 6. TEXT BLOCK NODE
+            if (node.type === "text") {
+              const fontSizePx =
+                node.fontSize === "Huge"
+                  ? "28px"
+                  : node.fontSize === "Large"
+                  ? "20px"
+                  : node.fontSize === "Small"
+                  ? "12px"
+                  : "15px";
+
+              return (
+                <div
+                  key={node.id}
+                  onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
+                  style={{
+                    position: "absolute",
+                    left: `${node.x}px`,
+                    top: `${node.y}px`,
+                    width: `${node.width}px`,
+                    height: `${node.height}px`,
+                  }}
+                  className={`cursor-pointer p-2 flex items-center transition-all relative ${
+                    isSelected ? "ring-2 ring-blue-400 rounded-md bg-blue-500/10" : "hover:bg-white/5 rounded-md"
+                  }`}
+                >
+                  {isEditing ? (
+                    <textarea
+                      autoFocus
+                      defaultValue={node.title}
+                      onBlur={(e) => {
+                        updateSelectedNode({ title: e.target.value });
+                        setEditingNodeId(null);
+                      }}
+                      className="w-full h-full bg-transparent text-white focus:outline-none resize-none"
+                      style={{
+                        fontSize: fontSizePx,
+                        fontWeight: node.fontWeight || "normal",
+                        textAlign: node.textAlign || "left",
+                        color: node.color || "#FFFFFF",
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="w-full h-full flex items-center"
+                      style={{
+                        justifyContent:
+                          node.textAlign === "center"
+                            ? "center"
+                            : node.textAlign === "right"
+                            ? "flex-end"
+                            : "flex-start",
+                      }}
+                    >
+                      <span
+                        className="leading-snug break-words select-none"
+                        style={{
+                          fontSize: fontSizePx,
+                          fontWeight: node.fontWeight || "normal",
+                          textAlign: node.textAlign || "left",
+                          color: node.color || "#FFFFFF",
+                        }}
+                      >
+                        {node.title || "Text block"}
+                      </span>
+                    </div>
+                  )}
+
+                  {isSelected && renderResizeHandles(node)}
+                </div>
+              );
+            }
+
+            // 7. GEOMETRIC SHAPES (Square, Diamond, Circle, Triangle, Star, Hexagon, etc.)
             return (
               <div
                 key={node.id}
@@ -1918,33 +2898,43 @@ export default function WhiteboardCanvas({
                   top: `${node.y}px`,
                   width: `${node.width}px`,
                   height: `${node.height}px`,
-                  backgroundColor:
-                    node.fillType === "solid"
-                      ? node.color
-                      : node.fillType === "tint"
-                      ? `${node.color}33`
-                      : "transparent",
-                  borderColor: node.color || "#0078D4",
                 }}
-                className={`p-3 rounded-md border-2 cursor-pointer shadow-md flex items-center justify-center text-center transition-all ${
-                  isSelected ? "ring-2 ring-white" : ""
+                className={`relative cursor-pointer transition-all ${
+                  isSelected ? "ring-2 ring-blue-400 ring-offset-2 ring-offset-[#0D0E11]" : ""
                 }`}
               >
-                {isEditing ? (
-                  <input
-                    type="text"
-                    defaultValue={node.title}
-                    onBlur={(e) => {
-                      updateSelectedNode({ title: e.target.value });
-                      setEditingNodeId(null);
-                    }}
-                    className="bg-transparent text-xs text-white text-center w-full focus:outline-none font-bold"
-                  />
-                ) : (
-                  <span className="text-xs font-bold text-white">
-                    {node.title || "Shape"}
-                  </span>
-                )}
+                {/* Vector Shape Geometry */}
+                <div className="absolute inset-0 pointer-events-none">
+                  {renderShapeGeometry(node)}
+                </div>
+
+                {/* Centered editable label */}
+                <div className="absolute inset-0 flex items-center justify-center p-3 text-center pointer-events-none">
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      defaultValue={node.title}
+                      autoFocus
+                      onBlur={(e) => {
+                        updateSelectedNode({ title: e.target.value });
+                        setEditingNodeId(null);
+                      }}
+                      className="bg-transparent text-xs text-white text-center w-full focus:outline-none font-bold pointer-events-auto"
+                    />
+                  ) : (
+                    <span
+                      className="text-xs font-bold text-white select-none leading-snug break-words px-1"
+                      style={{
+                        fontWeight: node.fontWeight || "bold",
+                        fontSize: node.fontSize === "Large" ? "14px" : "12px",
+                      }}
+                    >
+                      {node.title || ""}
+                    </span>
+                  )}
+                </div>
+
+                {isSelected && renderResizeHandles(node)}
               </div>
             );
           })}
@@ -2207,34 +3197,54 @@ export default function WhiteboardCanvas({
 
           {/* Screenshot 4: Shape Grid Palette Popover */}
           {showShapePalette && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-3 grid grid-cols-4 gap-2 w-48 z-50 animate-in fade-in-50">
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-3 grid grid-cols-3 gap-2 w-56 z-50 animate-in fade-in-50">
               <button
                 onClick={() => handleAddNode("shape", "rectangle")}
-                className="p-2 hover:bg-[#242630] rounded flex items-center justify-center text-gray-300 hover:text-white"
+                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-pointer"
                 title="Rectangle"
               >
                 <Square className="w-4 h-4" />
+                <span className="text-[9px]">Box</span>
+              </button>
+              <button
+                onClick={() => handleAddNode("shape", "rounded")}
+                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-pointer"
+                title="Rounded"
+              >
+                <Square className="w-4 h-4 rounded-md" />
+                <span className="text-[9px]">Rounded</span>
               </button>
               <button
                 onClick={() => handleAddNode("shape", "circle")}
-                className="p-2 hover:bg-[#242630] rounded flex items-center justify-center text-gray-300 hover:text-white"
+                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-pointer"
                 title="Circle"
               >
                 <Circle className="w-4 h-4" />
+                <span className="text-[9px]">Circle</span>
               </button>
               <button
                 onClick={() => handleAddNode("shape", "diamond")}
-                className="p-2 hover:bg-[#242630] rounded flex items-center justify-center text-gray-300 hover:text-white"
+                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-pointer"
                 title="Diamond"
               >
                 <Diamond className="w-4 h-4" />
+                <span className="text-[9px]">Diamond</span>
               </button>
               <button
                 onClick={() => handleAddNode("shape", "triangle")}
-                className="p-2 hover:bg-[#242630] rounded flex items-center justify-center text-gray-300 hover:text-white"
+                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-pointer"
                 title="Triangle"
               >
                 <Triangle className="w-4 h-4" />
+                <span className="text-[9px]">Triangle</span>
+              </button>
+              <button
+                onClick={() => handleAddNode("shape", "hexagon")}
+                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-pointer"
+                title="Hexagon"
+              >
+                <Hexagon className="w-4 h-4" />
+                <span className="text-[9px]">Hexagon</span>
               </button>
             </div>
           )}
@@ -2300,6 +3310,15 @@ export default function WhiteboardCanvas({
           title="Frame (F)"
         >
           <Maximize className="w-4 h-4" />
+        </button>
+
+        {/* Upload Media / Images / Graphs / SVGs / Diagrams from PC */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="p-2 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-[#22242D] transition-colors cursor-pointer"
+          title="Upload Image, SVG, Graph or Diagram from PC"
+        >
+          <Upload className="w-4 h-4" />
         </button>
 
         {/* Templates & Functional Areas Drawer */}

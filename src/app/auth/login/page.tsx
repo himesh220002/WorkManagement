@@ -487,7 +487,7 @@ export default function AuthPage({
       {/* Active Session Ribbon (If Already Logged In) */}
       {session && (
         <div className="mb-6 p-4 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-[#0078D4] text-white flex items-center justify-center font-bold text-sm">
               {session.user.name.slice(0, 2).toUpperCase()}
             </div>
@@ -541,11 +541,10 @@ export default function AuthPage({
               setError(null);
               setSuccess(null);
             }}
-            className={`pb-3.5 px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
-              activeTab === "login"
+            className={`pb-3.5 px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${activeTab === "login"
                 ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
                 : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424] dark:hover:text-white"
-            }`}
+              }`}
           >
             <Lock className="w-4 h-4" />
             <span>Sign In to Your Workspace</span>
@@ -558,11 +557,10 @@ export default function AuthPage({
               setError(null);
               setSuccess(null);
             }}
-            className={`pb-3.5 px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
-              activeTab === "signup"
+            className={`pb-3.5 px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${activeTab === "signup"
                 ? "border-[#0078D4] text-[#0078D4] dark:text-[#479EF5]"
                 : "border-transparent text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#242424] dark:hover:text-white"
-            }`}
+              }`}
           >
             <Building2 className="w-4 h-4" />
             <span>Create New Organization (Fresh Workspace)</span>
@@ -834,22 +832,20 @@ export default function AuthPage({
                     <button
                       type="button"
                       onClick={() => setSelectedCurrency("INR")}
-                      className={`px-3 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
-                        selectedCurrency === "INR"
+                      className={`px-3 py-1 rounded text-xs font-bold transition-all cursor-pointer ${selectedCurrency === "INR"
                           ? "bg-white dark:bg-zinc-700 text-[#0078D4] shadow-xs"
                           : "text-gray-600 dark:text-gray-400"
-                      }`}
+                        }`}
                     >
                       India (INR ₹)
                     </button>
                     <button
                       type="button"
                       onClick={() => setSelectedCurrency("USD")}
-                      className={`px-3 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
-                        selectedCurrency === "USD"
+                      className={`px-3 py-1 rounded text-xs font-bold transition-all cursor-pointer ${selectedCurrency === "USD"
                           ? "bg-white dark:bg-zinc-700 text-[#0078D4] shadow-xs"
                           : "text-gray-600 dark:text-gray-400"
-                      }`}
+                        }`}
                     >
                       US &amp; Global (USD $)
                     </button>
@@ -896,11 +892,10 @@ export default function AuthPage({
                         key={num}
                         type="button"
                         onClick={() => setSignupUserCount(num)}
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
-                          signupUserCount === num
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${signupUserCount === num
                             ? "bg-[#0078D4] text-white border-[#0078D4]"
                             : "bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-zinc-700 hover:bg-gray-100"
-                        }`}
+                          }`}
                       >
                         {num} Seats
                       </button>
@@ -930,19 +925,17 @@ export default function AuthPage({
                   {/* Monthly Plan */}
                   <div
                     onClick={() => setSelectedPlan("monthly")}
-                    className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
-                      selectedPlan === "monthly"
+                    className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${selectedPlan === "monthly"
                         ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-xs"
                         : "border-gray-200 dark:border-zinc-700 hover:border-gray-400 bg-white dark:bg-[#252423]"
-                    }`}
+                      }`}
                   >
                     <div>
                       <div className="flex justify-between items-center mb-1">
                         <span className="font-bold text-xs text-[#242424] dark:text-white">Monthly Plan</span>
                         <span
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                            selectedPlan === "monthly" ? "border-[#0078D4] bg-[#0078D4]" : "border-gray-400"
-                          }`}
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedPlan === "monthly" ? "border-[#0078D4] bg-[#0078D4]" : "border-gray-400"
+                            }`}
                         >
                           {selectedPlan === "monthly" && <Check className="w-2.5 h-2.5 text-white" />}
                         </span>
@@ -965,11 +958,10 @@ export default function AuthPage({
                   {/* 3-Month Plan */}
                   <div
                     onClick={() => setSelectedPlan("quarterly")}
-                    className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
-                      selectedPlan === "quarterly"
+                    className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${selectedPlan === "quarterly"
                         ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-xs"
                         : "border-gray-200 dark:border-zinc-700 hover:border-gray-400 bg-white dark:bg-[#252423]"
-                    }`}
+                      }`}
                   >
                     <span className="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#0078D4] text-white shadow-xs">
                       Save 7%
@@ -978,9 +970,8 @@ export default function AuthPage({
                       <div className="flex justify-between items-center mb-1">
                         <span className="font-bold text-xs text-[#242424] dark:text-white">3-Month Plan</span>
                         <span
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                            selectedPlan === "quarterly" ? "border-[#0078D4] bg-[#0078D4]" : "border-gray-400"
-                          }`}
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedPlan === "quarterly" ? "border-[#0078D4] bg-[#0078D4]" : "border-gray-400"
+                            }`}
                         >
                           {selectedPlan === "quarterly" && <Check className="w-2.5 h-2.5 text-white" />}
                         </span>
@@ -1003,11 +994,10 @@ export default function AuthPage({
                   {/* Annual Plan */}
                   <div
                     onClick={() => setSelectedPlan("annual")}
-                    className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
-                      selectedPlan === "annual"
+                    className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${selectedPlan === "annual"
                         ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-xs"
                         : "border-gray-200 dark:border-zinc-700 hover:border-gray-400 bg-white dark:bg-[#252423]"
-                    }`}
+                      }`}
                   >
                     <span className="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#107C10] text-white shadow-xs">
                       Save 17% (2 Mo Free)
@@ -1016,9 +1006,8 @@ export default function AuthPage({
                       <div className="flex justify-between items-center mb-1">
                         <span className="font-bold text-xs text-[#242424] dark:text-white">Annual Plan</span>
                         <span
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                            selectedPlan === "annual" ? "border-[#0078D4] bg-[#0078D4]" : "border-gray-400"
-                          }`}
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedPlan === "annual" ? "border-[#0078D4] bg-[#0078D4]" : "border-gray-400"
+                            }`}
                         >
                           {selectedPlan === "annual" && <Check className="w-2.5 h-2.5 text-white" />}
                         </span>
@@ -1264,11 +1253,10 @@ export default function AuthPage({
                       key={code}
                       type="button"
                       onClick={() => setDevCompanyCode(code)}
-                      className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold border transition-all cursor-pointer ${
-                        devCompanyCode === code
+                      className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold border transition-all cursor-pointer ${devCompanyCode === code
                           ? "bg-purple-600 text-white border-purple-600 shadow-xs"
                           : "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800"
-                      }`}
+                        }`}
                     >
                       {code}
                     </button>

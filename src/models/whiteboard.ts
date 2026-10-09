@@ -2,7 +2,7 @@ import mongoose, { Schema, Model } from "mongoose";
 
 export interface IWhiteboardNode {
   id: string;
-  type: "task" | "shape" | "sticky" | "text" | "frame" | "logo" | "legend" | "drawing";
+  type: "task" | "shape" | "sticky" | "text" | "frame" | "logo" | "legend" | "drawing" | "image";
   x: number;
   y: number;
   width: number;
@@ -12,7 +12,7 @@ export interface IWhiteboardNode {
   body?: string;
   color?: string;
   fillType?: "solid" | "tint" | "pattern" | "none";
-  shapeType?: "rectangle" | "rounded" | "circle" | "diamond" | "triangle" | "star" | "heart" | "arrow-right";
+  shapeType?: "rectangle" | "rounded" | "circle" | "diamond" | "triangle" | "star" | "heart" | "arrow-right" | "hexagon";
   fontSize?: string;
   fontWeight?: string;
   textAlign?: "left" | "center" | "right";
@@ -21,6 +21,8 @@ export interface IWhiteboardNode {
   zIndex?: number;
   pathData?: string;
   strokeWidth?: number;
+  imageUrl?: string;
+  progress?: number;
 }
 
 export interface IWhiteboardEdge {
@@ -88,9 +90,11 @@ const whiteboardSchema = new Schema<IWhiteboard>(
         id: { type: String, required: true },
         type: {
           type: String,
-          enum: ["task", "shape", "sticky", "text", "frame", "logo", "legend", "drawing"],
+          enum: ["task", "shape", "sticky", "text", "frame", "logo", "legend", "drawing", "image"],
           default: "shape",
         },
+        imageUrl: { type: String, default: "" },
+        progress: { type: Number, default: 0 },
         x: { type: Number, required: true },
         y: { type: Number, required: true },
         width: { type: Number, required: true },
@@ -115,6 +119,7 @@ const whiteboardSchema = new Schema<IWhiteboard>(
             "star",
             "heart",
             "arrow-right",
+            "hexagon",
           ],
           default: "rectangle",
         },
