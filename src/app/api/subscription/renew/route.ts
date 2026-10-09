@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import connectToDatabase from "@/lib/mongodb";
 import { Company } from "@/models";
 import { CompanyStatus } from "@/models/enums";
-import { verifyPaymentVerificationToken, PRICING_PLANS, PlanId } from "@/lib/razorpay";
+import {
+  verifyPaymentVerificationToken,
+  PRICING_PLANS,
+  PlanId,
+  calculateTieredSubscriptionCost,
+} from "@/lib/razorpay";
 import { getCurrentSession } from "@/server/auth/session";
 
 export async function POST(req: NextRequest) {
@@ -76,14 +81,28 @@ export async function POST(req: NextRequest) {
       newPeriodEnd.setMonth(newPeriodEnd.getMonth() + 1);
     }
 
+    const userCount = Math.max(
+      1,
+      Number(verification.payload?.userCount || company.subscription?.userCount) || 1
+    );
+    const tiered = calculateTieredSubscriptionCost(userCount, planId, "USD");
+    const amountUsd = tiered.totalUsd;
+
     company.subscription = {
       planId,
-      planName: planConfig.name,
+      planName: `${planConfig.name} (${tiered.tierFormulaLabel})`,
       startDate: company.subscription?.startDate || now,
       currentPeriodEnd: newPeriodEnd,
       status: "active",
       razorpayPaymentId: paymentId || verification.payload?.paymentId || "renew_razorpay",
-      amountUsd: planConfig.usdAmount,
+      amountUsd,
+      userCount,
+      pricePerUserMonthly: 5,
+      baseStorageGB: company.subscription?.baseStorageGB || 2,
+      extraStorageGB: company.subscription?.extraStorageGB || 0,
+      storageAddonCostUSD: company.subscription?.storageAddonCostUSD || 0,
+      usedStorageBytes: company.subscription?.usedStorageBytes || 0,
+      nextBillingAmountUSD: amountUsd + (company.subscription?.storageAddonCostUSD || 0),
     };
 
     if (company.status === CompanyStatus.Paused) {

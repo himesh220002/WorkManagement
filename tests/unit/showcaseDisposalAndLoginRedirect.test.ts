@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { NextRequest } from "next/server";
 import { middleware } from "@/middleware";
-import { getTenantQueryFilter, SessionContext } from "@/server/auth/session";
+import { getTenantQueryFilter, SessionContext, UNASSIGNED_TENANT_ID } from "@/server/auth/session";
 
 describe("Disposal of Showcase Mode & Enforcement of Default Login Redirect", () => {
   const baseUrl = "https://taskpms.cyphertech.online";
@@ -144,7 +144,7 @@ describe("Disposal of Showcase Mode & Enforcement of Default Login Redirect", ()
       };
 
       const filter = getTenantQueryFilter(unauthSession);
-      expect(filter).toEqual({ companyId: "unauthenticated_boundary_lock" });
+      expect(filter).toEqual({ companyId: UNASSIGNED_TENANT_ID });
     });
 
     it("isolates tenant queries strictly to the active companyId when authenticated", () => {

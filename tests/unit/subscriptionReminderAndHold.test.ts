@@ -92,11 +92,11 @@ describe("Subscription Reminder Thresholds & Account Hold Logic", () => {
     expect(res?.warningMessage).toContain("expired");
   });
 
-  it("correctly includes the 3-Month Plan at $55 USD in PRICING_PLANS", () => {
+  it("correctly includes the 3-Month Plan at $14 USD / user in PRICING_PLANS", () => {
     const quarterly = PRICING_PLANS.quarterly;
     expect(quarterly).toBeDefined();
-    expect(quarterly.usdAmount).toBe(55);
+    expect(quarterly.usdAmount).toBe(14);
     expect(quarterly.durationMonths).toBe(3);
-    expect(quarterly.discountBadge).toBe("Save $5 (3 Months)");
+    expect(quarterly.discountBadge).toBe("Save 7% ($14/user)");
   });
 });

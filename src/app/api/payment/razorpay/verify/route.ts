@@ -3,6 +3,7 @@ import {
   PRICING_PLANS,
   verifyRazorpaySignature,
   createPaymentVerificationToken,
+  calculateTieredSubscriptionCost,
 } from "@/lib/razorpay";
 
 export async function POST(req: NextRequest) {
@@ -29,13 +30,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const userCount = Math.max(1, Number(body.userCount) || 1);
+    const currency = ((body.currency || "INR").toUpperCase()) as "USD" | "INR";
+    const tiered = calculateTieredSubscriptionCost(userCount, planId, currency);
+    const amount = currency === "INR" ? tiered.totalInr : tiered.totalUsd;
+
     // Generate signed verification token valid for 24h to unlock organization registration
     const verificationToken = createPaymentVerificationToken({
       plan: planId,
       orderId,
       paymentId,
-      amount: selectedPlan.usdAmount,
-      currency: "USD",
+      amount,
+      currency,
+      userCount,
     });
 
     return NextResponse.json({
@@ -46,8 +53,11 @@ export async function POST(req: NextRequest) {
       orderId,
       plan: planId,
       planName: selectedPlan.name,
-      amountUsd: selectedPlan.usdAmount,
+      amountUsd: tiered.totalUsd,
+      monthlyUsd: tiered.monthlyUsd,
       billingCycle: selectedPlan.billingCycle,
+      tierFormula: tiered.tierFormulaLabel,
+      userCount,
     });
   } catch (error: any) {
     console.error("Payment verification route error:", error);

@@ -15,7 +15,7 @@ const sections = [
   },
   {
     h: "2. Subscription & Direct Paywall",
-    p: "New organizations are provisioned upon activating an active subscription ($20 USD / month, $55 USD / 3 months, or $200 USD / year) processed via Razorpay. Direct paywall applies to all workspace initializations. Subscriptions can be managed or cancelled at any time.",
+    p: "New organizations are provisioned upon activating an active subscription ($5 USD / user / month, $14 USD / user / 3 months, or $50 USD / user / year) processed via Razorpay. Direct paywall applies to all workspace initializations. Subscriptions can be managed or cancelled at any time.",
   },
   {
     h: "3. Accounts & roles",
@@ -30,12 +30,12 @@ const sections = [
     p: "You agree not to: access another company's workspace; probe, scan or circumvent tenant isolation, authentication or rate limits; upload unlawful, infringing or malicious content; resell or white-label the service without written permission; or use the platform in a way that degrades it for others.",
   },
   {
-    h: "6. Document storage limits",
-    p: "Uploads are governed per vault: Project & Deliverables 25 MB, Sales & Client Pipeline 15 MB, Salary/Payroll & Finance 10 MB, Employee & Onboarding 5 MB — with restricted file formats per category. We may reject or quarantine files that violate these limits or appear malicious.",
+    h: "6. Document storage limits & Elastic S3 Scaling",
+    p: "Every workspace includes 2 GB of complimentary encrypted cloud storage. Storage scales automatically: when usage exceeds 2 GB, an additional 5 GB capacity block is granted for $3 USD/month billed on your next cycle, with seamless incremental 5 GB tiers ($3 USD/each) as your repository expands. Individual upload ceilings apply per vault: Project & Deliverables 25 MB, Sales & Client Pipeline 15 MB, Salary/Payroll & Finance 10 MB, Employee & Onboarding 5 MB.",
   },
   {
     h: "7. Billing & cancellation",
-    p: "Paid tiers are billed per company workspace as shown at signup. You can cancel at any time; service continues until the end of the paid period. Refunds are handled case by case within 14 days of a charge — contact hello@taskpms.com.",
+    p: "Paid tiers are billed based on provisioned user seats plus any accumulated elastic storage blocks as shown at signup or in workspace settings. You can adjust seats or cancel at any time; service continues until the end of the paid period. Refunds are handled case by case within 14 days of a charge — contact hello@taskpms.com.",
   },
   {
     h: "8. Availability & support",

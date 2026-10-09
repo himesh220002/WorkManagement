@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let paymentPayload: any = null;
     if (paymentToken) {
       const { verifyPaymentVerificationToken } = await import("@/lib/razorpay");
       const paymentCheck = verifyPaymentVerificationToken(paymentToken);
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
           { status: 402 }
         );
       }
+      paymentPayload = paymentCheck.payload;
     }
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -105,14 +107,20 @@ export async function POST(req: NextRequest) {
       currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
     }
 
+    const userCount = Math.max(
+      1,
+      Number(paymentPayload?.userCount || body.userCount) || 1
+    );
+
+    const pricePerUser = planId === "annual" ? 50 : planId === "quarterly" ? 14 : 5;
+    const amountUsd = pricePerUser * userCount;
+
     const planName =
       planId === "annual"
-        ? "Enterprise Annual ($200/yr)"
+        ? `Enterprise Annual ($50/user/yr)`
         : planId === "quarterly"
-        ? "Enterprise Quarterly ($55/3mo)"
-        : "Enterprise Monthly ($20/mo)";
-
-    const amountUsd = planId === "annual" ? 200 : planId === "quarterly" ? 55 : 20;
+        ? `Enterprise Quarterly ($14/user/3mo)`
+        : `Enterprise Monthly ($5/user/mo)`;
 
     // 1. Create company in transaction
     const [company] = await Company.create(
@@ -132,6 +140,13 @@ export async function POST(req: NextRequest) {
             status: "active",
             razorpayPaymentId: body.paymentId || undefined,
             amountUsd,
+            userCount,
+            pricePerUserMonthly: 5,
+            baseStorageGB: 2,
+            extraStorageGB: 0,
+            storageAddonCostUSD: 0,
+            usedStorageBytes: 0,
+            nextBillingAmountUSD: amountUsd,
           },
           status: CompanyStatus.Active,
           settings: {

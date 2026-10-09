@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PRICING_PLANS, getRazorpayCredentials } from "@/lib/razorpay";
+import {
+  PRICING_PLANS,
+  getRazorpayCredentials,
+  calculateTieredSubscriptionCost,
+} from "@/lib/razorpay";
 import Razorpay from "razorpay";
 
 export async function POST(req: NextRequest) {
@@ -8,17 +12,19 @@ export async function POST(req: NextRequest) {
     const planId: "monthly" | "quarterly" | "annual" =
       body.plan === "annual" ? "annual" : body.plan === "quarterly" ? "quarterly" : "monthly";
     const selectedPlan = PRICING_PLANS[planId];
-    const currency = body.currency || "USD"; // USD or INR
+    // Default to INR to enable UPI (GPay, PhonePe, Paytm, QR), Netbanking & Wallets in Razorpay
+    const currency = (body.currency || "INR").toUpperCase() as "USD" | "INR";
+
+    const userCount = Math.max(1, Number(body.userCount) || 1);
 
     const { keyId, keySecret, isConfigured } = getRazorpayCredentials();
 
-    // Determine amount in smallest unit (e.g. cents for USD, paise for INR)
-    const amount =
-      currency === "INR"
-        ? selectedPlan.inrAmount * 100
-        : selectedPlan.usdAmount * 100;
+    // Determine tiered amount in smallest unit (paise for INR, cents for USD)
+    const tiered = calculateTieredSubscriptionCost(userCount, planId, currency);
+    const totalCurrencyAmount = currency === "INR" ? tiered.totalInr : tiered.totalUsd;
+    const amount = Math.round(totalCurrencyAmount * 100);
 
-    const receipt = `rcpt_${planId}_${Date.now().toString(36)}`;
+    const receipt = `rcpt_${planId}_u${userCount}_${Date.now().toString(36)}`;
 
     if (isConfigured) {
       try {
@@ -35,6 +41,10 @@ export async function POST(req: NextRequest) {
             plan: planId,
             planName: selectedPlan.name,
             billingCycle: selectedPlan.billingCycle,
+            userCount: String(userCount),
+            tierFormula: tiered.tierFormulaLabel,
+            companyCode: body.companyCode || "",
+            companyId: body.companyId || "",
           },
         });
 

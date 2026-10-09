@@ -163,7 +163,7 @@ const faqs = [
   },
   {
     q: "What is the pricing model for TaskPMS?",
-    a: "TaskPMS operates with direct, transparent subscription tiers: $20 USD / month, $55 USD / 3 months, or $200 USD / year (save 17%). Full access is provisioned upon registering your dedicated company workspace.",
+    a: "TaskPMS operates with simple, transparent per-user subscription tiers: $5 USD / month per user, $14 USD / user for 3 months, or $50 USD / user per year (save 17% — 2 months free). Every organization workspace includes 2 GB free encrypted AWS S3 document vault, with elastic auto-expansion (+5 GB for $3/mo in next month's bill upon hitting storage limits).",
   },
   {
     q: "What technology is TaskPMS built on?",
@@ -218,7 +218,7 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link href="/auth/login" className="px-3 py-1.5 text-xs font-semibold border border-[#0078d4]/30 text-[#0078d4] rounded-sm hover:bg-[#EBF3FC] transition-colors">Sign In</Link>
-            <Link href="/auth/signup" className="bg-[#0078d4] text-white px-3 sm:px-4 py-1.5 font-medium hover:bg-[#005a9e] transition-colors rounded-sm text-xs sm:text-sm">Get Started ($20/mo)</Link>
+            <Link href="/auth/signup" className="bg-[#0078d4] text-white px-3 sm:px-4 py-1.5 font-medium hover:bg-[#005a9e] transition-colors rounded-sm text-xs sm:text-sm">Get Started ($5/user)</Link>
           </div>
         </div>
       </header>
@@ -571,51 +571,67 @@ export default function Home() {
       {/* ── Pricing / paywall CTA ───────────────────────────────────── */}
       <section id="pricing" className="max-w-4xl mx-auto text-center py-16 sm:py-20 px-4 sm:px-6 scroll-mt-14">
         <Building2 className="w-8 h-8 text-[#0078d4] mx-auto mb-4" />
-        <h2 className="text-2xl sm:text-3xl font-light tracking-tight text-gray-900 dark:text-white mb-3">Enterprise Direct Subscription Pricing</h2>
+        <h2 className="text-2xl sm:text-3xl font-light tracking-tight text-gray-900 dark:text-white mb-3">Enterprise Per-User Subscription Pricing</h2>
         <p className="text-gray-600 dark:text-zinc-400 font-light max-w-2xl mx-auto mb-7 text-[15px]">
-          Dedicated tenant database perimeter, AWS S3 document vault, Frappe Gantt timelines and 5 RBAC roles. Direct subscription via Razorpay — no free trial required.
+          Dedicated tenant database perimeter, AWS S3 document vault, Frappe Gantt timelines and 5 RBAC roles. $5/month per user with 2 GB cloud storage included. Direct checkout via Razorpay.
         </p>
-        <div className="grid sm:grid-cols-3 gap-4 text-left text-xs mb-8 max-w-4xl mx-auto">
+        <div className="grid sm:grid-cols-3 gap-4 text-left text-xs mb-6 max-w-4xl mx-auto">
           <div className="bg-white dark:bg-[#201F1E] border border-gray-200 dark:border-[#3B3A39] rounded-lg p-5 shadow-sm">
             <div className="flex justify-between items-center mb-1">
               <span className="font-bold text-sm text-gray-900 dark:text-white">Monthly Plan</span>
               <span className="text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 font-semibold px-2 py-0.5 rounded">Flexible</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">$20 <span className="text-xs font-normal text-gray-500">USD / mo</span></p>
-            <p className="text-gray-500 dark:text-zinc-400 mb-3 font-light">All dashboards, unlimited parallel pipelines, presigned S3 vault, and 5 roles.</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">$5 <span className="text-xs font-normal text-gray-500">USD / user / mo</span></p>
+            <p className="text-gray-500 dark:text-zinc-400 mb-3 font-light">All dashboards, unlimited parallel pipelines, presigned S3 vault, and 2 GB storage included.</p>
             <Link href="/auth/signup?plan=monthly" className="w-full text-center block bg-[#0078d4] hover:bg-[#005a9e] text-white py-2 rounded text-xs font-bold transition-colors">
-              Subscribe Monthly ($20/mo)
+              Subscribe Monthly ($5/user)
             </Link>
           </div>
 
           <div className="bg-white dark:bg-[#201F1E] border-2 border-[#0078d4] rounded-lg p-5 shadow-sm relative">
             <span className="absolute -top-2.5 right-3 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0078d4] text-white">
-              Quarterly
+              Save $1/user
             </span>
             <div className="flex justify-between items-center mb-1">
               <span className="font-bold text-sm text-gray-900 dark:text-white">3-Month Plan</span>
               <span className="text-[10px] bg-sky-100 dark:bg-sky-900/60 text-sky-800 dark:text-sky-300 font-semibold px-2 py-0.5 rounded">Popular</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">$55 <span className="text-xs font-normal text-gray-500">USD / 3 mo</span></p>
-            <p className="text-gray-500 dark:text-zinc-400 mb-3 font-light">Quarterly billing cycle with full platform access and multi-squad coordination.</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">$14 <span className="text-xs font-normal text-gray-500">USD / user / 3 mo</span></p>
+            <p className="text-gray-500 dark:text-zinc-400 mb-3 font-light">~$4.67/mo per seat. Quarterly billing cycle with full platform access and 2 GB storage included.</p>
             <Link href="/auth/signup?plan=quarterly" className="w-full text-center block bg-[#0078d4] hover:bg-[#005a9e] text-white py-2 rounded text-xs font-bold transition-colors">
-              Subscribe Quarterly ($55/3mo)
+              Subscribe Quarterly ($14/user)
             </Link>
           </div>
 
           <div className="bg-white dark:bg-[#201F1E] border-2 border-emerald-600 rounded-lg p-5 shadow-sm relative">
             <span className="absolute -top-2.5 right-3 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#107C10] text-white">
-              Save 17% ($40/yr)
+              Save 17% (2 Mo Free)
             </span>
             <div className="flex justify-between items-center mb-1">
               <span className="font-bold text-sm text-gray-900 dark:text-white">Annual Plan</span>
               <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 font-semibold px-2 py-0.5 rounded">Best Value</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">$200 <span className="text-xs font-normal text-gray-500">USD / yr</span></p>
-            <p className="text-gray-500 dark:text-zinc-400 mb-3 font-light">Includes all features plus priority enterprise onboarding and support.</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">$50 <span className="text-xs font-normal text-gray-500">USD / user / yr</span></p>
+            <p className="text-gray-500 dark:text-zinc-400 mb-3 font-light">$4.17/mo per seat (2 months free!). Priority enterprise onboarding and 2 GB storage included.</p>
             <Link href="/auth/signup?plan=annual" className="w-full text-center block bg-[#107C10] hover:bg-[#0E6B0E] text-white py-2 rounded text-xs font-bold transition-colors">
-              Subscribe Annual ($200/yr)
+              Subscribe Annual ($50/user)
             </Link>
+          </div>
+        </div>
+
+        {/* Elastic Storage Callout Box */}
+        <div className="bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-xs max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-left shadow-xs">
+          <div className="space-y-0.5">
+            <span className="font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+              <span>Cloud Document Storage:</span>
+              <span className="text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.2 rounded-full text-[10px]">2 GB Free Included</span>
+            </span>
+            <p className="text-gray-600 dark:text-zinc-300 text-[11px] leading-relaxed">
+              When your company reaches 2 GB, storage automatically unlocks <strong>+5 GB (7 GB total)</strong> for only <strong>+$3 USD in your next monthly bill</strong>. Similarly, hit 7 GB and get another +5 GB (12 GB total) for +$3 USD. Auto-scales with zero upload disruption.
+            </p>
+          </div>
+          <div className="shrink-0 font-mono font-bold text-[11px] px-3 py-1.5 rounded bg-[#0078D4] text-white shadow-xs">
+            +$3 / 5 GB Elastic
           </div>
         </div>
       </section>

@@ -39,6 +39,7 @@ import {
 import { DocumentCategory } from "@/models/types";
 import { DOCUMENT_CATEGORY_CONFIGS, validateDocumentFile } from "@/config/documentLimits";
 import { isImageFile, compressImageFile, mergeImagesToPdf } from "@/utils/imageCompressor";
+import { calculateElasticStorage } from "@/lib/elasticStorage";
 
 export interface BatchPageItem {
   id: string;
@@ -185,6 +186,15 @@ export default function DocsClient({
     const maxBytes = categoryConfig.maxSizeMB * 1024 * 1024;
     return batchFiles.some((item) => !item.applySizeReducer && item.size > maxBytes);
   }, [batchFiles, categoryConfig.maxSizeMB]);
+
+  // Overall workspace storage telemetry computed against elastic scaling
+  const totalStorageBytes = useMemo(() => {
+    return documents.reduce((acc, doc) => acc + (doc.fileSize || 0), 0);
+  }, [documents]);
+
+  const storageMetrics = useMemo(() => {
+    return calculateElasticStorage(totalStorageBytes);
+  }, [totalStorageBytes]);
 
   // Clean up object URLs on unmount
   useEffect(() => {
@@ -1021,6 +1031,96 @@ export default function DocsClient({
               <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1">
                 <ShieldCheck className="w-4 h-4" /> taskflow-pm-storage-prod (ap-south-1)
               </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Elastic Storage Quota & Telemetry Banner */}
+        <div className="mt-6 bg-white dark:bg-[#202024] rounded-2xl border border-gray-200 dark:border-zinc-800 shadow-sm p-4 sm:p-5">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 shrink-0">
+                <HardDrive className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                    Elastic Cloud Storage Telemetry
+                  </h3>
+                  <span
+                    className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                      storageMetrics.isOverBaseQuota
+                        ? "bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300"
+                        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300"
+                    }`}
+                  >
+                    {storageMetrics.isOverBaseQuota
+                      ? `Elastic Tier (+${storageMetrics.extraBuckets * 5} GB Active)`
+                      : "Complimentary Base Tier (2 GB)"}
+                  </span>
+                  <span className="text-[11px] text-gray-500 dark:text-zinc-400">
+                    {storageMetrics.usedMB >= 1024
+                      ? `${storageMetrics.usedGB.toFixed(2)} GB`
+                      : `${storageMetrics.usedMB.toFixed(1)} MB`}{" "}
+                    used of {storageMetrics.totalQuotaGB} GB allocated
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+                  Every workspace includes <strong>2 GB free</strong> on AWS S3. When storage reaches 2 GB, it auto-expands to 7 GB for <strong>+$3 USD in your next monthly bill</strong>, and expands in seamless <strong>+5 GB increments ($3 USD each)</strong> whenever you reach subsequent ceilings.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-6 lg:border-l lg:border-gray-100 lg:dark:border-zinc-800 lg:pl-6 shrink-0">
+              <div className="text-left sm:text-right">
+                <p className="text-[11px] text-gray-400 dark:text-zinc-500">Next Cycle Storage Add-on</p>
+                <p className="text-base font-bold text-gray-900 dark:text-white">
+                  {storageMetrics.storageAddonCostUSD > 0 ? (
+                    <span className="text-blue-600 dark:text-blue-400">
+                      +${storageMetrics.storageAddonCostUSD.toFixed(2)} USD
+                    </span>
+                  ) : (
+                    <span className="text-emerald-600 dark:text-emerald-400">
+                      $0.00 USD (Covered)
+                    </span>
+                  )}
+                </p>
+                <p className="text-[10px] text-gray-400 dark:text-zinc-500">
+                  {storageMetrics.isOverBaseQuota
+                    ? `${storageMetrics.extraBuckets} × 5GB elastic expansion`
+                    : "Within 2 GB complimentary quota"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="mt-4 pt-3 border-t border-gray-100 dark:border-zinc-800/80">
+            <div className="flex justify-between items-center text-[11px] text-gray-500 dark:text-zinc-400 mb-1.5">
+              <span>Allocated Quota Utilization: {storageMetrics.percentUsed}%</span>
+              <span>
+                {storageMetrics.usedMB >= 1024
+                  ? `${storageMetrics.usedGB.toFixed(2)} GB`
+                  : `${storageMetrics.usedMB.toFixed(1)} MB`}{" "}
+                / {storageMetrics.totalQuotaGB} GB
+                {storageMetrics.usedGB >= storageMetrics.totalQuotaGB * 0.9 && (
+                  <span className="ml-2 text-amber-500 font-semibold">
+                    (Approaching next +5GB expansion)
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-gray-100 dark:bg-zinc-800 overflow-hidden">
+              <div
+                className={`h-full transition-all duration-500 rounded-full ${
+                  storageMetrics.percentUsed > 90
+                    ? "bg-amber-500"
+                    : storageMetrics.isOverBaseQuota
+                    ? "bg-purple-600"
+                    : "bg-blue-600"
+                }`}
+                style={{ width: `${Math.min(100, storageMetrics.percentUsed)}%` }}
+              />
             </div>
           </div>
         </div>

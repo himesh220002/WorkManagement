@@ -34,6 +34,13 @@ export interface ICompanySubscription {
   razorpayPaymentId?: string;
   razorpayOrderId?: string;
   amountUsd?: number;
+  userCount?: number;
+  pricePerUserMonthly?: number;
+  baseStorageGB?: number;
+  extraStorageGB?: number;
+  storageAddonCostUSD?: number;
+  usedStorageBytes?: number;
+  nextBillingAmountUSD?: number;
 }
 
 export interface ICompany {

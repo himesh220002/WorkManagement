@@ -27,8 +27,17 @@ import {
   CreditCard,
   Check,
 } from "lucide-react";
+
+import { SiRazorpay } from "react-icons/si";
+
 import RazorpayCheckoutModal from "@/components/payment/RazorpayCheckoutModal";
-import { PRICING_PLANS, PlanId } from "@/lib/razorpay";
+import { PRICING_PLANS, PlanId, calculateTieredSubscriptionCost } from "@/lib/razorpay";
+
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 interface SessionData {
   user: {
@@ -93,9 +102,9 @@ const PERSONA_CONFIGS: PersonaMeta[] = [
     badgeStyle: "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200",
     accentBorder: "border-amber-500",
     demoCreds: {
-      email: "sarah.connor@acme.corp",
-      pass: "OwnerSecure#2026",
-      company: "ACME",
+      email: "satyamhimesh@gmail.com",
+      pass: "admin123",
+      company: "ORGTTU",
     },
   },
   {
@@ -103,13 +112,13 @@ const PERSONA_CONFIGS: PersonaMeta[] = [
     label: "System Developer",
     shortRole: "Developer Superuser",
     icon: Shield,
-    tagline: "Global multi-tenant override and internal architectural development",
+    tagline: "Log into any company workspace as Developer using your 16-digit regDevKey & 6-character Company ID",
     badgeStyle: "bg-rose-100 text-rose-900 border-rose-300 dark:bg-rose-950/60 dark:text-rose-200",
     accentBorder: "border-rose-500",
     demoCreds: {
       email: "dev.superuser@taskflow.internal",
-      pass: "SuperDev@2026",
-      company: "",
+      pass: "8105542318220002",
+      company: "ORGTTU",
     },
   },
 ];
@@ -153,9 +162,20 @@ export default function AuthPage({
   // Razorpay Paywall Subscription State
   const [isPaymentVerified, setIsPaymentVerified] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PlanId>("monthly");
+  const [signupUserCount, setSignupUserCount] = useState<number>(2);
+  const [selectedCurrency, setSelectedCurrency] = useState<"INR" | "USD">("INR");
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentToken, setPaymentToken] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
+  const [paymentConfirmedAt, setPaymentConfirmedAt] = useState<string>("");
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+
+  // 16-Digit Developer Bypass Key (regDevKey) State
+  const [isRegDevKeyOpen, setIsRegDevKeyOpen] = useState(false);
+  const [regDevKeyInput, setRegDevKeyInput] = useState("");
+  const [isVerifyingDevKey, setIsVerifyingDevKey] = useState(false);
+  const [devKeyError, setDevKeyError] = useState<string | null>(null);
 
   // Expired Owner Renewal State
   const [expiredOwnerInfo, setExpiredOwnerInfo] = useState<{
@@ -166,11 +186,34 @@ export default function AuthPage({
   } | null>(null);
   const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
 
-  // Check active session and payment URL parameters on mount
+  // Auto-record timestamp when payment is verified
+  useEffect(() => {
+    if (isPaymentVerified && !paymentConfirmedAt) {
+      setPaymentConfirmedAt(
+        new Date().toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      );
+    }
+  }, [isPaymentVerified, paymentConfirmedAt]);
+
+  // Check active session, inject Razorpay SDK and check payment URL parameters on mount
   useEffect(() => {
     fetchSession();
 
     if (typeof window !== "undefined") {
+      if (!document.getElementById("razorpay-sdk")) {
+        const script = document.createElement("script");
+        script.id = "razorpay-sdk";
+        script.src = "https://checkout.razorpay.com/v1/checkout.js";
+        script.async = true;
+        document.body.appendChild(script);
+      }
+
       const urlParams = new URLSearchParams(window.location.search);
       const tabParam = urlParams.get("tab");
       if (tabParam === "signup") {
@@ -180,6 +223,17 @@ export default function AuthPage({
       const token = urlParams.get("payment_token");
       const plan = urlParams.get("plan");
       const paid = urlParams.get("paid");
+      const seatsParam = urlParams.get("seats") || urlParams.get("user_count");
+      const currencyParam = urlParams.get("currency");
+
+      if (seatsParam) {
+        const parsedSeats = parseInt(seatsParam, 10);
+        if (!isNaN(parsedSeats) && parsedSeats > 0) setSignupUserCount(parsedSeats);
+      }
+      if (currencyParam === "USD" || currencyParam === "INR") {
+        setSelectedCurrency(currencyParam);
+      }
+
       if (token || paid === "true") {
         setIsPaymentVerified(true);
         if (token) setPaymentToken(token);
@@ -337,14 +391,192 @@ export default function AuthPage({
     }
   };
 
+  const handleDevKeyBypass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDevKeyError(null);
+    setIsVerifyingDevKey(true);
+
+    try {
+      const res = await fetch("/api/auth/dev-bypass", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          regDevKey: regDevKeyInput,
+          plan: selectedPlan,
+          userCount: signupUserCount,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to verify developer key");
+      }
+
+      setIsPaymentVerified(true);
+      setPaymentToken(data.verificationToken);
+      setPaymentId(data.paymentId);
+      setSelectedPlan(data.plan);
+      if (data.userCount) setSignupUserCount(data.userCount);
+      setIsRegDevKeyOpen(false);
+      setSuccess(`✓ 16-digit regDevKey verified! Organization registration unlocked in Developer Mode.`);
+    } catch (err: any) {
+      setDevKeyError(err.message);
+    } finally {
+      setIsVerifyingDevKey(false);
+    }
+  };
+
+  const handleDirectRazorpayCheckout = async () => {
+    setIsProcessingPayment(true);
+    setPaymentError(null);
+    setError(null);
+
+    try {
+      const orderRes = await fetch("/api/payment/razorpay/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: selectedPlan,
+          userCount: signupUserCount,
+          currency: selectedCurrency,
+        }),
+      });
+
+      const orderData = await orderRes.json();
+      if (!orderData.success) {
+        throw new Error(orderData.error || "Failed to create payment order");
+      }
+
+      const planDetails = PRICING_PLANS[selectedPlan];
+      const tieredCalc = calculateTieredSubscriptionCost(signupUserCount, selectedPlan, selectedCurrency);
+      const displayAmount =
+        selectedCurrency === "INR"
+          ? `₹${tieredCalc.totalInr.toLocaleString("en-IN")}`
+          : `$${tieredCalc.totalUsd}`;
+
+      if (typeof window !== "undefined" && window.Razorpay) {
+        const options = {
+          key: orderData.keyId,
+          amount: orderData.amount,
+          currency: orderData.currency || selectedCurrency,
+          name: "TaskPMS Enterprise",
+          description: `${planDetails.name} · ${signupUserCount} Seat${signupUserCount > 1 ? "s" : ""} (${displayAmount})`,
+          order_id: orderData.isSandbox ? undefined : orderData.orderId,
+          prefill: {
+            name: signupOwnerName || signupCompanyName || "Organization Owner",
+            email: signupEmail || "owner@company.com",
+          },
+          theme: {
+            color: "#0078D4",
+          },
+          method: {
+            netbanking: true,
+            card: true,
+            upi: true,
+            wallet: true,
+            emi: true,
+            paylater: true,
+          },
+          config: {
+            display: {
+              blocks: {
+                all_methods: {
+                  name: "All Payment Methods",
+                  instruments: [
+                    { method: "upi" },
+                    { method: "card" },
+                    { method: "netbanking" },
+                    { method: "wallet" },
+                    { method: "emi" },
+                  ],
+                },
+              },
+              sequence: ["block.all_methods"],
+              preferences: {
+                show_default_blocks: true,
+              },
+            },
+          },
+          handler: async (response: any) => {
+            await verifySignupPayment({
+              orderId: response.razorpay_order_id || orderData.orderId,
+              paymentId: response.razorpay_payment_id || `pay_${Date.now()}`,
+              signature: response.razorpay_signature || "signature_ok",
+              plan: selectedPlan,
+              userCount: signupUserCount,
+              currency: selectedCurrency,
+            });
+          },
+          modal: {
+            ondismiss: () => {
+              setIsProcessingPayment(false);
+            },
+          },
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.on("payment.failed", (response: any) => {
+          setPaymentError(response.error?.description || "Payment failed. Please try again.");
+          setIsProcessingPayment(false);
+        });
+        rzp.open();
+      } else {
+        await verifySignupPayment({
+          orderId: orderData.orderId,
+          paymentId: `pay_direct_${Date.now()}`,
+          signature: "direct_bypass_signature",
+          plan: selectedPlan,
+          userCount: signupUserCount,
+          currency: selectedCurrency,
+        });
+      }
+    } catch (err: any) {
+      console.error("Direct payment initiation error:", err);
+      setPaymentError(err.message || "Failed to initialize payment");
+      setIsProcessingPayment(false);
+    }
+  };
+
+  const verifySignupPayment = async (payload: {
+    orderId: string;
+    paymentId: string;
+    signature: string;
+    plan: PlanId;
+    userCount: number;
+    currency: "INR" | "USD";
+  }) => {
+    try {
+      const verifyRes = await fetch("/api/payment/razorpay/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const verifyData = await verifyRes.json();
+      if (!verifyData.success) {
+        throw new Error(verifyData.error || "Payment verification failed");
+      }
+
+      setIsProcessingPayment(false);
+      setIsPaymentVerified(true);
+      setPaymentToken(verifyData.verificationToken);
+      setPaymentId(verifyData.paymentId);
+      setSuccess(
+        `✓ Subscription Payment Verified! (${PRICING_PLANS[payload.plan].name} · ${payload.userCount} Seat${payload.userCount > 1 ? "s" : ""} · Receipt ID: ${verifyData.paymentId}). Please enter your organization details below.`
+      );
+    } catch (err: any) {
+      setPaymentError(err.message || "Payment verification failed");
+      setIsProcessingPayment(false);
+    }
+  };
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
 
     if (!isPaymentVerified) {
-      setError("Active subscription required. Please choose your plan and complete Razorpay checkout ($20/mo or $200/yr) to launch your workspace.");
-      setIsCheckoutModalOpen(true);
+      setError("Active subscription required. Please complete Razorpay checkout above or enter your 16-digit RegDevKey to unlock organization creation.");
       return;
     }
 
@@ -361,6 +593,7 @@ export default function AuthPage({
           email: signupEmail,
           password: signupPassword,
           plan: selectedPlan,
+          userCount: signupUserCount,
           paymentToken,
           paymentId,
         }),
@@ -408,8 +641,18 @@ export default function AuthPage({
   const currentConfig = PERSONA_CONFIGS.find((p) => p.key === selectedPersona)!;
   const ActiveIcon = currentConfig.icon;
 
+  const currentPlan = PRICING_PLANS[selectedPlan];
+  const tieredCalc = calculateTieredSubscriptionCost(signupUserCount, selectedPlan, selectedCurrency);
+  const monthlyCalc = calculateTieredSubscriptionCost(signupUserCount, "monthly", selectedCurrency);
+  const quarterlyCalc = calculateTieredSubscriptionCost(signupUserCount, "quarterly", selectedCurrency);
+  const annualCalc = calculateTieredSubscriptionCost(signupUserCount, "annual", selectedCurrency);
+  const totalDisplayPrice =
+    selectedCurrency === "INR"
+      ? `₹${tieredCalc.totalInr.toLocaleString("en-IN")}`
+      : `$${tieredCalc.totalUsd}`;
+
   return (
-    <main className="flex flex-col min-w-0 p-3 sm:p-6 flex-1 max-w-[1400px] mx-auto w-full">
+    <main className="flex flex-col min-w-0 p-0 sm:p-6 flex-1 max-w-[1400px] mx-auto w-full">
       {/* Header */}
       <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 sm:p-6 mb-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -517,7 +760,7 @@ export default function AuthPage({
       )}
 
       {/* ================= UNIFIED AUTH CARD WITH ROLE SELECTOR ================= */}
-      <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 sm:p-8 mb-6 shadow-sm max-w-2xl mx-auto w-full">
+      <section className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-6 sm:p-8 mb-6 shadow-sm mx-auto w-full">
         {/* Role Selector Dropdown */}
         <div className="pb-5 mb-5 border-b border-[#F3F2F1] dark:border-[#292827]">
           <label
@@ -602,117 +845,492 @@ export default function AuthPage({
 
             {ownerMode === "signup" ? (
               !isPaymentVerified ? (
-                <div className="space-y-4 text-xs max-w-2xl bg-white dark:bg-[#1E1E1E] p-6 rounded-xl border border-[#E1DFDD] dark:border-[#3B3A39] shadow-sm">
-                  <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-sm">
-                    <Lock className="w-4 h-4" />
-                    <span>Subscription Razorpay Payment</span>
-                  </div>
-
-                  <p className="text-[#605E5C] dark:text-[#C8C6C4] leading-relaxed text-xs">
-                    TaskPMS provides an isolated per-company MongoDB database perimeter and AWS S3 document vault. A direct paid subscription (<span className="font-semibold text-gray-900 dark:text-white">$20 USD/mo</span>, <span className="font-semibold text-gray-900 dark:text-white">$55 USD/3mo</span>, or <span className="font-semibold text-gray-900 dark:text-white">$200 USD/yr</span>) is strictly required to provision a new organization workspace.
-                  </p>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 my-4">
-                    <div
-                      onClick={() => setSelectedPlan("monthly")}
-                      className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer ${selectedPlan === "monthly"
-                          ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-xs"
-                          : "border-[#E1DFDD] dark:border-[#3B3A39] hover:border-gray-400"
-                        }`}
-                    >
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="font-bold text-xs text-[#242424] dark:text-white">Monthly Plan</span>
-                        <span
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedPlan === "monthly"
-                              ? "border-[#0078D4] bg-[#0078D4]"
-                              : "border-gray-400"
-                            }`}
-                        >
-                          {selectedPlan === "monthly" && <Check className="w-2.5 h-2.5 text-white" />}
-                        </span>
+                <div className="space-y-4 text-xs bg-white dark:bg-[#1E1E1E] p-6 rounded-xl border border-[#E1DFDD] dark:border-[#3B3A39] shadow-sm">
+                  {/* Header with Title and RegDevKey Quick Button */}
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-[#0078D4] dark:text-[#479EF5] flex items-center justify-center font-bold">
+                        <CreditCard className="w-4 h-4" />
                       </div>
-                      <div className="text-xl font-bold text-[#242424] dark:text-white">
-                        $20 <span className="text-xs font-normal text-gray-500">USD / mo</span>
+                      <div>
+                        <h3 className="font-bold text-sm text-[#242424] dark:text-white flex items-center gap-1.5">
+                          <span>Enterprise Workspace Subscription & Dedicated Cloud Perimeter</span>
+                        </h3>
+                        <p className="text-[11px] text-[#605E5C] dark:text-[#A19F9D]">
+                          Dedicated per-company isolated MongoDB database & encrypted AWS S3 document vault
+                        </p>
                       </div>
-                      <p className="text-[10px] text-gray-500 mt-1">Flexible month-to-month billing</p>
                     </div>
-
-                    <div
-                      onClick={() => setSelectedPlan("quarterly")}
-                      className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer relative ${selectedPlan === "quarterly"
-                          ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-xs"
-                          : "border-[#E1DFDD] dark:border-[#3B3A39] hover:border-gray-400"
-                        }`}
-                    >
-                      <span className="absolute -top-2.5 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#0078D4] text-white shadow-xs">
-                        Save $5 (3 Months)
-                      </span>
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="font-bold text-xs text-[#242424] dark:text-white">3-Month Plan</span>
-                        <span
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedPlan === "quarterly"
-                              ? "border-[#0078D4] bg-[#0078D4]"
-                              : "border-gray-400"
-                            }`}
-                        >
-                          {selectedPlan === "quarterly" && <Check className="w-2.5 h-2.5 text-white" />}
-                        </span>
-                      </div>
-                      <div className="text-xl font-bold text-[#242424] dark:text-white">
-                        $55 <span className="text-xs font-normal text-gray-500">USD / 3 mo</span>
-                      </div>
-                      <p className="text-[10px] text-[#0078D4] dark:text-[#479EF5] font-medium mt-1">
-                        Save $5 vs monthly
-                      </p>
-                    </div>
-
-                    <div
-                      onClick={() => setSelectedPlan("annual")}
-                      className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer relative ${selectedPlan === "annual"
-                          ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-xs"
-                          : "border-[#E1DFDD] dark:border-[#3B3A39] hover:border-gray-400"
-                        }`}
-                    >
-                      <span className="absolute -top-2.5 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#107C10] text-white shadow-xs">
-                        Save 17% ($40/yr)
-                      </span>
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="font-bold text-xs text-[#242424] dark:text-white">Annual Plan</span>
-                        <span
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedPlan === "annual"
-                              ? "border-[#0078D4] bg-[#0078D4]"
-                              : "border-gray-400"
-                            }`}
-                        >
-                          {selectedPlan === "annual" && <Check className="w-2.5 h-2.5 text-white" />}
-                        </span>
-                      </div>
-                      <div className="text-xl font-bold text-[#242424] dark:text-white">
-                        $200 <span className="text-xs font-normal text-gray-500">USD / yr</span>
-                      </div>
-                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">
-                        Best value for scaling
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-gray-100 dark:border-gray-800">
-                    <span className="text-[11px] text-[#605E5C] dark:text-[#A19F9D] flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5 text-[#107C10]" />
-                      <span>Encrypted Razorpay payment gateway</span>
-                    </span>
 
                     <button
                       type="button"
-                      onClick={() => setIsCheckoutModalOpen(true)}
-                      className="w-full sm:w-auto px-5 py-2.5 bg-[#0078D4] hover:bg-[#106EBE] text-white rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
+                      onClick={() => {
+                        setIsRegDevKeyOpen(!isRegDevKeyOpen);
+                        setDevKeyError(null);
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-semibold rounded-md bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800 transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs"
+                      title="Use 16-digit regDevKey from .env to bypass payment for testing"
                     >
-                      <CreditCard className="w-4 h-4" />
-                      <span>
-                        Pay with Razorpay (${selectedPlan === "annual" ? "200" : selectedPlan === "quarterly" ? "55" : "20"}) to Unlock
-                      </span>
-                      <ArrowRight className="w-4 h-4" />
+                      <KeyRound className="w-3.5 h-3.5" />
+                      <span>Use RegDevKey</span>
                     </button>
+                  </div>
+
+                  {/* 16-Digit Developer Key Inline Bypass Form */}
+                  {isRegDevKeyOpen && (
+                    <form
+                      onSubmit={handleDevKeyBypass}
+                      className="p-3.5 rounded-xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 space-y-2.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <KeyRound className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                          <span className="font-bold text-xs text-purple-900 dark:text-purple-200">
+                            Developer Registration Bypass (16-Digit regDevKey)
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsRegDevKeyOpen(false);
+                            setDevKeyError(null);
+                          }}
+                          className="text-purple-400 hover:text-purple-700 dark:hover:text-purple-200 text-xs"
+                        >
+                          ✕ Close
+                        </button>
+                      </div>
+
+                      <p className="text-[11px] text-purple-800 dark:text-purple-300 leading-relaxed">
+                        Enter your 16-digit <code>REG_DEV_KEY</code> from <code>.env</code> to bypass Razorpay payment and unlock organization creation directly for local S3 and multi-tenant testing.
+                      </p>
+
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          required
+                          maxLength={16}
+                          minLength={16}
+                          placeholder="e.g. 123A 1B2C 3D4E 5F6G"
+                          value={regDevKeyInput}
+                          onChange={(e) => setRegDevKeyInput(e.target.value.trim())}
+                          className="flex-1 px-3 py-1.5 text-xs font-mono rounded-lg border border-purple-300 dark:border-purple-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white uppercase tracking-wider focus:outline-none focus:ring-1 focus:ring-purple-500"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isVerifyingDevKey || !regDevKeyInput}
+                          className="px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer shadow-xs"
+                        >
+                          {isVerifyingDevKey ? "Verifying..." : "Unlock with RegDevKey"}
+                        </button>
+                      </div>
+
+                      {devKeyError && (
+                        <p className="text-[11px] text-red-600 dark:text-red-400 font-medium">
+                          ✕ {devKeyError}
+                        </p>
+                      )}
+
+                      <div className="pt-1 flex items-center justify-between text-[11px]">
+                        <span className="text-purple-700 dark:text-purple-300">
+                          Already created a company? Log into its workspace as Developer:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectPersona("superuser");
+                            setIsRegDevKeyOpen(false);
+                          }}
+                          className="text-purple-700 dark:text-purple-300 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                        >
+                          <span>Log into Company as Dev →</span>
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* Payment Currency Selection & Visual Payment Rails */}
+                  <div className="bg-[#FAF9F8] dark:bg-[#252423] p-4 rounded-xl border border-[#E1DFDD] dark:border-[#3B3A39] space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-[#242424] dark:text-white">
+                            Choose Billing Currency & Payment Rail
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                            {selectedCurrency === "INR" ? "Domestic Indian Rails Active" : "International Cards Active"}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#605E5C] dark:text-[#A19F9D]">
+                          Seamless checkout powered by Razorpay. Switch currency to view accepted local payment options.
+                        </p>
+                      </div>
+
+                      {/* Currency Switch Buttons */}
+                      <div className="flex items-center gap-1.5 p-1 bg-white dark:bg-[#1E1E1E] rounded-lg border border-[#E1DFDD] dark:border-[#3B3A39] shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCurrency("INR")}
+                          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${selectedCurrency === "INR"
+                            ? "bg-[#0078D4] text-white shadow-xs"
+                            : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                            }`}
+                        >
+                          <span>🇮🇳 India (INR ₹)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCurrency("USD")}
+                          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${selectedCurrency === "USD"
+                            ? "bg-[#0078D4] text-white shadow-xs"
+                            : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                            }`}
+                        >
+                          <span>🇺🇸 US & Global (USD $)</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Visual Payment Methods Highlight for Indian & US/Global clients */}
+                    {selectedCurrency === "INR" ? (
+                      <div className="p-3 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/60 space-y-2">
+                        <div className="flex items-center justify-between flex-wrap gap-1 text-[11px] text-emerald-900 dark:text-emerald-200 font-semibold">
+                          <span className="flex items-center gap-1.5">
+                            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            Accepted Payment Methods in India:
+                          </span>
+                          <span className="text-[10px] text-emerald-700 dark:text-emerald-400">
+                            Instant UPI QR & Real-time Verification
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <div className="p-2 rounded-md bg-white dark:bg-[#1E1E1E] border border-emerald-200/60 dark:border-emerald-900/40">
+                            <div className="font-bold text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                              <span>📱 UPI Instant</span>
+                            </div>
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                              Google Pay, PhonePe, Paytm, BHIM, Scan Any QR
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-md bg-white dark:bg-[#1E1E1E] border border-emerald-200/60 dark:border-emerald-900/40">
+                            <div className="font-bold text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                              <span>🏛️ NetBanking</span>
+                            </div>
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                              50+ Banks (HDFC, ICICI, SBI, Axis, Kotak)
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-md bg-white dark:bg-[#1E1E1E] border border-emerald-200/60 dark:border-emerald-900/40">
+                            <div className="font-bold text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                              <span>💳 Cards</span>
+                            </div>
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                              RuPay, Visa, MasterCard Credit & Debit
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-md bg-white dark:bg-[#1E1E1E] border border-emerald-200/60 dark:border-emerald-900/40">
+                            <div className="font-bold text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                              <span>👛 Wallets</span>
+                            </div>
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                              Amazon Pay, MobiKwik, Freecharge
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-lg bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-900/60 space-y-2">
+                        <div className="flex items-center justify-between flex-wrap gap-1 text-[11px] text-blue-900 dark:text-blue-200 font-semibold">
+                          <span className="flex items-center gap-1.5">
+                            <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                            Accepted US & International Payment Methods:
+                          </span>
+                          <span className="text-[10px] text-blue-700 dark:text-blue-400">
+                            Global Cards with 3D Secure Verification
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <div className="p-2 rounded-md bg-white dark:bg-[#1E1E1E] border border-blue-200/60 dark:border-blue-900/40">
+                            <div className="font-bold text-[11px] text-blue-800 dark:text-blue-300 flex items-center gap-1">
+                              <span>💳 International Cards</span>
+                            </div>
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                              Visa, MasterCard, American Express, Discover, Diners
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-md bg-white dark:bg-[#1E1E1E] border border-blue-200/60 dark:border-blue-900/40">
+                            <div className="font-bold text-[11px] text-blue-800 dark:text-blue-300 flex items-center gap-1">
+                              <span>🌐 100+ Countries</span>
+                            </div>
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                              Global cross-border payments with automatic currency settlement
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-md bg-white dark:bg-[#1E1E1E] border border-blue-200/60 dark:border-blue-900/40">
+                            <div className="font-bold text-[11px] text-blue-800 dark:text-blue-300 flex items-center gap-1">
+                              <span>🔒 Bank-Grade Security</span>
+                            </div>
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                              PCI-DSS Level 1 certified gateway & instant invoice receipt
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Team Seats Selector & Tiered Formula Breakdown */}
+                  <div className="bg-[#FAF9F8] dark:bg-[#252423] p-4 rounded-xl border border-[#E1DFDD] dark:border-[#3B3A39] space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <span className="font-bold text-xs text-[#242424] dark:text-white block">
+                          Workspace Team Seats:
+                        </span>
+                        <p className="text-[11px] text-[#605E5C] dark:text-[#A19F9D]">
+                          Total employee & manager accounts provisioned under this subscription
+                        </p>
+                      </div>
+
+                      {/* Stepper + Input */}
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center border border-[#E1DFDD] dark:border-[#3B3A39] rounded-lg bg-white dark:bg-[#1E1E1E] overflow-hidden shadow-xs">
+                          <button
+                            type="button"
+                            onClick={() => setSignupUserCount((c) => Math.max(2, c - 1))}
+                            disabled={signupUserCount <= 1}
+                            className="px-3 py-1.5 text-xs font-bold text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-800 disabled:opacity-30 cursor-pointer"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min={2}
+                            max={2000}
+                            value={signupUserCount}
+                            onChange={(e) => setSignupUserCount(Math.max(1, parseInt(e.target.value) || 2))}
+                            className="w-16 px-1 py-1 text-center font-mono font-bold text-xs text-[#0078D4] dark:text-[#479EF5] bg-transparent focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setSignupUserCount((c) => c + 1)}
+                            className="px-3 py-1.5 text-xs font-bold text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-800 cursor-pointer"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <span className="text-xs font-bold text-gray-700 dark:text-zinc-300">
+                          {signupUserCount === 1 ? "Seat" : "Seats"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Quick Preset Buttons [2, 4, 5, 10, 20, 50, 100, 500] */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 mr-1">
+                        Popular Tiers:
+                      </span>
+                      {[2, 4, 5, 10, 20, 50, 100, 500].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setSignupUserCount(preset)}
+                          className={`px-2.5 py-1 rounded text-[11px] font-bold border transition-all cursor-pointer ${signupUserCount === preset
+                            ? "bg-[#0078D4] text-white border-[#0078D4] shadow-xs"
+                            : "bg-white dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 border-gray-200 dark:border-zinc-700 hover:border-gray-400"
+                            }`}
+                        >
+                          {preset} Seats
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Dynamic Formula Applied & Effective Price Per User Breakdown */}
+                    <div className="p-2.5 rounded-lg bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px]">
+                      <div className="flex items-center gap-1.5 text-blue-900 dark:text-blue-200">
+                        <span className="font-semibold text-gray-600 dark:text-gray-400">Formula Applied:</span>
+                        <span className="font-bold text-[#0078D4] dark:text-[#479EF5]">
+                          {monthlyCalc.tierFormulaLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-600 dark:text-gray-400">Effective Cost:</span>
+                        <span className="px-2 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                          {selectedCurrency === "INR"
+                            ? `₹${monthlyCalc.effectivePerUserMonthlyInr} / user / mo`
+                            : `$${monthlyCalc.effectivePerUserMonthlyUsd.toFixed(2)} / user / mo`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3 Pricing Plan Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 my-2">
+                    {/* Monthly Plan */}
+                    <div
+                      onClick={() => setSelectedPlan("monthly")}
+                      className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${selectedPlan === "monthly"
+                        ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-xs"
+                        : "border-[#E1DFDD] dark:border-[#3B3A39] hover:border-gray-400 bg-white dark:bg-[#252423]"
+                        }`}
+                    >
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-bold text-xs text-[#242424] dark:text-white">Monthly Plan</span>
+                          <span
+                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedPlan === "monthly"
+                              ? "border-[#0078D4] bg-[#0078D4]"
+                              : "border-gray-400"
+                              }`}
+                          >
+                            {selectedPlan === "monthly" && <Check className="w-2.5 h-2.5 text-white" />}
+                          </span>
+                        </div>
+                        <div className="text-xl font-bold text-[#242424] dark:text-white">
+                          {selectedCurrency === "INR"
+                            ? `₹${monthlyCalc.totalInr.toLocaleString("en-IN")}`
+                            : `$${monthlyCalc.totalUsd}`}{" "}
+                          <span className="text-xs font-normal text-gray-500">/ mo</span>
+                        </div>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                          Flexible month-to-month · {selectedCurrency === "INR" ? `₹${monthlyCalc.effectivePerUserMonthlyInr}` : `$${monthlyCalc.effectivePerUserMonthlyUsd.toFixed(2)}`} / user
+                        </p>
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-gray-200/60 dark:border-zinc-700/60 font-semibold text-[11px] text-[#0078D4] dark:text-[#479EF5]">
+                        Renews monthly · Full flexibility
+                      </div>
+                    </div>
+
+                    {/* 3-Month Plan */}
+                    <div
+                      onClick={() => setSelectedPlan("quarterly")}
+                      className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${selectedPlan === "quarterly"
+                        ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-xs"
+                        : "border-[#E1DFDD] dark:border-[#3B3A39] hover:border-gray-400 bg-white dark:bg-[#252423]"
+                        }`}
+                    >
+                      <span className="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#0078D4] text-white shadow-xs">
+                        Save 7%
+                      </span>
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-bold text-xs text-[#242424] dark:text-white">3-Month Plan</span>
+                          <span
+                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedPlan === "quarterly"
+                              ? "border-[#0078D4] bg-[#0078D4]"
+                              : "border-gray-400"
+                              }`}
+                          >
+                            {selectedPlan === "quarterly" && <Check className="w-2.5 h-2.5 text-white" />}
+                          </span>
+                        </div>
+                        <div className="text-xl font-bold text-[#242424] dark:text-white">
+                          {selectedCurrency === "INR"
+                            ? `₹${quarterlyCalc.totalInr.toLocaleString("en-IN")}`
+                            : `$${quarterlyCalc.totalUsd}`}{" "}
+                          <span className="text-xs font-normal text-gray-500">/ 3 mo</span>
+                        </div>
+                        <p className="text-[10px] text-[#0078D4] dark:text-[#479EF5] font-medium mt-0.5">
+                          Save 7% vs standard monthly rate
+                        </p>
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-gray-200/60 dark:border-zinc-700/60 font-semibold text-[11px] text-[#0078D4] dark:text-[#479EF5]">
+                        Total: {selectedCurrency === "INR" ? `₹${quarterlyCalc.totalInr.toLocaleString("en-IN")}` : `$${quarterlyCalc.totalUsd}`} for 3 months
+                      </div>
+                    </div>
+
+                    {/* Annual Plan */}
+                    <div
+                      onClick={() => setSelectedPlan("annual")}
+                      className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${selectedPlan === "annual"
+                        ? "border-[#0078D4] bg-[#EBF3FC]/50 dark:bg-[#1C2B3D]/50 shadow-xs"
+                        : "border-[#E1DFDD] dark:border-[#3B3A39] hover:border-gray-400 bg-white dark:bg-[#252423]"
+                        }`}
+                    >
+                      <span className="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#107C10] text-white shadow-xs">
+                        Save 17% (2 Mo Free)
+                      </span>
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-bold text-xs text-[#242424] dark:text-white">Annual Plan</span>
+                          <span
+                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedPlan === "annual"
+                              ? "border-[#0078D4] bg-[#0078D4]"
+                              : "border-gray-400"
+                              }`}
+                          >
+                            {selectedPlan === "annual" && <Check className="w-2.5 h-2.5 text-white" />}
+                          </span>
+                        </div>
+                        <div className="text-xl font-bold text-[#242424] dark:text-white">
+                          {selectedCurrency === "INR"
+                            ? `₹${annualCalc.totalInr.toLocaleString("en-IN")}`
+                            : `$${annualCalc.totalUsd}`}{" "}
+                          <span className="text-xs font-normal text-gray-500">/ yr</span>
+                        </div>
+                        <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
+                          2 Months Free! (Pay for 10 months, get 12)
+                        </p>
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-gray-200/60 dark:border-zinc-700/60 font-semibold text-[11px] text-emerald-600 dark:text-emerald-400">
+                        Total: {selectedCurrency === "INR" ? `₹${annualCalc.totalInr.toLocaleString("en-IN")}` : `$${annualCalc.totalUsd}`} / year
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Elastic Cloud Storage Callout */}
+                  <div className="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 text-[11px] text-blue-900 dark:text-blue-200 flex items-start gap-2.5">
+                    <span className="text-base shrink-0">📦</span>
+                    <div className="leading-relaxed">
+                      <span className="font-bold">AWS S3 Cloud Storage Included:</span> Every workspace includes{" "}
+                      <strong>2 GB free</strong> encrypted document storage. When storage reaches 2 GB, it auto-expands to 7 GB for{" "}
+                      <strong>+$3 USD in your next monthly bill</strong>, scaling elastically in seamless +5 GB increments ($3 USD each) without workflow interruption.
+                    </div>
+                  </div>
+
+                  {/* Payment Error Inline Banner */}
+                  {paymentError && (
+                    <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{paymentError}</span>
+                    </div>
+                  )}
+
+                  {/* Direct Pay Action & Security Badges (Unified: Opens Razorpay Directly) */}
+                  <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-gray-100 dark:border-gray-800">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px] text-[#605E5C] dark:text-[#A19F9D] flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5 text-[#107C10]" />
+                        <span>Encrypted Razorpay Gateway · Instant Workspace Activation</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsRegDevKeyOpen(true);
+                          setDevKeyError(null);
+                        }}
+                        className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <KeyRound className="w-3 h-3" />
+                        <span>Use RegDevKey</span>
+                      </button>
+                    </div>
+                    <div className="flex gap-4">
+                      <SiRazorpay color="#0B44CD" size={40} />
+                      <button
+                        type="button"
+                        onClick={handleDirectRazorpayCheckout}
+                        disabled={isProcessingPayment}
+                        className="w-full sm:w-auto px-6 py-2.5 bg-[#0078D4] hover:bg-[#106EBE] disabled:opacity-50 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
+                      >
+                        <CreditCard className="w-4 h-4" />
+                        <span>
+                          {isProcessingPayment
+                            ? "Opening Razorpay..."
+                            : `Pay with Razorpay (${totalDisplayPrice}) to Unlock`}
+                        </span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -721,9 +1339,10 @@ export default function AuthPage({
                   <div className="p-3.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-200 flex items-start gap-2.5">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-bold">✓ Subscription Payment Verified via Razorpay:</div>
+                      <div className="font-bold">✓ Subscription Payment Verified / Dev Mode Active:</div>
                       <div className="text-[11px] mt-0.5">
-                        Plan: <span className="font-semibold">{selectedPlan === "annual" ? "Enterprise Annual ($200/yr)" : selectedPlan === "quarterly" ? "Enterprise 3-Month ($55/3mo)" : "Enterprise Monthly ($20/mo)"}</span> · Receipt ID: <code className="bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded font-mono">{paymentId}</code>.
+                        Plan: <span className="font-semibold">{PRICING_PLANS[selectedPlan].name}</span> ·{" "}
+                        <span className="font-semibold">{signupUserCount} {signupUserCount === 1 ? "Seat" : "Seats"}</span> ({totalDisplayPrice}) · Receipt ID: <code className="bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.5 rounded font-mono">{paymentId}</code>.
                       </div>
                       <div className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-1">
                         Fill in your organization details below to instantly initialize your dedicated database perimeter.
@@ -922,34 +1541,58 @@ export default function AuthPage({
         {/* -------------------- 2. MANAGER / TL / EMPLOYEE / DEV FORMS -------------------- */}
         {selectedPersona !== "owner" && (
           <form onSubmit={handleLogin} className="space-y-4 text-xs max-w-xl">
-            {selectedPersona !== "superuser" && (
-              <div>
-                <label className="block font-medium text-[#242424] dark:text-white mb-1">
-                  6-Digit/Character Company Code *
-                </label>
-                <div className="relative">
-                  <Building2 className="w-4 h-4 text-[#8A8886] absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    required
-                    maxLength={6}
-                    value={loginCompanyCode}
-                    onChange={(e) => setLoginCompanyCode(e.target.value.toUpperCase().slice(0, 6))}
-                    placeholder="e.g. ACME01"
-                    className="w-full pl-9 pr-3 py-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded text-[#242424] dark:text-white outline-none focus:border-[#0078D4] font-mono font-bold tracking-wider uppercase"
-                  />
-                </div>
-                <span className="text-[10px] text-[#8A8886] mt-0.5 block">
-                  Your organization's 6-character code provided by your Owner or Operations Manager.
-                </span>
+            <div>
+              <label className="block font-medium text-[#242424] dark:text-white mb-1">
+                {selectedPersona === "superuser"
+                  ? "6-Character Target Company ID (to log into as Dev) *"
+                  : "6-Digit/Character Company Code *"}
+              </label>
+              <div className="relative">
+                <Building2 className="w-4 h-4 text-[#8A8886] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  required
+                  maxLength={6}
+                  value={loginCompanyCode}
+                  onChange={(e) => setLoginCompanyCode(e.target.value.toUpperCase().slice(0, 6))}
+                  placeholder={selectedPersona === "superuser" ? "e.g. ORGTTU" : "e.g. ACME01"}
+                  className="w-full pl-9 pr-3 py-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded text-[#242424] dark:text-white outline-none focus:border-[#0078D4] font-mono font-bold tracking-wider uppercase"
+                />
               </div>
-            )}
+              {selectedPersona === "superuser" ? (
+                <div className="mt-1.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  <span className="text-[11px] text-purple-700 dark:text-purple-300 font-medium">
+                    Enter the 6-character company code (e.g. ORGTTU, ORGTTV) to connect directly to that company&apos;s isolated MongoDB database and S3 bucket.
+                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[10px] text-gray-500 font-medium">Quick Select:</span>
+                    {["ORGTTU", "ORGTTV"].map((code) => (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => setLoginCompanyCode(code)}
+                        className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold border transition-all cursor-pointer ${loginCompanyCode === code
+                          ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                          : "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800"
+                          }`}
+                      >
+                        {code}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <span className="text-[10px] text-[#8A8886] mt-0.5 block">
+                  Your organization&apos;s 6-character code provided by your Owner or Operations Manager.
+                </span>
+              )}
+            </div>
 
             <div>
               <label className="block font-medium text-[#242424] dark:text-white mb-1">
                 {selectedPersona === "employee"
                   ? "Employee Login Email (Provided by Manager) *"
-                  : "Superuser Developer Email *"}
+                  : "Developer Login Email *"}
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-[#8A8886] absolute left-3 top-1/2 -translate-y-1/2" />
@@ -958,7 +1601,7 @@ export default function AuthPage({
                   required
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
-                  placeholder="user@acme.corp"
+                  placeholder={selectedPersona === "superuser" ? "dev.superuser@taskflow.internal" : "user@acme.corp"}
                   className="w-full pl-9 pr-3 py-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded text-[#242424] dark:text-white outline-none focus:border-[#0078D4]"
                 />
               </div>
@@ -968,7 +1611,7 @@ export default function AuthPage({
               <label className="block font-medium text-[#242424] dark:text-white mb-1">
                 {selectedPersona === "employee"
                   ? "Initial Password (Provided by Manager) *"
-                  : "Password *"}
+                  : "16-Digit regDevKey / Master Key (from .env) *"}
               </label>
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-[#8A8886] absolute left-3 top-1/2 -translate-y-1/2" />
@@ -977,8 +1620,8 @@ export default function AuthPage({
                   required
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  className="w-full pl-9 pr-9 py-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded text-[#242424] dark:text-white outline-none focus:border-[#0078D4]"
+                  placeholder={selectedPersona === "superuser" ? "16-digit key (e.g. 8105542318220002)" : "••••••••••••"}
+                  className="w-full pl-9 pr-9 py-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded text-[#242424] dark:text-white outline-none focus:border-[#0078D4] font-mono"
                 />
                 <button
                   type="button"
@@ -988,6 +1631,11 @@ export default function AuthPage({
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              {selectedPersona === "superuser" && (
+                <span className="text-[10px] text-purple-600 dark:text-purple-400 mt-1 block font-mono">
+                  Using 16-digit REG_DEV_KEY grants instant superuser access into the specified organization&apos;s perimeter.
+                </span>
+              )}
             </div>
 
             <button
@@ -999,7 +1647,9 @@ export default function AuthPage({
               <span>
                 {loading
                   ? "Authenticating..."
-                  : `Sign In as ${currentConfig.label}`}
+                  : selectedPersona === "superuser"
+                    ? `Sign In to ${loginCompanyCode || "Company"} as Developer`
+                    : `Sign In as ${currentConfig.label}`}
               </span>
               <ArrowRight className="w-4 h-4" />
             </button>
@@ -1019,6 +1669,7 @@ export default function AuthPage({
           setPaymentToken(data.verificationToken);
           setPaymentId(data.paymentId);
           setSelectedPlan(data.plan);
+          if (data.userCount) setSignupUserCount(data.userCount);
           setIsCheckoutModalOpen(false);
           setSuccess(`Payment verified! Plan: ${data.planName}. Please enter your company details below.`);
         }}

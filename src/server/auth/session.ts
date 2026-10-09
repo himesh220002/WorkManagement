@@ -1,10 +1,13 @@
 import { cookies, headers } from "next/headers";
+import mongoose from "mongoose";
 import { verifyToken } from "./jwt";
 import { JWTPayload } from "@/models/types";
 import { User, Company } from "@/models";
 import connectToDatabase from "@/lib/mongodb";
 import { normalizeRole, RoleName } from "./rbac";
 import { getCached, setCached } from "@/lib/cache";
+
+export const UNASSIGNED_TENANT_ID = new mongoose.Types.ObjectId("000000000000000000000000");
 
 export interface SessionContext {
   userId?: string;
@@ -205,6 +208,6 @@ export function getTenantQueryFilter(session: SessionContext): Record<string, an
   if (session.companyId) {
     return { companyId: session.companyId };
   }
-  return { companyId: "unauthenticated_boundary_lock" };
+  return { companyId: UNASSIGNED_TENANT_ID };
 }
 
