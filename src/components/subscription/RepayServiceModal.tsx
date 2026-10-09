@@ -17,9 +17,14 @@ import {
   Sparkles,
   History,
   RefreshCw,
+  Crown,
+  HeartHandshake,
+  Zap,
+  CloudBackup,
 } from "lucide-react";
 import RazorpayCheckoutModal from "@/components/payment/RazorpayCheckoutModal";
 import { calculateTieredSubscriptionCost, type PlanId } from "@/lib/razorpay";
+import { GiAerialSignal } from "react-icons/gi";
 
 // Renewal tenure options: monthly (+30 days), quarterly (+90 days, save 7%),
 // annual (+12 months, save 17% — pay for 10, get 12).
@@ -245,30 +250,29 @@ export default function RepayServiceModal({
   const tenureMeta = TENURE_META[selectedTenure];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div className="bg-white dark:bg-[#1E1E1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-xl shadow-2xl max-w-2xl w-full p-6 text-[#242424] dark:text-white my-8 max-h-[92vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/65 backdrop-blur-md animate-fade-in overflow-y-auto">
+      <div className="bg-white dark:bg-[#18181B] border border-gray-200/80 dark:border-zinc-800 rounded-2xl shadow-2xl shadow-black/30 max-w-2xl w-full p-4 sm:p-6 md:p-7 text-[#242424] dark:text-white my-6 max-h-[92vh] overflow-y-auto overflow-x-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-zinc-800">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-              <CreditCard className="w-5 h-5" />
+        <div className="flex items-start justify-between pb-4 sm:pb-5 border-b border-gray-100 dark:border-zinc-800/80 gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-emerald-500/15 via-teal-500/10 to-blue-500/15 dark:from-emerald-500/20 dark:to-blue-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 shadow-xs">
+              <CreditCard className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
             </div>
-            <div>
-              <h2 className="text-base font-bold flex items-center gap-2">
-                <span>Repay Service &amp; Subscription Portal</span>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">
-                  {tenureMeta.extension} Extension
-                </span>
+            <div className="min-w-0">
+
+              <h2 className="text-base sm:text-lg font-bold tracking-tight text-gray-900 dark:text-white">
+                Repay Service &amp; Subscription Portal
               </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Lookup remaining days, seat quota, past plans, or pay prior to extend workspace validity.
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed">
+                Lookup remaining validity, seat quota, past plans, or pay prior to extend workspace access.
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
             type="button"
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+            aria-label="Close modal"
+            className="p-1.5 sm:p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-zinc-800/80 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
@@ -276,14 +280,14 @@ export default function RepayServiceModal({
 
         {/* Error / Success Messages */}
         {error && (
-          <div className="mt-4 p-3 rounded-lg bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+          <div className="mt-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {renewSuccessMsg && (
-          <div className="mt-4 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900/60 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+          <div className="mt-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900/60 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <span>{renewSuccessMsg}</span>
           </div>
@@ -292,13 +296,21 @@ export default function RepayServiceModal({
         {/* Step 1: Lookup Form */}
         {!lookupData ? (
           <form onSubmit={handleLookup} className="mt-5 space-y-4 text-xs">
-            <div className="bg-blue-50/60 dark:bg-blue-950/30 p-3.5 rounded-lg border border-blue-200 dark:border-blue-900/60 text-blue-900 dark:text-blue-300">
-              <span className="font-semibold block mb-0.5">Quick Lookup Guarantee:</span>
-              Enter your 6-character Organization ID, Owner/Manager Email, and Password to reveal your remaining days and subscription quota.
+            {/* VIP Welcome Notice */}
+            <div className="bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-emerald-500/10 p-4 rounded-xl border border-blue-200/80 dark:border-blue-900/60 text-blue-950 dark:text-blue-200">
+              <div className="flex items-center gap-2 mb-1">
+                <Crown className="w-4 h-4 text-amber-500" />
+                <span className="font-bold text-xs text-blue-900 dark:text-blue-100">
+                  Valued Partner Self-Service Gateway
+                </span>
+              </div>
+              <p className="text-[11.5px] leading-relaxed text-blue-800/90 dark:text-blue-300/90">
+                Welcome back! Enter your organization credentials to immediately reveal your remaining days, configure seat tiers, and reactivate priority workspace access.
+              </p>
             </div>
 
             <div>
-              <label className="block font-semibold mb-1">
+              <label className="block font-semibold mb-1 text-gray-700 dark:text-gray-300">
                 6-Character Company ID (Org Code) *
               </label>
               <div className="relative">
@@ -310,13 +322,13 @@ export default function RepayServiceModal({
                   value={companyCode}
                   onChange={(e) => setCompanyCode(e.target.value.toUpperCase().slice(0, 6))}
                   placeholder="e.g. ORGTTU"
-                  className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-zinc-800/80 border border-gray-200 dark:border-zinc-700 rounded-lg text-xs font-mono font-bold tracking-wider uppercase outline-none focus:border-[#0078D4]"
+                  className="w-full pl-9 pr-3 py-2.5 bg-gray-50 dark:bg-zinc-800/80 border border-gray-200 dark:border-zinc-700 rounded-xl text-xs font-mono font-bold tracking-wider uppercase outline-none focus:border-[#0078D4] focus:ring-2 focus:ring-[#0078D4]/20 transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block font-semibold mb-1">
+              <label className="block font-semibold mb-1 text-gray-700 dark:text-gray-300">
                 Organization / Owner Email Address *
               </label>
               <div className="relative">
@@ -327,13 +339,13 @@ export default function RepayServiceModal({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="e.g. owner@organization.com"
-                  className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-zinc-800/80 border border-gray-200 dark:border-zinc-700 rounded-lg text-xs outline-none focus:border-[#0078D4]"
+                  className="w-full pl-9 pr-3 py-2.5 bg-gray-50 dark:bg-zinc-800/80 border border-gray-200 dark:border-zinc-700 rounded-xl text-xs outline-none focus:border-[#0078D4] focus:ring-2 focus:ring-[#0078D4]/20 transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block font-semibold mb-1">
+              <label className="block font-semibold mb-1 text-gray-700 dark:text-gray-300">
                 Account Password (or Master Dev Key) *
               </label>
               <div className="relative">
@@ -344,7 +356,7 @@ export default function RepayServiceModal({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-zinc-800/80 border border-gray-200 dark:border-zinc-700 rounded-lg text-xs outline-none focus:border-[#0078D4]"
+                  className="w-full pl-9 pr-3 py-2.5 bg-gray-50 dark:bg-zinc-800/80 border border-gray-200 dark:border-zinc-700 rounded-xl text-xs outline-none focus:border-[#0078D4] focus:ring-2 focus:ring-[#0078D4]/20 transition-all"
                 />
               </div>
             </div>
@@ -352,42 +364,78 @@ export default function RepayServiceModal({
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 px-4 bg-[#0078D4] hover:bg-[#106EBE] disabled:opacity-50 text-white font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors shadow-sm cursor-pointer"
+              className="w-full py-3 px-4 bg-[#0078D4] hover:bg-[#106EBE] active:scale-[0.99] disabled:opacity-50 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
             >
-              <CreditCard className="w-4 h-4" />
+              <CreditCard className="w-4 h-4 shrink-0" />
               <span>{loading ? "Verifying Credentials & Fetching Quota..." : "Lookup Subscription & Reveal Remaining Days"}</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4 shrink-0" />
             </button>
           </form>
         ) : (
           /* Step 2: Telemetry & Renewal Dashboard */
-          <div className="mt-5 space-y-5 text-xs">
+          <div className="mt-5 space-y-4 sm:space-y-5 text-xs">
+            {/* VIP High-Priority Client Care Appreciation Banner */}
+            <div className="relative overflow-hidden rounded-xl border border-amber-500/35 dark:border-amber-500/30 bg-gradient-to-r from-amber-500/15 via-orange-500/5 to-emerald-500/10 p-3.5 sm:p-4 text-xs">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <Crown className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
+                      Welcome Back · Valued Enterprise Partner
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300/60 dark:border-amber-700/60 flex items-center gap-1">
+                      <HeartHandshake className="w-2.5 h-2.5" />
+                    </span>
+                  </div>
+                  <p className="text-[11.5px] text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">
+                    We sincerely appreciate you returning for our service! Your complete organization perimeter — projects, squads, sales targets, and S3 vaults — is safely preserved and ready for immediate continuity.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2.5 pt-2 border-t border-amber-500/20 text-[10.5px] text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <span>Instant 1-Click Reactivation</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>Zero Data Loss · 100% Intact</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <CloudBackup className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      <span>Dedicated Cloud SLA</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Organization Info Banner */}
-            <div className="p-4 rounded-xl bg-gray-50 dark:bg-zinc-800/60 border border-gray-200 dark:border-zinc-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="p-3.5 sm:p-4 rounded-xl bg-gray-50/80 dark:bg-zinc-800/50 border border-gray-200/80 dark:border-zinc-700/70 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-bold text-sm text-[#242424] dark:text-white">
                     {lookupData.company.name}
                   </span>
-                  <code className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-gray-200 dark:bg-zinc-700">
+                  <code className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-gray-200 dark:bg-zinc-700 text-gray-800 dark:text-gray-200">
                     {lookupData.company.code}
                   </code>
+
                 </div>
-                <span className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 block">
-                  Registered Account: {email}
+                <span className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 block">
+                  Registered Account: <strong className="text-gray-700 dark:text-gray-300">{email}</strong>
                 </span>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span
-                  className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase ${
-                    lookupData.subscription.isExpired
-                      ? "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800"
-                      : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
-                  }`}
+              <div className="flex items-center gap-2 self-start sm:self-center">
+                <div
+                  className={`px-3 py-1 rounded-full text-[2px] font-bold uppercase ${lookupData.subscription.isExpired
+                    ? "bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-300 dark:border-rose-800"
+                    : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
+                    }`}
                 >
-                  {lookupData.subscription.isExpired ? "Access On Hold (Expired)" : "Active Plan"}
-                </span>
+                  {lookupData.subscription.isExpired ? "Access On Hold" : "Active Plan"}
+                </div>
                 <button
                   type="button"
                   onClick={() => setLookupData(null)}
@@ -399,83 +447,81 @@ export default function RepayServiceModal({
             </div>
 
             {/* Metrics Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
               {/* Remaining Days */}
               <div
-                className={`p-3 rounded-lg border flex flex-col justify-between ${
-                  lookupData.subscription.isExpired
-                    ? "bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900"
-                    : "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900"
-                }`}
+                className={`p-3 sm:p-3.5 rounded-xl border flex flex-col justify-between ${lookupData.subscription.isExpired
+                  ? "bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900"
+                  : "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900"
+                  }`}
               >
                 <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span className="text-[10px] uppercase font-bold tracking-wider">Days Remaining</span>
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <span className="text-[10px] uppercase font-bold tracking-wider">Remaining</span>
                 </div>
                 <div
-                  className={`text-xl font-bold mt-1 ${
-                    lookupData.subscription.isExpired
-                      ? "text-rose-600 dark:text-rose-400"
-                      : "text-emerald-600 dark:text-emerald-400"
-                  }`}
+                  className={`text-xl font-bold mt-1.5 ${lookupData.subscription.isExpired
+                    ? "text-rose-600 dark:text-rose-400"
+                    : "text-emerald-600 dark:text-emerald-400"
+                    }`}
                 >
                   {lookupData.subscription.isExpired
                     ? `-${lookupData.subscription.daysExpired} Days`
                     : `${lookupData.subscription.daysRemaining} Days`}
                 </div>
-                <span className="text-[10px] text-gray-500">
+                <span className="text-[10px] text-gray-500 mt-1">
                   {lookupData.subscription.isExpired ? "Expired prior" : "Left in cycle"}
                 </span>
               </div>
 
               {/* Expiration Date */}
-              <div className="p-3 rounded-lg bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700 flex flex-col justify-between">
+              <div className="p-3 sm:p-3.5 rounded-xl bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700/80 flex flex-col justify-between">
                 <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span className="text-[10px] uppercase font-bold tracking-wider">Expiration Date</span>
+                  <Calendar className="w-3.5 h-3.5 shrink-0" />
+                  <span className="text-[10px] uppercase font-bold tracking-wider">Expiration</span>
                 </div>
-                <div className="text-sm font-bold mt-1 text-[#242424] dark:text-white">
+                <div className="text-sm font-bold mt-1.5 text-[#242424] dark:text-white">
                   {lookupData.subscription.formattedPeriodEnd}
                 </div>
-                <span className="text-[10px] text-gray-500">Period end</span>
+                <span className="text-[10px] text-gray-500 mt-1">Period end</span>
               </div>
 
               {/* Total Seats */}
-              <div className="p-3 rounded-lg bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700 flex flex-col justify-between">
+              <div className="p-3 sm:p-3.5 rounded-xl bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700/80 flex flex-col justify-between">
                 <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
-                  <Users className="w-3.5 h-3.5" />
-                  <span className="text-[10px] uppercase font-bold tracking-wider">Purchased Seats</span>
+                  <Users className="w-3.5 h-3.5 shrink-0" />
+                  <span className="text-[10px] uppercase font-bold tracking-wider">Users</span>
                 </div>
-                <div className="text-xl font-bold mt-1 text-[#0078D4] dark:text-[#479EF5]">
+                <div className="text-xl font-bold mt-1.5 text-[#0078D4] dark:text-[#479EF5]">
                   {lookupData.subscription.totalSeats} Seats
                 </div>
-                <span className="text-[10px] text-gray-500">
-                  {lookupData.subscription.filledSeats} filled · {lookupData.subscription.availableSeats} available
+                <span className="text-[10px] text-gray-500 mt-1">
+                  {lookupData.subscription.filledSeats} filled · {lookupData.subscription.availableSeats} open
                 </span>
               </div>
 
-              {/* Renewal Cost (live, follows seat stepper + tenure below) */}
-              <div className="p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 flex flex-col justify-between">
+              {/* Renewal Cost */}
+              <div className="p-3 sm:p-3.5 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 flex flex-col justify-between">
                 <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
-                  <Sparkles className="w-3.5 h-3.5" />
+                  <GiAerialSignal className="w-3.5 h-3.5 shrink-0" />
                   <span className="text-[10px] uppercase font-bold tracking-wider">
-                    {tenureMeta.label} Renewal
+                    {tenureMeta.label}
                   </span>
                 </div>
-                <div className="text-xl font-bold mt-1 text-blue-700 dark:text-blue-300">
+                <div className="text-xl font-bold mt-1.5 text-blue-700 dark:text-blue-300">
                   ₹{seatPricing.totalInr.toLocaleString("en-IN")}
                 </div>
-                <span className="text-[10px] text-blue-600 dark:text-blue-400">
-                  (${seatPricing.totalUsd} USD / {selectedTenure === "monthly" ? "mo" : selectedTenure === "quarterly" ? "3 mo" : "yr"} · {activeSeats} seats)
+                <span className="text-[10px] text-blue-600 dark:text-blue-400 mt-1">
+                  (${seatPricing.totalUsd} USD · {activeSeats} seats)
                 </span>
               </div>
             </div>
 
             {/* Adjust Seats Before Renewal */}
-            <div className="p-4 rounded-xl bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700 space-y-3">
+            <div className="p-3.5 sm:p-4 rounded-xl bg-gray-50/80 dark:bg-zinc-800/50 border border-gray-200/80 dark:border-zinc-700/70 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h4 className="font-bold text-xs text-[#242424] dark:text-white flex items-center gap-1.5">
+                  <h4 className="font-bold text-xs text-[#242424] dark:text-white flex items-center gap-1.5 flex-wrap">
                     <Users className="w-3.5 h-3.5 text-[#0078D4]" />
                     <span>Adjust Seats Before Renewal</span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200">
@@ -491,12 +537,12 @@ export default function RepayServiceModal({
                         : `Reducing ${Math.abs(seatDelta)} seat${Math.abs(seatDelta) > 1 ? "s" : ""}: ${currentTotalSeats} → ${activeSeats}.`}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
                   <button
                     type="button"
                     onClick={() => setDesiredSeats(Math.max(minRenewalSeats, activeSeats - 1))}
                     disabled={activeSeats <= minRenewalSeats}
-                    className="w-8 h-8 rounded-lg border border-gray-300 dark:border-zinc-600 font-bold text-sm hover:bg-gray-200 dark:hover:bg-zinc-700 disabled:opacity-40 flex items-center justify-center cursor-pointer"
+                    className="w-8 h-8 rounded-lg border border-gray-300 dark:border-zinc-600 font-bold text-sm hover:bg-gray-200 dark:hover:bg-zinc-700 disabled:opacity-40 flex items-center justify-center cursor-pointer transition-colors"
                   >
                     -
                   </button>
@@ -514,14 +560,15 @@ export default function RepayServiceModal({
                   <button
                     type="button"
                     onClick={() => setDesiredSeats(Math.min(500, activeSeats + 1))}
-                    className="w-8 h-8 rounded-lg border border-gray-300 dark:border-zinc-600 font-bold text-sm hover:bg-gray-200 dark:hover:bg-zinc-700 flex items-center justify-center cursor-pointer"
+                    className="w-8 h-8 rounded-lg border border-gray-300 dark:border-zinc-600 font-bold text-sm hover:bg-gray-200 dark:hover:bg-zinc-700 flex items-center justify-center cursor-pointer transition-colors"
                   >
                     +
                   </button>
-                  <span className="text-xs text-gray-500">Seats</span>
+                  <span className="text-xs text-gray-500 font-medium">Seats</span>
                 </div>
               </div>
 
+              {/* Quick tier buttons */}
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[11px] text-gray-500 mr-1">Quick tiers:</span>
                 {[2, 4, 5, 10, 20, 33, 50, 100].map((num) => (
@@ -530,11 +577,10 @@ export default function RepayServiceModal({
                     type="button"
                     disabled={num < minRenewalSeats}
                     onClick={() => setDesiredSeats(num)}
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer disabled:opacity-40 ${
-                      activeSeats === num
-                        ? "bg-[#0078D4] text-white border-[#0078D4]"
-                        : "bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-zinc-700 hover:bg-gray-100"
-                    }`}
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-colors cursor-pointer disabled:opacity-40 ${activeSeats === num
+                      ? "bg-[#0078D4] text-white border-[#0078D4] shadow-xs"
+                      : "bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-zinc-700 hover:bg-gray-100 dark:hover:bg-zinc-700"
+                      }`}
                   >
                     {num} Seats
                   </button>
@@ -550,18 +596,17 @@ export default function RepayServiceModal({
                     <button
                       type="button"
                       onClick={() => setDesiredSeats(currentTotalSeats)}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
-                        activeSeats === currentTotalSeats
-                          ? "bg-[#0078D4] text-white border-[#0078D4]"
-                          : "bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-zinc-700 hover:bg-gray-100"
-                      }`}
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-colors cursor-pointer ${activeSeats === currentTotalSeats
+                        ? "bg-[#0078D4] text-white border-[#0078D4] shadow-xs"
+                        : "bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-zinc-700 hover:bg-gray-100 dark:hover:bg-zinc-700"
+                        }`}
                     >
                       Current ({currentTotalSeats})
                     </button>
                   )}
               </div>
 
-              <div className="pt-2.5 border-t border-gray-200 dark:border-zinc-700 flex items-center justify-between text-[11px] flex-wrap gap-2">
+              <div className="pt-2.5 border-t border-gray-200/80 dark:border-zinc-700 flex items-center justify-between text-[11px] flex-wrap gap-2">
                 <div className="flex items-center gap-1.5">
                   <span className="text-gray-500">Formula:</span>
                   <strong className="text-[#0078D4] dark:text-[#479EF5]">{seatPricing.tierFormulaLabel}</strong>
@@ -573,11 +618,10 @@ export default function RepayServiceModal({
                   </strong>
                   {seatDelta !== 0 && (
                     <span
-                      className={`px-2 py-0.5 rounded font-bold ${
-                        seatPricing.totalInr < basePricing.totalInr
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                          : "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
-                      }`}
+                      className={`px-2 py-0.5 rounded-full font-bold ${seatPricing.totalInr < basePricing.totalInr
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                        : "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                        }`}
                     >
                       {seatPricing.totalInr < basePricing.totalInr ? "Saving " : "Extra "}
                       ₹{Math.abs(seatPricing.totalInr - basePricing.totalInr).toLocaleString("en-IN")}
@@ -595,19 +639,16 @@ export default function RepayServiceModal({
             </div>
 
             {/* Select Renewal Tenure: Monthly / 3-Month / Annual */}
-            <div className="p-4 rounded-xl bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700 space-y-3">
+            <div className="p-3.5 sm:p-4 rounded-xl bg-gray-50/80 dark:bg-zinc-800/50 border border-gray-200/80 dark:border-zinc-700/70 space-y-3">
               <div>
-                <h4 className="font-bold text-xs text-[#242424] dark:text-white flex items-center gap-1.5">
+                <h4 className="font-bold text-xs text-[#242424] dark:text-white flex items-center gap-1.5 flex-wrap">
                   <Calendar className="w-3.5 h-3.5 text-[#0078D4]" />
                   <span>Select Renewal Tenure</span>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
                     {tenureMeta.extension}
                   </span>
                 </h4>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                  Monthly extends +30 days · 3-Month extends +90 days (save 7%) · Annual extends +12 months
-                  (save 17%, pay for 10 get 12). Price below is live for {activeSeats} seats.
-                </p>
+
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -620,25 +661,23 @@ export default function RepayServiceModal({
                       key={tid}
                       type="button"
                       onClick={() => setSelectedTenure(tid)}
-                      className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer relative flex flex-col justify-between ${
-                        isSelected
-                          ? "border-emerald-600 bg-emerald-50/60 dark:bg-emerald-950/30 shadow-sm"
-                          : "border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/60 hover:border-gray-400"
-                      }`}
+                      className={`p-3 sm:p-3.5 rounded-xl border-2 text-left transition-all cursor-pointer relative flex flex-col justify-between ${isSelected
+                        ? "border-emerald-600 bg-emerald-50/70 dark:bg-emerald-950/30 shadow-sm"
+                        : "border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/60 hover:border-gray-400 dark:hover:border-zinc-500"
+                        }`}
                     >
                       {meta.badge && (
                         <span className="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#0078D4] text-white shadow-xs">
                           {meta.badge}
                         </span>
                       )}
-                      <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center justify-between mb-1.5">
                         <span className="font-bold text-xs text-[#242424] dark:text-white">
                           {meta.label}
                         </span>
                         <span
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                            isSelected ? "border-emerald-600 bg-emerald-600" : "border-gray-400"
-                          }`}
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-emerald-600 bg-emerald-600" : "border-gray-400"
+                            }`}
                         >
                           {isSelected && (
                             <CheckCircle2 className="w-2.5 h-2.5 text-white" />
@@ -651,7 +690,7 @@ export default function RepayServiceModal({
                           / {tid === "monthly" ? "mo" : tid === "quarterly" ? "3 mo" : "yr"}
                         </span>
                       </div>
-                      <p className="text-[10px] text-gray-500 mt-0.5">
+                      <p className="text-[10px] text-gray-500 mt-1">
                         ${calc.totalUsd} USD · {meta.extension} · {calc.tierFormulaLabel}
                       </p>
                     </button>
@@ -661,15 +700,15 @@ export default function RepayServiceModal({
             </div>
 
             {/* Repay Action Card */}
-            <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 via-blue-500/10 to-purple-500/10 border border-emerald-300 dark:border-emerald-800/70 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div>
-                <h4 className="font-bold text-sm text-[#242424] dark:text-white flex items-center gap-2">
+            <div className="p-4 sm:p-5 rounded-xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-blue-500/15 border border-emerald-400/40 dark:border-emerald-600/50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 shadow-sm">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-bold text-sm text-[#242424] dark:text-white flex items-center gap-2 flex-wrap">
                   <span>Extend Subscription by {tenureMeta.duration}</span>
-                  <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full">
-                    Prior or Post Renewal
+                  <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                    Services Renewal
                   </span>
                 </h4>
-                <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">
                   {lookupData.subscription.isExpired
                     ? `Your workspace is currently locked. Pay now to reactivate instant access for ${activeSeats} seats for ${tenureMeta.extension} from today.`
                     : `Pay prior to expiration to stack ${tenureMeta.extension} for ${activeSeats} seats onto your remaining balance without losing existing days.`}
@@ -680,54 +719,81 @@ export default function RepayServiceModal({
                 type="button"
                 onClick={() => setIsCheckoutOpen(true)}
                 disabled={isRenewing || isSeatSelectionInvalid}
-                className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-md shrink-0 cursor-pointer"
+                className="w-full sm:w-auto px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] disabled:opacity-50 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-md shrink-0 cursor-pointer"
               >
-                <CreditCard className="w-4 h-4" />
+                <CreditCard className="w-4 h-4 shrink-0" />
                 <span>
                   Pay ₹{seatPricing.totalInr.toLocaleString("en-IN")} ({activeSeats} Seats · {tenureMeta.extension})
                 </span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-4 h-4 shrink-0" />
               </button>
             </div>
 
-            {/* History of Older Plans & Payments */}
-            <div>
-              <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-400 mb-2">
-                <History className="w-3.5 h-3.5" />
-                <span>Subscription Invoices &amp; Past Plan Records</span>
+            {/* History of Older Plans & Payments with Responsive Overflow Controls */}
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                  <History className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>Subscription Invoices &amp; Past Plan Records</span>
+                </div>
+                <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
+                  {lookupData.paymentHistory.length} Past Record{lookupData.paymentHistory.length === 1 ? "" : "s"}
+                </span>
               </div>
 
-              <div className="border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
-                <table className="w-full text-left text-[11px]">
-                  <thead className="bg-gray-100 dark:bg-zinc-800/80 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-zinc-700 font-semibold">
-                    <tr>
-                      <th className="p-2.5">Invoice / Payment ID</th>
-                      <th className="p-2.5">Date</th>
-                      <th className="p-2.5">Seats</th>
-                      <th className="p-2.5">Amount</th>
-                      <th className="p-2.5">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-zinc-800">
-                    {lookupData.paymentHistory.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-zinc-800/40">
-                        <td className="p-2.5 font-mono text-gray-600 dark:text-gray-400 truncate max-w-[120px]">
-                          {item.id}
-                        </td>
-                        <td className="p-2.5 text-gray-700 dark:text-gray-300">{item.date}</td>
-                        <td className="p-2.5 font-bold text-[#0078D4] dark:text-[#479EF5]">{item.seats} Seats</td>
-                        <td className="p-2.5 font-bold text-[#242424] dark:text-white">
-                          ₹{item.amountInr.toLocaleString("en-IN")} (${item.amountUsd})
-                        </td>
-                        <td className="p-2.5">
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                            {item.status}
-                          </span>
-                        </td>
+              {/* Mobile horizontal scroll guidance indicator */}
+              <div className="flex sm:hidden items-center justify-between text-[10px] text-gray-500 dark:text-gray-400 px-1">
+                <span>← Scroll table horizontally for all details</span>
+                <span className="font-mono text-xs">⟷</span>
+              </div>
+
+              {/* Responsive scrollable table container */}
+              <div className="w-full border border-gray-200 dark:border-zinc-800 rounded-xl overflow-hidden bg-white dark:bg-zinc-900/40 shadow-xs">
+                <div className="overflow-x-auto overscroll-x-contain">
+                  <table className="w-full min-w-[540px] text-left text-[11px] border-collapse">
+                    <thead className="bg-gray-50 dark:bg-zinc-800/80 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-zinc-700 font-semibold">
+                      <tr>
+                        <th className="py-2.5 px-3 sm:px-4">Invoice / Payment ID</th>
+                        <th className="py-2.5 px-3 sm:px-4">Date</th>
+                        <th className="py-2.5 px-3 sm:px-4">Seats</th>
+                        <th className="py-2.5 px-3 sm:px-4">Amount</th>
+                        <th className="py-2.5 px-3 sm:px-4 text-right sm:text-left">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-zinc-800/80">
+                      {lookupData.paymentHistory.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-4 text-center text-gray-400 text-xs">
+                            No prior payment records found for this workspace.
+                          </td>
+                        </tr>
+                      ) : (
+                        lookupData.paymentHistory.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50/80 dark:hover:bg-zinc-800/40 transition-colors">
+                            <td className="py-2.5 px-3 sm:px-4 font-mono text-gray-600 dark:text-gray-400 truncate max-w-[140px]">
+                              {item.id}
+                            </td>
+                            <td className="py-2.5 px-3 sm:px-4 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                              {item.date}
+                            </td>
+                            <td className="py-2.5 px-3 sm:px-4 font-bold text-[#0078D4] dark:text-[#479EF5] whitespace-nowrap">
+                              {item.seats} Seats
+                            </td>
+                            <td className="py-2.5 px-3 sm:px-4 font-bold text-[#242424] dark:text-white whitespace-nowrap">
+                              ₹{item.amountInr.toLocaleString("en-IN")}{" "}
+                              <span className="text-[10px] font-normal text-gray-500">(${item.amountUsd})</span>
+                            </td>
+                            <td className="py-2.5 px-3 sm:px-4 text-right sm:text-left whitespace-nowrap">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-800/60">
+                                {item.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>

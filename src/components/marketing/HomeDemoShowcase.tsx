@@ -10,13 +10,15 @@ import {
   Wallet,
   Sparkles,
   Gauge,
+  PenTool,
 } from "lucide-react";
 
-type DemoId = "pipelines" | "deliver" | "collaborate" | "sell" | "govern" | "intelligence";
+type DemoId = "pipelines" | "deliver" | "whiteboard" | "collaborate" | "sell" | "govern" | "intelligence";
 
 const tabs: { id: DemoId; label: string; route: string }[] = [
   { id: "pipelines", label: "Plan · Timelines", route: "/dev/timeline" },
   { id: "deliver", label: "Deliver · Dev Hub", route: "/dev/dashboard" },
+  { id: "whiteboard", label: "Design · Whiteboards", route: "/whiteboards" },
   { id: "collaborate", label: "Chat · Teams", route: "/chat" },
   { id: "sell", label: "Sell · Pipeline", route: "/sales/dashboard" },
   { id: "govern", label: "Govern · Resources", route: "/exec/resources" },
@@ -59,6 +61,23 @@ const copy: Record<
       ["32", "deliverables tracked"],
       ["1884 hrs", "production time"],
       ["65.4%", "pipeline progress"],
+    ],
+  },
+  whiteboard: {
+    eyebrow: "Visual Whiteboards + Org-Chart Blueprint",
+    title: "Map the org, then attach work to every box",
+    body: "Open /whiteboards for an infinite canvas with the Organizational Chart template: company logo, positions and member tasks on one live board — zoom, pan, connect and edit inline.",
+    bullets: [
+      "Org-chart template: logo node, President → VP → Directors with one-click ＋ add on every edge",
+      "Pro-tip built in: create a task per member to store need-to-know info",
+      "Infinite canvas: shapes, connectors, text, task-linked nodes with autosave",
+    ],
+    cta: "Open live Whiteboards",
+    href: "/whiteboards",
+    stats: [
+      ["∞", "infinite canvas"],
+      ["1-click", "add member node"],
+      ["Org", "chart template"],
     ],
   },
   collaborate: {
@@ -238,6 +257,137 @@ function DeliverMock() {
       <div className="mt-auto grid grid-cols-2 gap-2">
         <div className="rounded border border-blue-200 bg-blue-50/60 p-2 flex items-center gap-1.5"><span className="text-blue-600 font-bold">＋</span><p className="text-[9px] font-bold">Add Deliverable / Production Task</p></div>
         <div className="rounded border border-emerald-200 bg-emerald-50/60 p-2 flex items-center gap-1.5"><span className="text-emerald-600 font-bold">◷</span><p className="text-[9px] font-bold">Define Milestone, Batch or Sprint</p></div>
+      </div>
+    </div>
+  );
+}
+
+function WhiteboardMock() {
+  // Two-part org node: amber task prompt on top, navy position bar below.
+  const node = "rounded-[3px] border border-amber-500/90 text-center overflow-hidden bg-black/70 shadow-[0_0_12px_rgba(0,0,0,0.6)]";
+  const taskTop = "text-[7px] leading-tight text-amber-300/90 px-1.5 py-1";
+  const taskBottom = "text-[8px] font-bold text-blue-100 bg-[#1b2f5e]/95 px-1.5 py-[3px] border-t border-blue-500/50";
+  const plus = "absolute w-3 h-3 rounded-full border border-blue-400 bg-[#0d0d10] text-blue-300 text-[8px] font-bold flex items-center justify-center leading-none z-10";
+  const drop = "absolute text-blue-400 text-[7px] leading-none z-10";
+
+  return (
+    <div
+      className="rounded border border-white/10 overflow-hidden text-left h-full flex flex-col"
+      style={{ backgroundColor: "#0d0d10", backgroundImage: "radial-gradient(rgba(255,255,255,0.13) 1px, transparent 1.5px)", backgroundSize: "20px 20px" }}
+    >
+      {/* Canvas header */}
+      <div className="flex items-center justify-between px-3 pt-2.5">
+        <p className="text-[10px] font-bold text-white">Organizational Chart</p>
+        <span className="text-[8px] font-bold text-emerald-400">✓ Saved</span>
+      </div>
+
+      <div className="relative flex-1 px-3 pt-1.5 pb-1">
+        {/* ── Top row: legend | glowing logo | president ── */}
+        <div className="grid grid-cols-12 gap-1.5 items-start">
+          <div className="col-span-4 border border-white/80 rounded-[4px] p-1.5 bg-black/40">
+            <p className="text-[8px] font-bold text-white text-center tracking-widest">LEGEND</p>
+            <div className="flex items-center gap-1 mt-1">
+              <span className="w-3.5 h-3.5 rounded-full border border-cyan-400 shrink-0 flex items-center justify-center text-[5px] text-cyan-300">Logo</span>
+              <p className="text-[6.5px] text-zinc-300 leading-tight">Insert Company Logo on the space (Optional)</p>
+            </div>
+            <div className="flex items-center gap-1 mt-1">
+              <span className="text-[6.5px] text-blue-200 border border-blue-500 rounded-[2px] px-1 py-px shrink-0">Position</span>
+              <p className="text-[6.5px] text-zinc-300 leading-tight">Position or job function of the team member</p>
+            </div>
+          </div>
+          <div className="col-span-4 flex flex-col items-center pt-0.5">
+            <span
+              className="w-11 h-11 rounded-full border-2 border-cyan-400 bg-black/70 flex items-center justify-center text-[7px] font-bold text-white text-center leading-tight"
+              style={{ boxShadow: "0 0 18px 3px rgba(34,211,238,0.55), 0 0 34px 6px rgba(168,85,247,0.35)" }}
+            >
+              COMPANY<br />LOGO
+            </span>
+            <p className="text-[8px] font-bold text-white mt-1">COMPANY NAME</p>
+            <p className="text-[7px] text-zinc-400">Organizational Chart</p>
+          </div>
+          <div className="col-span-4">
+            <div className={node}>
+              <p className={taskTop}>Add a task here to represent this team member!</p>
+              <p className={taskBottom}>President</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Connector tier 1: president down, bus to VP + exec assistant ── */}
+        <div className="relative h-5 mx-1">
+          {/* vertical drop from president */}
+          <span className="absolute top-0 bottom-0 w-px bg-blue-400" style={{ left: "83%" }} />
+          {/* horizontal bus */}
+          <span className="absolute top-0 h-px bg-blue-400" style={{ left: "37%", right: "17%" }} />
+          <span className={`${plus} -translate-x-1/2 -translate-y-1/2`} style={{ left: "37%", top: 0 }}>+</span>
+          {/* drops to VP + exec assistant */}
+          <span className="absolute top-0 bottom-0 w-px bg-blue-400" style={{ left: "37%" }} />
+          <span className="absolute top-0 bottom-0 w-px bg-blue-400" style={{ left: "79%" }} />
+          <span className={`${drop} -translate-x-1/2`} style={{ left: "37%", bottom: -1 }}>▼</span>
+          <span className={`${drop} -translate-x-1/2`} style={{ left: "79%", bottom: -1 }}>▼</span>
+        </div>
+
+        {/* ── Middle row: VP + executive assistant ── */}
+        <div className="grid grid-cols-12 gap-1.5 items-start">
+          <div className="col-span-2" />
+          <div className="col-span-4">
+            <div className={node}>
+              <p className={taskTop}>Add a task here to represent this team member!</p>
+              <p className={taskBottom}>Vice President</p>
+            </div>
+          </div>
+          <div className="col-span-1" />
+          <div className="col-span-4">
+            <div className={node}>
+              <p className={taskTop}>New Team Member</p>
+              <p className={taskBottom}>Executive Assistant</p>
+            </div>
+          </div>
+          <div className="col-span-1" />
+        </div>
+
+        {/* ── Connector tier 2: VP down, bus to directors ── */}
+        <div className="relative h-5 mx-1">
+          <span className="absolute top-0 bottom-0 w-px bg-blue-400" style={{ left: "37%" }} />
+          <span className="absolute top-0 h-px bg-blue-400" style={{ left: "16%", right: "8%" }} />
+          <span className={`${plus} -translate-x-1/2 -translate-y-1/2`} style={{ left: "37%", top: 0 }}>+</span>
+          {["16%", "50%", "84%"].map((x) => (
+            <span key={x} className="absolute top-0 bottom-0 w-px bg-blue-400" style={{ left: x }} />
+          ))}
+          {["16%", "50%", "84%"].map((x) => (
+            <span key={x} className={`${drop} -translate-x-1/2`} style={{ left: x, bottom: -1 }}>▼</span>
+          ))}
+        </div>
+
+        {/* ── Directors row ── */}
+        <div className="grid grid-cols-3 gap-1.5">
+          {["Operations Director", "IT Director", "Marketing Lead"].map((t) => (
+            <div key={t} className={node}>
+              <p className={taskTop}>New Team Member</p>
+              <p className={taskBottom}>{t}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Pro-tip note (left, like the real canvas) ── */}
+        <div className="absolute border border-pink-500/80 rounded-[4px] bg-pink-950/30 p-1.5" style={{ left: 12, top: "46%", width: "21%" }}>
+          <p className="text-[7px] text-pink-200 leading-snug">Pro-tip: create tasks for each member of the org chart. Use that task to add information about the team members that would be helpful to know.</p>
+        </div>
+
+        {/* ── Bottom bar: zoom pill + toolbar pill ── */}
+        <div className="absolute flex items-end justify-between" style={{ left: 12, right: 12, bottom: 6 }}>
+          <div className="flex items-center gap-1.5 bg-black/60 border border-white/15 rounded-md px-1.5 py-1">
+            <span className="text-[8px] text-zinc-400">⌕</span>
+            <span className="text-[8px] font-bold text-white">92%</span>
+            <span className="text-[8px] text-zinc-400">⊕</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-[#1a1b20]/95 border border-white/15 rounded-full pl-2.5 pr-1 py-1">
+            {["◂", "✋", "☑", "◇", "▢", "→", "T"].map((g) => (
+              <span key={g} className="text-[9px] text-zinc-300">{g}</span>
+            ))}
+            <span className="text-[8px] font-bold text-white bg-blue-600 rounded-full px-2 py-0.5">Share</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -456,7 +606,7 @@ function IntelligenceMock() {
 export function HomeDemoShowcase() {
   const [active, setActive] = useState<DemoId>("pipelines");
   const c = copy[active];
-  const ActiveIcon = active === "pipelines" ? CalendarClock : active === "deliver" ? Gauge : active === "collaborate" ? MessagesSquare : active === "sell" ? KanbanSquare : active === "govern" ? Wallet : Sparkles;
+  const ActiveIcon = active === "pipelines" ? CalendarClock : active === "deliver" ? Gauge : active === "whiteboard" ? PenTool : active === "collaborate" ? MessagesSquare : active === "sell" ? KanbanSquare : active === "govern" ? Wallet : Sparkles;
 
   return (
     <section id="demo" className="bg-white dark:bg-[#201F1E] border-y border-gray-200 dark:border-[#3B3A39] py-14 px-4 sm:px-6 scroll-mt-14">
@@ -519,6 +669,7 @@ export function HomeDemoShowcase() {
           <BrowserChrome route={tabs.find((t) => t.id === active)?.route ?? ""}>
             {active === "pipelines" && <PipelinesMock />}
             {active === "deliver" && <DeliverMock />}
+            {active === "whiteboard" && <WhiteboardMock />}
             {active === "collaborate" && <CollaborateMock />}
             {active === "sell" && <SellMock />}
             {active === "govern" && <GovernMock />}

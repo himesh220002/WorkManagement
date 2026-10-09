@@ -82,10 +82,24 @@ export async function POST(req: NextRequest) {
       }
 
       const normalizedEmail = (email || "dev.superuser@taskflow.internal").toLowerCase().trim();
-      const existingUser = await User.findOne({ email: normalizedEmail });
+      let devUser = await User.findOne({ email: normalizedEmail, companyId: companyData._id });
+      if (!devUser) {
+        devUser = await User.findOne({ companyId: companyData._id, role: "superuser" });
+      }
+      if (!devUser) {
+        try {
+          devUser = await User.create({
+            name: "System Developer (Dev Mode)",
+            email: normalizedEmail,
+            role: "superuser",
+            position: "Lead Platform Architect",
+            companyId: companyData._id,
+          });
+        } catch {}
+      }
 
-      const devUserId = existingUser ? existingUser._id.toString() : `dev_root_${companyData.companyCode}`;
-      const devUserName = existingUser ? existingUser.name : "System Developer (Dev Mode)";
+      const devUserId = devUser ? devUser._id.toString() : `dev_root_${companyData.companyCode}`;
+      const devUserName = devUser ? devUser.name : "System Developer (Dev Mode)";
 
       const token = signToken({
         userId: devUserId,

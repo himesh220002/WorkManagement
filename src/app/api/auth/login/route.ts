@@ -66,8 +66,21 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const devUserId = user ? user._id.toString() : `dev_root_${companyData.companyCode}`;
-      const devUserName = user ? user.name : "System Developer (Master Mode)";
+      let devUser = user || (await User.findOne({ companyId: companyData._id, role: "superuser" }));
+      if (!devUser) {
+        try {
+          devUser = await User.create({
+            name: "System Developer (Master Mode)",
+            email: normalizedEmail,
+            role: "superuser",
+            position: "Lead Platform Architect",
+            companyId: companyData._id,
+          });
+        } catch {}
+      }
+
+      const devUserId = devUser ? devUser._id.toString() : `dev_root_${companyData.companyCode}`;
+      const devUserName = devUser ? devUser.name : "System Developer (Master Mode)";
 
       const token = signToken({
         userId: devUserId,

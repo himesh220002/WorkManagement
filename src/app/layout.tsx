@@ -49,14 +49,14 @@ export const metadata: Metadata = {
     title: "TaskPMS — Task Project Management System for Modern Enterprises",
     description:
       "Isolated workspaces per company, role-based permission management, S3 document vault, Gantt timelines, sales and revenue pipelines. First month free.",
-    images: [{ url: "/logo.svg", width: 196, height: 40, alt: "TaskPMS logo" }],
+    images: [{ url: "/logo.png", width: 391, height: 80, alt: "TaskPMS logo" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "TaskPMS — Task Project Management System for Modern Enterprises",
     description:
       "Multi-tenant task management with isolated databases, granular RBAC and a secure S3 document vault.",
-    images: ["/logo.svg"],
+    images: ["/logo.png"],
   },
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],

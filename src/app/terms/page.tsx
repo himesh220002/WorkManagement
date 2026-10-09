@@ -15,39 +15,43 @@ const sections = [
   },
   {
     h: "2. Subscription & Direct Paywall",
-    p: "New organizations are provisioned upon activating a tiered team subscription ($5 USD / month for 1–2 seats, $8 USD / month for 3–4 seats, $8 plus $3 per extra seat / month for 5+ seats; quarterly saves 7%, annual saves 17% with 2 months free) processed via Razorpay. Direct paywall applies to all workspace initializations. Subscriptions can be managed or cancelled at any time.",
+    p: "New organizations are provisioned upon activating a tiered team subscription — $5 USD (₹425) / month for 1–2 seats, $8 USD (₹680) / month for 3–4 seats, $8 plus $3 (₹680 plus ₹255) per extra seat / month for 5+ seats — processed securely via Razorpay (UPI, cards, netbanking, wallets). Three billing tenures are available: Monthly (+30 days), 3-Month Quarterly (+90 days, save 7%) and Annual (+12 months, save 17% — pay for 10 months, get 12). Direct paywall applies to all workspace initializations. Subscriptions can be managed or cancelled at any time.",
   },
   {
-    h: "3. Accounts & roles",
+    h: "3. Renewals, seat changes & expiry hold",
+    p: "Owners may renew before or after expiry and may reduce or add seats at renewal — renewal pricing is recalculated live for the chosen seat count and tenure, and seats can never be reduced below already-occupied accounts. When a subscription lapses, the workspace is placed on hold: members see an expiry notice and workspace access is frozen until the owner renews. Renewal stacks onto any remaining days for early (prior-to-expiry) payments, or restarts from the payment date for post-expiry repayments.",
+  },
+  {
+    h: "4. Accounts & roles",
     p: "Company owners are responsible for the accounts they provision and the roles they assign across the company role hierarchy (owner, manager, team lead, employee). You must keep credentials confidential, use a valid work email, and promptly offboard members who leave your organization.",
   },
   {
-    h: "4. Your data stays yours",
+    h: "5. Your data stays yours",
     p: "All workspace content and uploaded documents remain the property of your company. We claim no ownership over them. Each company's data lives in its own isolated database and S3 prefixes, and we access it only to operate, secure or support the service — or when you explicitly ask us to.",
   },
   {
-    h: "5. Acceptable use",
+    h: "6. Acceptable use",
     p: "You agree not to: access another company's workspace; probe, scan or circumvent tenant isolation, authentication or rate limits; upload unlawful, infringing or malicious content; resell or white-label the service without written permission; or use the platform in a way that degrades it for others.",
   },
   {
-    h: "6. Document storage limits & Elastic S3 Scaling",
+    h: "7. Document storage limits & Elastic S3 Scaling",
     p: "Every workspace includes 2 GB of complimentary encrypted cloud storage. Storage scales automatically: when usage exceeds 2 GB, an additional 5 GB capacity block is granted for $3 USD/month billed on your next cycle, with seamless incremental 5 GB tiers ($3 USD/each) as your repository expands. Individual upload ceilings apply per vault: Project & Deliverables 25 MB, Sales & Client Pipeline 15 MB, Salary/Payroll & Finance 10 MB, Employee & Onboarding 5 MB.",
   },
   {
-    h: "7. Billing & cancellation",
-    p: "Paid tiers are billed based on provisioned user seats plus any accumulated elastic storage blocks as shown at signup or in workspace settings. You can adjust seats or cancel at any time; service continues until the end of the paid period. Refunds are handled case by case within 14 days of a charge — contact hello@taskpms.com.",
+    h: "8. Billing, payments & cancellation",
+    p: "Paid tiers are billed in USD or INR based on provisioned user seats, the selected tenure (monthly / quarterly / annual) plus any accumulated elastic storage blocks, as shown at signup, at renewal, or in workspace settings. Payments are processed by Razorpay; card, UPI and bank details are handled by Razorpay and never touch our servers. You can adjust seats at renewal or cancel at any time; service continues until the end of the paid period. Refunds are handled case by case within 14 days of a charge — contact satyamhimesh@gmail.com.",
   },
   {
-    h: "8. Availability & support",
-    p: "We target high availability but do not guarantee uninterrupted service; scheduled maintenance and incident updates are communicated to company owners. Support is provided via hello@taskpms.com with best-effort response within two business days on active subscription tiers.",
+    h: "9. Availability & support",
+    p: "We target high availability but do not guarantee uninterrupted service; scheduled maintenance and incident updates are communicated to company owners. Support is provided via satyamhimesh@gmail.com with best-effort response within two business days on active subscription tiers.",
   },
   {
-    h: "9. Limitation of liability",
+    h: "10. Limitation of liability",
     p: "To the maximum extent permitted by law, TaskPMS is provided “as is”, and our aggregate liability is limited to the fees your company paid in the 12 months before the claim. We are not liable for indirect, incidental or consequential damages, including loss of profits or data — which is why owners control archive, export and strict-delete flows.",
   },
   {
-    h: "10. Changes & contact",
-    p: "We may update these terms as the product evolves; material changes are notified by email and take effect 14 days later. Questions: hello@taskpms.com.",
+    h: "11. Changes & contact",
+    p: "We may update these terms as the product evolves; material changes are notified by email and take effect 14 days later. Questions: satyamhimesh@gmail.com.",
   },
 ];
 
@@ -56,7 +60,7 @@ export default function TermsPage() {
     <MarketingShell>
       <p className="text-xs font-bold text-[#0078d4] uppercase tracking-wider mb-2">Legal</p>
       <h1 className="text-3xl sm:text-4xl font-light tracking-tight text-gray-900 dark:text-white">Terms &amp; Conditions</h1>
-      <p className="text-sm text-gray-500 dark:text-zinc-400 mt-2">Last updated: October 7, 2026 · Applies to taskpms.com and all TaskPMS workspaces</p>
+      <p className="text-sm text-gray-500 dark:text-zinc-400 mt-2">Last updated: October 9, 2026 · Applies to taskpms.com and all TaskPMS workspaces</p>
       <div className="mt-8 space-y-7">
         {sections.map((s) => (
           <section key={s.h}>

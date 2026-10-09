@@ -54,11 +54,19 @@ export default function NotFound() {
           <div className="flex items-center gap-5 min-w-0">
             <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="TaskPMS home">
               <Image
-                src="/logo.svg"
+                src="/logo.png"
                 alt="TaskPMS — Task Project Management System"
                 width={132}
                 height={27}
-                className="h-[27px] w-auto"
+                className="h-[27px] w-auto dark:hidden"
+                priority
+              />
+              <Image
+                src="/logo-dark.png"
+                alt="TaskPMS — Task Project Management System"
+                width={132}
+                height={27}
+                className="h-[27px] w-auto hidden dark:block"
                 priority
               />
             </Link>
@@ -205,11 +213,18 @@ export default function NotFound() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 grid grid-cols-2 md:grid-cols-4 gap-8 text-sm">
           <div className="col-span-2 md:col-span-1">
             <Image
-              src="/logo.svg"
+              src="/logo.png"
               alt="TaskPMS — Task Project Management System"
               width={132}
               height={27}
-              className="h-[27px] w-auto mb-3"
+              className="h-[27px] w-auto mb-3 dark:hidden"
+            />
+            <Image
+              src="/logo-dark.png"
+              alt="TaskPMS — Task Project Management System"
+              width={132}
+              height={27}
+              className="h-[27px] w-auto mb-3 hidden dark:block"
             />
             <p className="text-xs text-gray-500 dark:text-zinc-400 font-light leading-relaxed">
               Multi-tenant enterprise OS for task flows, squads, sales pipelines and revenue — with isolated data perimeters and S3-grade document security.

@@ -171,8 +171,8 @@ export function ContactForm() {
           <p className="flex items-center gap-2 font-semibold text-sm text-gray-900 dark:text-white mb-1">
             <Mail className="w-4 h-4 text-[#0078d4]" /> Direct Contact
           </p>
-          <a href="mailto:hello@taskpms.com" className="text-sm text-[#0078d4] hover:underline font-medium">
-            hello@taskpms.com
+          <a href="mailto:satyamhimesh@gmail.com" className="text-sm text-[#0078d4] hover:underline font-medium">
+            satyamhimesh@gmail.com
           </a>
           <p className="text-xs text-gray-500 dark:text-zinc-400 font-light mt-2">
             For subscriptions, enterprise onboarding, SLA contracts, and Discord integration setup.

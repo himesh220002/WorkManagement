@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { ThemeToggle } from "@/components/marketing/ThemeToggle";
 
 /**
  * Shared chrome for public legal / contact pages.
@@ -13,7 +14,8 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-12 flex items-center justify-between text-sm gap-4">
           <div className="flex items-center gap-5 min-w-0">
             <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="TaskPMS home">
-              <Image src="/logo.svg" alt="TaskPMS — Task Project Management System" width={132} height={27} />
+              <Image src="/logo.png" alt="TaskPMS — Task Project Management System" width={132} height={27} className="h-[27px] w-auto dark:hidden" priority />
+              <Image src="/logo-dark.png" alt="TaskPMS — Task Project Management System" width={132} height={27} className="h-[27px] w-auto hidden dark:block" priority />
             </Link>
             <nav className="hidden md:flex items-center gap-5 text-[#242424] dark:text-[#C8C6C4]">
               <Link href="/about" className="hover:text-[#0078d4]">About Us</Link>
@@ -25,6 +27,7 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link href="/auth/login" className="text-[#0078d4] hover:underline font-medium hidden sm:inline">Sign in</Link>
             <Link href="/auth/signup" className="bg-[#0078d4] text-white px-3 sm:px-4 py-1.5 font-medium hover:bg-[#005a9e] transition-colors rounded-sm text-xs sm:text-sm">Subscribe ($3/user/mo)</Link>
+            <ThemeToggle />
           </div>
         </div>
       </header>
@@ -36,7 +39,8 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
       <footer className="bg-white dark:bg-[#201F1E] border-t border-gray-200 dark:border-[#3B3A39]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm">
           <Link href="/" className="flex items-center gap-2" aria-label="TaskPMS home">
-            <Image src="/logo.svg" alt="TaskPMS" width={110} height={22} />
+            <Image src="/logo.png" alt="TaskPMS" width={110} height={22} className="h-[22px] w-auto dark:hidden" />
+            <Image src="/logo-dark.png" alt="TaskPMS" width={110} height={22} className="h-[22px] w-auto hidden dark:block" />
           </Link>
           <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[13px]">
             <Link href="/about" className="hover:text-[#0078d4]">About Us</Link>

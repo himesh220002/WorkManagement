@@ -1,10 +1,42 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   createPaymentVerificationToken,
   verifyPaymentVerificationToken,
   PRICING_PLANS,
 } from "@/lib/razorpay";
 import { signToken, verifyToken } from "@/server/auth/jwt";
+
+let mockAuthToken: string | null = null;
+
+vi.mock("@/lib/mongodb", () => ({
+  default: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock("@/models", () => ({
+  User: {
+    findById: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(null) }),
+    findOne: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(null) }),
+    create: vi.fn().mockResolvedValue(null),
+  },
+  Company: {
+    findById: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(null) }) }),
+    findOne: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(null) }) }),
+  },
+}));
+
+vi.mock("next/headers", () => ({
+  cookies: vi.fn().mockImplementation(async () => ({
+    get: (key: string) => {
+      if (key === "auth_token" && mockAuthToken) {
+        return { value: mockAuthToken };
+      }
+      return null;
+    },
+  })),
+  headers: vi.fn().mockImplementation(async () => ({
+    get: (key: string) => (key === "x-tenant-org-code" ? "ORGTTV" : null),
+  })),
+}));
 
 describe("Developer Bypass Registration via 16-Digit regDevKey", () => {
   const TEST_REG_DEV_KEY = "8H1I0M5E5S4H2318";
@@ -74,5 +106,24 @@ describe("Developer Bypass Registration via 16-Digit regDevKey", () => {
     expect(decoded.role).toBe("superuser");
     expect(decoded.companyCode).toBe("ORGTTU");
     expect(decoded.companyId).toBe("6ac628dc809cdf949afd0347");
+  });
+
+  it("ensures synthetic dev_root token does not throw CastError and resolves session safely", async () => {
+    mockAuthToken = signToken({
+      userId: "dev_root_ORGTTU",
+      companyId: "6ac628dc809cdf949afd0347",
+      companyCode: "ORGTTU",
+      role: "superuser",
+      email: "dev.superuser@taskflow.internal",
+      name: "System Developer (Master Mode)",
+    });
+
+    const { getCurrentSession } = await import("@/server/auth/session");
+    const session = await getCurrentSession();
+    expect(session).toBeDefined();
+    expect(session.role).toBe("superuser");
+    expect(session.email).toBe("dev.superuser@taskflow.internal");
+    // Verify no CastError was thrown
+    expect(session.isGuest).toBeFalsy();
   });
 });

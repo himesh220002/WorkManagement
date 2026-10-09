@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { HomeDemoShowcase } from "@/components/marketing/HomeDemoShowcase";
+import { ThemeToggle } from "@/components/marketing/ThemeToggle";
 import {
   ArrowRight,
   Award,
@@ -17,6 +18,7 @@ import {
   FolderKanban,
   GitGraph,
   LayoutDashboard,
+  PenTool,
   ShieldCheck,
   Target,
   TrendingUp,
@@ -113,6 +115,7 @@ const quickLinks = [
   { icon: LayoutDashboard, label: "Exec Dashboard", href: "/exec/dashboard", desc: "OKRs, goals & revenue targets" },
   { icon: CheckSquare, label: "Dev Dashboard", href: "/dev/dashboard", desc: "Tasks, pipelines & workflow" },
   { icon: Clock, label: "Gantt Timeline", href: "/dev/timeline", desc: "Schedules & dependencies" },
+  { icon: PenTool, label: "Whiteboards", href: "/whiteboards", desc: "Org charts & visual canvas" },
   { icon: Briefcase, label: "My Work", href: "/my-work", desc: "Personal tasks & logs" },
   { icon: BadgeDollarSign, label: "Sales Pipeline", href: "/sales/dashboard", desc: "Leads, deals & campaigns" },
   { icon: TrendingUp, label: "Revenue & Targets", href: "/revenue/dashboard", desc: "Deals Kanban & budgets" },
@@ -207,7 +210,8 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-12 flex items-center justify-between text-sm gap-4">
           <div className="flex items-center gap-5 min-w-0">
             <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="TaskPMS home">
-              <Image src="/logo.svg" alt="TaskPMS — Task Project Management System" width={132} height={27} className="h-[27px] w-auto" priority />
+              <Image src="/logo.png" alt="TaskPMS — Task Project Management System" width={132} height={27} className="h-[27px] w-auto dark:hidden" priority />
+              <Image src="/logo-dark.png" alt="TaskPMS — Task Project Management System" width={132} height={27} className="h-[27px] w-auto hidden dark:block" priority />
             </Link>
             <nav className="hidden lg:flex items-center gap-5 text-[#242424] dark:text-[#C8C6C4]">
               <a href="#demo" className="hover:text-[#0078d4] border-b-2 border-transparent hover:border-[#0078d4] py-3">Live Demo</a>
@@ -218,9 +222,11 @@ export default function Home() {
               <a href="#pricing" className="hover:text-[#0078d4] border-b-2 border-transparent hover:border-[#0078d4] py-3">Pricing</a>
             </nav>
           </div>
+          
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link href="/auth/login" className="px-3 py-1.5 text-xs font-semibold border border-[#0078d4]/30 text-[#0078d4] rounded-sm hover:bg-[#EBF3FC] transition-colors">Sign In</Link>
             <Link href="/auth/signup" className="bg-[#0078d4] text-white px-3 sm:px-4 py-1.5 font-medium hover:bg-[#005a9e] transition-colors rounded-sm text-xs sm:text-sm">Get Started ($3/user/mo)</Link>
+            <ThemeToggle />
           </div>
         </div>
       </header>
@@ -664,7 +670,8 @@ export default function Home() {
       <footer className="bg-white dark:bg-[#201F1E] border-t border-gray-200 dark:border-[#3B3A39]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 grid grid-cols-2 md:grid-cols-4 gap-8 text-sm">
           <div className="col-span-2 md:col-span-1">
-            <Image src="/logo.svg" alt="TaskPMS — Task Project Management System" width={132} height={27} className="h-[27px] w-auto mb-3" />
+            <Image src="/logo.png" alt="TaskPMS — Task Project Management System" width={132} height={27} className="h-[27px] w-auto mb-3 dark:hidden" />
+            <Image src="/logo-dark.png" alt="TaskPMS — Task Project Management System" width={132} height={27} className="h-[27px] w-auto mb-3 hidden dark:block" />
             <p className="text-xs text-gray-500 dark:text-zinc-400 font-light leading-relaxed">Multi-tenant enterprise OS for task flows, squads, sales pipelines and revenue — with isolated data perimeters and S3-grade document security.</p>
           </div>
           <div>
