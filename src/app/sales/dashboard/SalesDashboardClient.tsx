@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -20,7 +20,9 @@ import {
   deleteLead,
   updateCampaign,
   deleteCampaign,
+  toggleLeadChecklistItem,
 } from "@/actions";
+import KanbanChecklistField from "@/components/KanbanChecklistField";
 import PipelineCard from "@/components/PipelineCard";
 import { Badge } from "@/components/ui/Badge";
 import {
@@ -42,6 +44,10 @@ import {
   Columns3,
   Shield,
   ShieldCheck,
+  Inbox,
+  Rocket,
+  SearchCheck,
+  Check,
 } from "lucide-react";
 
 ChartJS.register(
@@ -55,6 +61,60 @@ ChartJS.register(
 );
 
 const LEAD_STAGES = ["New", "Working", "Qualified", "Unqualified"] as const;
+
+// Paper-board presentation meta — mimics a hand-drawn kraft-paper kanban
+const KANBAN_META: Record<string, { icon: any; subtitle: string; wip?: number }> = {
+  New: { icon: Inbox, subtitle: "Ideas & requests" },
+  Working: { icon: Users, subtitle: "Actively being worked on", wip: 6 },
+  Qualified: { icon: SearchCheck, subtitle: "Validate & close" },
+  Unqualified: { icon: Rocket, subtitle: "Parked & dropped" },
+};
+
+const AVATAR_BG = ["#E9C6F2", "#C9DEFA", "#F6CFA0", "#BEE6C8", "#F5C6C6", "#FFE9A8"];
+const PRIORITY_STYLE: Record<string, string> = {
+  High: "bg-[#F7C5C3] text-[#8C1D18]",
+  Medium: "bg-[#FBE3A1] text-[#7A5200]",
+  Low: "bg-[#CDEACF] text-[#1C5E2A]",
+};
+
+function leadPriority(lead: any): "High" | "Medium" | "Low" {
+  if (lead?.priority === "High" || lead?.priority === "Medium" || lead?.priority === "Low") {
+    return lead.priority;
+  }
+  const seed = `${lead?.name || ""}${lead?.owner || ""}`;
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) % 997;
+  return h % 3 === 0 ? "High" : h % 3 === 1 ? "Medium" : "Low";
+}
+
+function realLeadChecks(lead: any): { text: string; completed: boolean }[] {
+  if (!Array.isArray(lead?.checklist)) return [];
+  return lead.checklist
+    .map((c: any) => ({
+      text: String(c?.text || "").trim(),
+      completed: Boolean(c?.completed),
+    }))
+    .filter((c: { text: string; completed: boolean }) => c.text.length > 0);
+}
+
+function initialsOf(name?: string) {
+  if (!name) return "•";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function avatarBg(name?: string) {
+  if (!name) return AVATAR_BG[0];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 997;
+  return AVATAR_BG[h % AVATAR_BG.length];
+}
+
+function leadCode(lead: any) {
+  const raw = String(lead?._id || lead?.name || "0000").replace(/[^a-zA-Z0-9]/g, "");
+  return `LD-${raw.slice(-4).toUpperCase().padStart(4, "0")}`;
+}
 
 export default function SalesDashboardClient({
   leads = [],
@@ -102,6 +162,75 @@ export default function SalesDashboardClient({
 
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
+
+  // Optimistic tick state: instant paint, server persists quietly in bg.
+  // Only stores completed flags keyed by item index — text always comes from server,
+  // so editing text in the modal never goes stale.
+  const [doneOverrides, setDoneOverrides] = useState<Record<string, Record<number, boolean>>>({});
+  const pendingToggles = useRef<Record<string, number>>({});
+
+  // Forget local overrides once server data catches up (and nothing is still in flight).
+  useEffect(() => {
+    setDoneOverrides((prev) => {
+      const ids = Object.keys(prev);
+      if (ids.length === 0) return prev;
+      let changed = false;
+      const next = { ...prev };
+      for (const id of ids) {
+        if ((pendingToggles.current[id] || 0) > 0) continue;
+        const serverLead = leads.find((l) => l._id === id);
+        const serverChecks = realLeadChecks(serverLead);
+        const ov = prev[id];
+        const pruned: Record<number, boolean> = {};
+        for (const [idxStr, val] of Object.entries(ov)) {
+          const idx = Number(idxStr);
+          if (serverChecks[idx]?.completed !== val) pruned[idx] = val;
+        }
+        if (Object.keys(pruned).length === 0) {
+          delete next[id];
+          changed = true;
+        } else if (Object.keys(pruned).length !== Object.keys(ov).length) {
+          next[id] = pruned;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [leads]);
+
+  const visibleChecks = (lead: any) => {
+    const server = realLeadChecks(lead);
+    const ov = doneOverrides[lead?._id];
+    if (!ov) return server;
+    return server.map((c, i) => (ov[i] === undefined ? c : { ...c, completed: ov[i] }));
+  };
+
+  const handleToggleCheck = (lead: any, index: number) => {
+    if (isGuest) return;
+    // 1. paint instantly
+    setDoneOverrides((prev) => {
+      const ov = prev[lead._id] || {};
+      const cur = ov[index] ?? realLeadChecks(lead)[index]?.completed ?? false;
+      return { ...prev, [lead._id]: { ...ov, [index]: !cur } };
+    });
+    // 2. persist in background without disturbing the UI
+    pendingToggles.current[lead._id] = (pendingToggles.current[lead._id] || 0) + 1;
+    toggleLeadChecklistItem(lead._id, index)
+      .catch(() => {
+        // roll back to server truth on failure
+        setDoneOverrides((prev) => {
+          const ov = { ...(prev[lead._id] || {}) };
+          delete ov[index];
+          const next = { ...prev };
+          if (Object.keys(ov).length > 0) next[lead._id] = ov;
+          else delete next[lead._id];
+          return next;
+        });
+      })
+      .finally(() => {
+        pendingToggles.current[lead._id] = Math.max(0, (pendingToggles.current[lead._id] || 1) - 1);
+      });
+  };
 
   // Metrics
   const totalLeads = leads?.length || 0;
@@ -365,116 +494,256 @@ export default function SalesDashboardClient({
         <section className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div className="relative w-full max-w-sm">
-              <Search className="w-4 h-4 text-[#8A8886] absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-[#8A7D61] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search leads by name or owner..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                className="w-full pl-9 pr-3 py-2 text-xs bg-[#FFFEF7] border border-[#2E2A24]/30 rounded-full text-[#2E2A24] placeholder:text-[#8A7D61] outline-none focus:border-[#2E2A24] shadow-[1px_2px_0_rgba(46,42,36,0.2)]"
               />
             </div>
+            <span className="hidden sm:block text-[11px] font-bold text-[#6B5D43] uppercase tracking-widest">
+              Drag cards between stages
+            </span>
           </div>
 
-          <div className="flex gap-4 overflow-x-auto pb-4 items-start min-h-[500px]">
-            {LEAD_STAGES.map((stage) => {
-              const stageLeads = filteredLeads.filter((l) => l.status === stage);
-              const isOver = dragOverStage === stage;
+          {/* Kraft-paper board */}
+          <div
+            className="rounded-[14px] border-[2px] border-[#2E2A24] shadow-[0_12px_32px_rgba(62,42,10,0.22)] overflow-hidden"
+            style={{ backgroundColor: "#FCE3A1" }}
+          >
+            <div className="flex overflow-x-auto items-stretch divide-x-[2px] divide-[#2E2A24]/85 divide-solid min-h-[540px]">
+              {LEAD_STAGES.map((stage) => {
+                const stageLeads = filteredLeads.filter((l) => l.status === stage);
+                const isOver = dragOverStage === stage;
+                const meta = KANBAN_META[stage];
+                const Icon = meta?.icon ?? Layers;
 
-              return (
-                <div
-                  key={stage}
-                  onDragOver={(e) => handleDragOver(e, stage)}
-                  onDragLeave={() => setDragOverStage(null)}
-                  onDrop={(e) => handleDrop(e, stage)}
-                  className={`flex-1 min-w-[260px] max-w-[300px] bg-[#FAF9F8] dark:bg-[#1B1A19] rounded-[8px] border transition-all ${isOver
-                    ? "border-[#0078D4] ring-2 ring-[#0078D4]/40 bg-[#EBF3FC]/60"
-                    : "border-[#E1DFDD] dark:border-[#3B3A39]"
+                return (
+                  <div
+                    key={stage}
+                    onDragOver={(e) => handleDragOver(e, stage)}
+                    onDragLeave={() => setDragOverStage(null)}
+                    onDrop={(e) => handleDrop(e, stage)}
+                    className={`flex-1 min-w-[272px] max-w-[340px] flex flex-col transition-colors ${
+                      isOver ? "bg-[#FFF3C0]/70" : ""
                     }`}
-                >
-                  <div className="p-3 border-b border-[#E1DFDD] dark:border-[#3B3A39] flex items-center justify-between bg-white dark:bg-[#201F1E] rounded-t-[8px]">
-                    <span className="font-semibold text-xs text-[#242424] dark:text-[#FFFFFF]">
-                      {stage}
-                    </span>
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4]">
-                      {stageLeads.length}
-                    </span>
-                  </div>
+                  >
+                    {/* Column header */}
+                    <div className="px-4 pt-5 pb-3 text-center">
+                      <div className="flex items-center justify-center gap-2 text-[#2E2A24]">
+                        <Icon className="w-5 h-5" strokeWidth={1.9} />
+                        <span className="font-extrabold text-[17px] leading-none tracking-tight">
+                          {stage}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-[11px] font-medium text-[#6B5D43]">
+                        {meta?.subtitle}
+                      </div>
+                      {meta?.wip && (
+                        <div className="mt-2 inline-block text-[11px] font-extrabold text-[#2E2A24] bg-[#FFF6D9] border border-[#2E2A24]/60 rounded-[6px] px-2 py-0.5 shadow-[1px_1px_0_rgba(46,42,36,0.35)]">
+                          WIP Limit: {meta.wip}
+                        </div>
+                      )}
+                    </div>
 
-                  <div className="p-2.5 space-y-2.5 min-h-[300px]">
-                    {stageLeads.map((lead) => (
-                      <div
-                        key={lead._id}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, lead._id)}
-                        onDragEnd={handleDragEnd}
-                        className={`bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] p-3 shadow-sm hover:border-[#0078D4] transition-all cursor-grab active:cursor-grabbing group ${draggedLeadId === lead._id ? "opacity-40" : ""
-                          }`}
-                      >
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="font-semibold text-xs text-[#242424] dark:text-[#FFFFFF]">
-                            {lead.name}
-                          </span>
-                          <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
-                            <button
-                              type="button"
-                              draggable={false}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                setEditingLead(lead);
-                              }}
-                              className="p-1 text-[#605E5C] hover:text-[#0078D4] transition-colors cursor-pointer rounded"
-                              title={canEditLead(lead) ? "Edit Lead" : "Inspect Lead Record (Colleague Lead)"}
-                            >
-                              <Edit3 className="w-3.5 h-3.5 pointer-events-none" />
-                            </button>
-                            {!isGuest && canDeleteLead && (
-                              <form
-                                action={deleteLead}
-                                onSubmit={(e) => {
-                                  if (!window.confirm(`Delete lead "${lead.name}"?`)) e.preventDefault();
-                                }}
+                    {/* Hand-drawn horizontal rule */}
+                    <div className="relative h-[2px] bg-[#2E2A24] mx-0">
+                      <span className="absolute -left-[5px] -top-[3px] w-[8px] h-[8px] rounded-full bg-[#2E2A24]" />
+                      <span className="absolute -right-[4px] -top-[3px] w-[8px] h-[8px] rounded-full bg-[#2E2A24]" />
+                    </div>
+
+                    {/* Cards */}
+                    <div className="p-4 space-y-4 flex-1">
+                      {stageLeads.map((lead, idx) => {
+                        const priority = leadPriority(lead);
+                        const campaignName =
+                          campaigns.find((c) => c._id === lead.campaignId)?.name || "Direct inbound";
+                        const checks = visibleChecks(lead);
+                        return (
+                          <div
+                            key={lead._id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, lead._id)}
+                            onDragEnd={handleDragEnd}
+                            style={{
+                              transform: `rotate(${idx % 2 === 0 ? "-0.6deg" : "0.6deg"})`,
+                            }}
+                            className={`group relative bg-[#FFFEF7] rounded-[10px] border border-[#E2D3A3] p-3.5 shadow-[2px_3px_0_rgba(46,42,36,0.22),0_10px_20px_rgba(46,42,36,0.10)] hover:shadow-[2px_5px_0_rgba(46,42,36,0.25),0_14px_24px_rgba(46,42,36,0.14)] hover:-translate-y-0.5 transition-all cursor-grab active:cursor-grabbing ${
+                              draggedLeadId === lead._id ? "opacity-40 scale-[0.98]" : ""
+                            } ${isOver ? "ring-2 ring-[#2E2A24]/40" : ""}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-mono text-[10px] font-bold tracking-wide text-[#6B5D43]">
+                                {leadCode(lead)}
+                              </span>
+                              <span
+                                className={`text-[10px] font-extrabold px-2 py-[2px] rounded-[4px] leading-none ${PRIORITY_STYLE[priority]}`}
                               >
-                                <input type="hidden" name="leadId" value={lead._id} />
-                                <button
-                                  type="submit"
-                                  className="p-1 text-[#605E5C] hover:text-[#D13438] transition-colors cursor-pointer rounded"
-                                  title="Delete Lead"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </form>
+                                {priority}
+                              </span>
+                            </div>
+
+                            <h4 className="mt-1.5 font-extrabold text-[14px] leading-snug text-[#221C12]">
+                              {lead.name}
+                            </h4>
+
+                            {/* Info rows — not checkboxes */}
+                            <div className="mt-2 space-y-1 text-[11px] font-medium text-[#4A4132]">
+                              <div className="flex items-center gap-1.5 truncate">
+                                <Users className="w-3 h-3 text-[#6B5D43] shrink-0" />
+                                <span className="truncate">Contact: {lead.contactName || lead.owner || "—"}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 truncate">
+                                <Search className="w-3 h-3 text-[#6B5D43] shrink-0" />
+                                <span className="truncate">Source: {lead.source || "Inbound"}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 truncate">
+                                <Megaphone className="w-3 h-3 text-[#6B5D43] shrink-0" />
+                                <span className="truncate">{campaignName}</span>
+                              </div>
+                            </div>
+
+                            {/* Real checklist items only — tick directly on board */}
+                              {checks.length > 0 && (
+                              <div className="mt-2.5 space-y-[7px] pt-2.5 border-t border-dashed border-[#E2D3A3]">
+                                {checks.map((c, cIdx) => {
+                                  return (
+                                    <div key={`${c.text}-${cIdx}`} className="flex items-center gap-2 min-w-0">
+                                      <button
+                                        type="button"
+                                        draggable={false}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleToggleCheck(lead, cIdx);
+                                        }}
+                                        disabled={isGuest}
+                                        title={c.completed ? "Untick" : "Tick"}
+                                        className={`w-[15px] h-[15px] shrink-0 rounded-[3px] border-[1.5px] flex items-center justify-center transition-colors cursor-pointer ${
+                                          c.completed
+                                            ? "bg-[#107C10] border-[#107C10] text-white"
+                                            : "border-[#9A8C6B] bg-white text-transparent hover:border-[#2E2A24]"
+                                        } ${isGuest ? "cursor-not-allowed" : ""}`}
+                                      >
+                                        <Check className="w-2.5 h-2.5" strokeWidth={4} />
+                                      </button>
+                                      <span
+                                        className={`truncate text-[12px] font-medium text-[#4A4132] ${
+                                          c.completed ? "line-through opacity-60" : ""
+                                        }`}
+                                      >
+                                        {c.text}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             )}
+
+                            <div className="mt-3 pt-2.5 border-t border-dashed border-[#E2D3A3] flex items-center gap-2">
+                              <span
+                                className="w-6 h-6 rounded-full border border-[#2E2A24]/40 flex items-center justify-center text-[9px] font-extrabold text-[#2E2A24] shrink-0"
+                                style={{ backgroundColor: avatarBg(lead.owner) }}
+                              >
+                                {initialsOf(lead.owner)}
+                              </span>
+                              <span className="truncate text-[12px] font-semibold text-[#2E2A24]">
+                                {lead.owner || "Unassigned"}
+                              </span>
+                              <span className="ml-auto flex items-center gap-0.5 opacity-50 2xl:opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  type="button"
+                                  draggable={false}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    setEditingLead(lead);
+                                  }}
+                                  className="p-1.5 text-[#6B5D43] hover:text-[#221C12] hover:bg-black/5 rounded-md transition-colors cursor-pointer"
+                                  title={canEditLead(lead) ? "Edit Lead" : "Inspect Lead Record"}
+                                >
+                                  <Edit3 className="w-3.5 h-3.5 pointer-events-none" />
+                                </button>
+                                {!isGuest && canDeleteLead && (
+                                  <span onMouseDown={(e) => e.stopPropagation()} className="inline-flex">
+                                    <form
+                                      action={deleteLead}
+                                      onSubmit={(e) => {
+                                        if (!window.confirm(`Delete lead "${lead.name}"?`)) e.preventDefault();
+                                      }}
+                                    >
+                                      <input type="hidden" name="leadId" value={lead._id} />
+                                      <button
+                                        type="submit"
+                                        className="p-1.5 text-[#6B5D43] hover:text-[#B42318] hover:bg-red-500/10 rounded-md transition-colors cursor-pointer"
+                                        title="Delete Lead"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </form>
+                                  </span>
+                                )}
+                              </span>
+                            </div>
                           </div>
+                        );
+                      })}
+
+                      {stageLeads.length === 0 && (
+                        <div className="border-2 border-dashed border-[#2E2A24]/30 rounded-[10px] p-5 text-center bg-[#FFF7D6]/60">
+                          <p className="text-[12px] font-bold text-[#7A6B4F]">Empty column</p>
+                          <p className="text-[11px] text-[#8A7D61] mt-0.5">Drag a lead here</p>
                         </div>
+                      )}
 
-                        <div className="text-[11px] text-[#605E5C] dark:text-[#C8C6C4] flex items-center gap-1 mb-1.5">
-                          <Users className="w-3 h-3 text-[#0078D4]" />
-                          <span>Owner: {lead.owner}</span>
+                      {/* Drop hint while dragging */}
+                      {isOver && stageLeads.length > 0 && (
+                        <div className="border-2 border-dashed border-[#2E2A24]/60 rounded-[10px] p-3 text-center text-[11px] font-bold text-[#2E2A24] bg-white/60">
+                          Drop to move to {stage}
                         </div>
-
-                        {lead.campaignId && (
-                          <div className="pt-1.5 border-t border-[#F3F2F1] dark:border-[#292827] text-[10px] text-[#0078D4] dark:text-[#479EF5] flex items-center gap-1 truncate">
-                            <Megaphone className="w-3 h-3 shrink-0" />
-                            <span className="truncate">
-                              {campaigns.find((c) => c._id === lead.campaignId)?.name || "Campaign Linked"}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-
-                    {stageLeads.length === 0 && (
-                      <div className="border border-dashed border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] p-4 text-center text-xs text-[#8A8886]">
-                        No leads in {stage}
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+
+            {/* Legend footer */}
+            <div className="border-t-[2px] border-[#2E2A24] bg-[#F9D98C] px-4 py-3 flex justify-center">
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 bg-[#FFF3C9] border-[1.5px] border-[#2E2A24] rounded-[8px] px-4 py-2 shadow-[2px_2px_0_rgba(46,42,36,0.3)]">
+                <span className="flex items-center gap-2 text-[11px] font-bold text-[#2E2A24]">
+                  <span className="font-extrabold">Priority legend:</span>
+                  <span className="px-1.5 py-0.5 rounded-[4px] bg-[#F7C5C3] text-[#8C1D18]">High</span>
+                  <span className="px-1.5 py-0.5 rounded-[4px] bg-[#FBE3A1] text-[#7A5200] border border-[#2E2A24]/20">Medium</span>
+                  <span className="px-1.5 py-0.5 rounded-[4px] bg-[#CDEACF] text-[#1C5E2A]">Low</span>
+                </span>
+                <span className="hidden sm:inline w-px h-5 bg-[#2E2A24]/40" />
+                <span className="flex items-center gap-2 text-[11px] font-bold text-[#2E2A24]">
+                  <span className="font-extrabold">Owner:</span>
+                  <span className="flex -space-x-1.5">
+                    {filteredLeads.slice(0, 3).map((l) => (
+                      <span
+                        key={l._id}
+                        title={l.owner}
+                        className="w-5 h-5 rounded-full border border-[#2E2A24]/50 flex items-center justify-center text-[7px] font-extrabold"
+                        style={{ backgroundColor: avatarBg(l.owner) }}
+                      >
+                        {initialsOf(l.owner)}
+                      </span>
+                    ))}
+                  </span>
+                  <span className="font-semibold text-[#4A4132] truncate max-w-[220px]">
+                    {filteredLeads.slice(0, 2).map((l) => l.owner).filter(Boolean).join(", ") || "No owners yet"}
+                  </span>
+                  {filteredLeads.length > 2 && (
+                    <span className="text-[#6B5D43]">+ more</span>
+                  )}
+                </span>
+              </div>
+            </div>
           </div>
         </section>
       )}
@@ -611,7 +880,7 @@ export default function SalesDashboardClient({
       {/* ===================== MODAL: ADD LEAD ===================== */}
       {isAddLeadOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] max-w-md w-full shadow-2xl p-6">
+          <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] max-w-lg w-full shadow-2xl p-6 my-8">
             <div className="flex justify-between items-center mb-4 pb-2 border-b border-[#E1DFDD] dark:border-[#3B3A39]">
               <h3 className="font-bold text-sm text-[#242424] dark:text-[#FFFFFF]">Add Inbound Lead</h3>
               <button onClick={() => setIsAddLeadOpen(false)}>
@@ -623,40 +892,96 @@ export default function SalesDashboardClient({
                 await addLead(formData);
                 setIsAddLeadOpen(false);
               }}
-              className="space-y-3 text-xs"
+              className="space-y-3 text-xs max-h-[70vh] overflow-y-auto pr-1"
             >
-              <div>
-                <label className="block font-medium mb-1">Lead / Company Name *</label>
-                <input
-                  type="text"
-                  name="name"
-                  required
-                  placeholder="e.g. Apex Dynamics Corp"
-                  className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium mb-1">Company Name *</label>
+                  <input
+                    type="text"
+                    name="name"
+                    required
+                    placeholder="e.g. Apex Dynamics Corp"
+                    className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium mb-1">Contact Name</label>
+                  <input
+                    type="text"
+                    name="contactName"
+                    placeholder="e.g. Priya Sharma"
+                    className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium mb-1">Lead Owner *</label>
+                  <input
+                    type="text"
+                    name="owner"
+                    required
+                    placeholder="e.g. Alex Morgan"
+                    className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium mb-1">Acquisition Source</label>
+                  <input
+                    type="text"
+                    name="source"
+                    defaultValue="Manual Entry"
+                    placeholder="e.g. Website, Referral"
+                    className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-medium mb-1">Status</label>
+                  <select
+                    name="status"
+                    defaultValue="New"
+                    className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none"
+                  >
+                    <option value="New">New</option>
+                    <option value="Working">Working</option>
+                    <option value="Qualified">Qualified</option>
+                    <option value="Unqualified">Unqualified</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-medium mb-1">Priority</label>
+                  <select
+                    name="priority"
+                    defaultValue="Medium"
+                    className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none"
+                  >
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-medium mb-1">Campaign</label>
+                  <select
+                    name="campaignId"
+                    defaultValue=""
+                    className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none"
+                  >
+                    <option value="">None / Direct</option>
+                    {campaigns.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div>
-                <label className="block font-medium mb-1">Lead Owner *</label>
-                <input
-                  type="text"
-                  name="owner"
-                  required
-                  placeholder="e.g. Alex Morgan"
-                  className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none"
-                />
-              </div>
-              <div>
-                <label className="block font-medium mb-1">Status</label>
-                <select
-                  name="status"
-                  defaultValue="New"
-                  className="w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none"
-                >
-                  <option value="New">New</option>
-                  <option value="Working">Working</option>
-                  <option value="Qualified">Qualified</option>
-                  <option value="Unqualified">Unqualified</option>
-                </select>
+                <label className="block font-medium mb-1">Kanban Checklist</label>
+                <KanbanChecklistField key="add-lead" initial={[]} />
               </div>
               <div className="flex justify-end gap-2 pt-3">
                 <button
@@ -774,7 +1099,7 @@ export default function SalesDashboardClient({
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150">
-            <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] max-w-md w-full shadow-2xl p-6">
+            <div className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] max-w-lg w-full shadow-2xl p-6 my-8">
               <div className="flex justify-between items-center mb-3 pb-2 border-b border-[#E1DFDD] dark:border-[#3B3A39]">
                 <div className="flex items-center gap-2">
                   <Edit3 className="w-4 h-4 text-[#0078D4]" />
@@ -822,24 +1147,41 @@ export default function SalesDashboardClient({
                   await updateLead(formData);
                   setEditingLead(null);
                 }}
-                className="space-y-3 text-xs"
+                className="space-y-3 text-xs max-h-[70vh] overflow-y-auto pr-1"
               >
                 <input type="hidden" name="leadId" value={editingLead._id} />
 
-                <div>
-                  <label className="block font-medium mb-1 text-[#242424] dark:text-white">
-                    Lead / Company Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    defaultValue={editingLead.name}
-                    required
-                    disabled={isReadOnlyColleague}
-                    className={`w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none text-[#242424] dark:text-white focus:border-[#0078D4] ${
-                      isReadOnlyColleague ? "opacity-60 cursor-not-allowed" : ""
-                    }`}
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-medium mb-1 text-[#242424] dark:text-white">
+                      Company Name *
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      defaultValue={editingLead.name}
+                      required
+                      disabled={isReadOnlyColleague}
+                      className={`w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none text-[#242424] dark:text-white focus:border-[#0078D4] ${
+                        isReadOnlyColleague ? "opacity-60 cursor-not-allowed" : ""
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium mb-1 text-[#242424] dark:text-white">
+                      Contact Name
+                    </label>
+                    <input
+                      type="text"
+                      name="contactName"
+                      defaultValue={editingLead.contactName || ""}
+                      placeholder="e.g. Priya Sharma"
+                      disabled={isReadOnlyColleague}
+                      className={`w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none text-[#242424] dark:text-white focus:border-[#0078D4] ${
+                        isReadOnlyColleague ? "opacity-60 cursor-not-allowed" : ""
+                      }`}
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -887,6 +1229,26 @@ export default function SalesDashboardClient({
 
                   <div>
                     <label className="block font-medium mb-1 text-[#242424] dark:text-white">
+                      Priority
+                    </label>
+                    <select
+                      name="priority"
+                      defaultValue={editingLead.priority || "Medium"}
+                      disabled={isReadOnlyColleague}
+                      className={`w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none text-[#242424] dark:text-white cursor-pointer ${
+                        isReadOnlyColleague ? "opacity-60 cursor-not-allowed" : ""
+                      }`}
+                    >
+                      <option value="High">High</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Low">Low</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-medium mb-1 text-[#242424] dark:text-white">
                       Acquisition Source
                     </label>
                     <input
@@ -899,27 +1261,37 @@ export default function SalesDashboardClient({
                       }`}
                     />
                   </div>
+                  <div>
+                    <label className="block font-medium mb-1 text-[#242424] dark:text-white">
+                      Linked Marketing Campaign
+                    </label>
+                    <select
+                      name="campaignId"
+                      defaultValue={editingLead.campaignId || ""}
+                      disabled={isReadOnlyColleague}
+                      className={`w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none text-[#242424] dark:text-white cursor-pointer ${
+                        isReadOnlyColleague ? "opacity-60 cursor-not-allowed" : ""
+                      }`}
+                    >
+                      <option value="">None / Direct Inbound</option>
+                      {campaigns.map((c) => (
+                        <option key={c._id} value={c._id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div>
                   <label className="block font-medium mb-1 text-[#242424] dark:text-white">
-                    Linked Marketing Campaign
+                    Kanban Checklist
                   </label>
-                  <select
-                    name="campaignId"
-                    defaultValue={editingLead.campaignId || ""}
+                  <KanbanChecklistField
+                    key={editingLead._id}
                     disabled={isReadOnlyColleague}
-                    className={`w-full p-2 bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] outline-none text-[#242424] dark:text-white cursor-pointer ${
-                      isReadOnlyColleague ? "opacity-60 cursor-not-allowed" : ""
-                    }`}
-                  >
-                    <option value="">None / Direct Inbound</option>
-                    {campaigns.map((c) => (
-                      <option key={c._id} value={c._id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                    initial={Array.isArray(editingLead.checklist) ? editingLead.checklist : []}
+                  />
                 </div>
 
                 <div className="flex justify-end gap-2 pt-3">

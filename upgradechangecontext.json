@@ -2,7 +2,7 @@
     "meta": {
         "project": "WorkManagement (TaskPMS)",
         "stack": "Next.js 16 App Router, React 19, TypeScript, Tailwind v4, Mongoose 9 / MongoDB",
-        "planVersion": "1.1.4",
+        "planVersion": "1.1.7",
         "createdAt": "2026-10-05",
         "designReference": "https://developer.microsoft.com/en-us/ (Microsoft Fluent 2 design language)",
         "purpose": "Single source of truth for every upgrade, refactor and UX change. Every task lists WHAT, WHY and HOW. Update `status` and `remarks` on a task when work starts or finishes.",
@@ -1109,6 +1109,24 @@
             "taskId": "P7-whiteboard-caching-ms-project-audit",
             "author": "Antigravity",
             "note": "Upgraded WhiteboardCanvas with 60/120fps requestAnimationFrame hardware throttling for dragging/resizing, instant localStorage caching, and debounced 1.5s background server auto-save; audited and documented complete multi-layer in-memory and tenant caching systems; completed MS Project graphical audit and synced upgradechangecontext.json."
+        },
+        {
+            "date": "2026-10-10",
+            "taskId": "P8-whiteboard-s3-multiformat-drop",
+            "author": "Antigravity",
+            "note": "Implemented direct drag-and-drop onto Whiteboard for .graphml, .pdf, .json, and .md files; created /api/whiteboards/upload to offload file binaries directly to AWS S3 ({companyId}/whiteboards/{boardId}/...) instead of MongoDB base64 strings (eliminating Vercel 4.5MB payload limit and main-thread freezing); added live GraphML parser to convert topologies directly into native canvas nodes/arrows; added visual drop overlay and 217 passing unit tests."
+        },
+        {
+            "date": "2026-10-10",
+            "taskId": "P9-whiteboard-s3-deletion-dialog",
+            "author": "Antigravity",
+            "note": "Added smart deletion prompt modal for outside uploaded S3 files on Whiteboard canvas with 'Delete from here' (canvas only) and 'Delete here + S3' (cleans up AWS S3 storage); implemented secure multi-tenant DELETE /api/whiteboards/upload endpoint with URL normalization and authorization checks; added toast notifications; verified 220 passing tests."
+        },
+        {
+            "date": "2026-10-10",
+            "taskId": "P10-whiteboard-lcp-hydration-fix",
+            "author": "Antigravity",
+            "note": "Fixed SVG polygon floating-point hydration mismatch by rounding coordinates to integers with Math.round() and adding suppressHydrationWarning; created streaming SSR loading.tsx for instant paint (<0.2s LCP); optimized server queries to eliminate Mongoose CastError and unindexed regex table scans."
         }
     ]
 }

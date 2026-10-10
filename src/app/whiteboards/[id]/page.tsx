@@ -1,7 +1,8 @@
 import React from "react";
 import connectToDatabase from "@/lib/mongodb";
 import { Whiteboard } from "@/models";
-import { getCurrentSession } from "@/server/auth/session";
+import mongoose from "mongoose";
+import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import { serializeDocs } from "@/lib/serialize";
 import WhiteboardCanvas from "@/components/whiteboard/WhiteboardCanvas";
 import { ORG_CHART_NODES, ORG_CHART_EDGES } from "@/lib/whiteboardTemplates";
@@ -22,7 +23,7 @@ export default async function WhiteboardEditorPage({
 
   let rawBoard: any = null;
 
-  if (id && id !== "default" && id !== "org-chart") {
+  if (id && mongoose.Types.ObjectId.isValid(id)) {
     try {
       rawBoard = await Whiteboard.findById(id).lean();
     } catch {
@@ -31,10 +32,15 @@ export default async function WhiteboardEditorPage({
   }
 
   if (!rawBoard) {
-    // If not found, check if an org chart board exists or use default
-    rawBoard = await Whiteboard.findOne({
-      $or: [{ templateId: "org-chart" }, { title: /Organizational/i }],
-    }).lean();
+    const tenantFilter = getTenantQueryFilter(session);
+    try {
+      rawBoard = await Whiteboard.findOne({
+        ...tenantFilter,
+        templateId: "org-chart",
+      }).lean();
+    } catch {
+      rawBoard = null;
+    }
   }
 
   if (!rawBoard) {

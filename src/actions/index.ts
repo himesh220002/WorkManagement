@@ -107,16 +107,60 @@ export async function addPipeline(formData: FormData) {
   }
 }
 
+function parseChecklistField(formData: FormData): { text: string; completed: boolean }[] {
+  const raw = formData.get("checklist");
+  if (!raw || typeof raw !== "string") return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item: any) => {
+        if (typeof item === "string") return { text: item.trim(), completed: false };
+        return {
+          text: String(item?.text || "").trim(),
+          completed: Boolean(item?.completed),
+        };
+      })
+      .filter((item) => item.text.length > 0)
+      .slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
+function defaultLeadChecklist(lead: any, campaignName?: string): { text: string; completed: boolean }[] {
+  return [
+    { text: `Contact ${lead?.contactName || lead?.owner || "lead"}`, completed: false },
+    { text: `Source: ${lead?.source || "Inbound"}`, completed: false },
+    { text: campaignName || "Direct inbound", completed: false },
+  ];
+}
+
 export async function addLead(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
   assertNotGuest(session);
   const name = formData.get("name") as string;
   const owner = formData.get("owner") as string;
-  const status = formData.get("status") as string;
+  const status = (formData.get("status") as string) || "New";
+  const contactName = (formData.get("contactName") as string) || "";
+  const source = (formData.get("source") as string) || "Manual Entry";
+  const campaignIdRaw = (formData.get("campaignId") as string) || "";
+  const priority = (formData.get("priority") as string) || "Medium";
+  let checklist = parseChecklistField(formData);
 
   if (name) {
-    const newLead = await Lead.create({ name, owner, status, source: "Manual Entry", companyId: session.companyId });
+    const newLead = await Lead.create({
+      name,
+      owner,
+      status,
+      contactName,
+      priority,
+      source,
+      campaignId: campaignIdRaw || undefined,
+      checklist,
+      companyId: session.companyId,
+    });
     await syncTenantWrite("Lead", "create", newLead, undefined, session.companyCode);
     revalidatePath("/sales/dashboard");
   }
@@ -137,6 +181,14 @@ export async function addCampaign(formData: FormData) {
   }
 }
 
+function defaultDealChecklist(deal: any): { text: string; completed: boolean }[] {
+  return [
+    { text: `Contact ${deal?.contactName || deal?.owner || deal?.client?.name || "client"}`, completed: false },
+    { text: `Value: $${Number(deal?.amount || 0).toLocaleString()}`, completed: false },
+    { text: deal?.client?.name ? `Account: ${deal.client.name}` : "Confirm scope", completed: false },
+  ];
+}
+
 export async function addDeal(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();
@@ -150,12 +202,19 @@ export async function addDeal(formData: FormData) {
   const expectedCloseDate = formData.get("expectedCloseDate") as string;
   const priority = formData.get("priority") as string || "Medium";
   const riskLevel = formData.get("riskLevel") as string || "Low";
+  const owner = (formData.get("owner") as string) || "";
+  const contactName = (formData.get("contactName") as string) || "";
+  const campaignIdRaw = (formData.get("campaignId") as string) || "";
+  let checklist = parseChecklistField(formData);
 
   if (name) {
     const data: any = { 
       name, 
       amount, 
       stage,
+      owner,
+      contactName,
+      checklist,
       client: {
         name: clientName,
         industry: clientIndustry,
@@ -170,6 +229,7 @@ export async function addDeal(formData: FormData) {
     };
     if (formData.get("projectId")) data.projectId = formData.get("projectId");
     if (formData.get("pipelineId")) data.pipelineId = formData.get("pipelineId");
+    if (campaignIdRaw) data.campaignId = campaignIdRaw;
     const newDeal = await Deal.create(data);
     await syncTenantWrite("Deal", "create", newDeal, undefined, session.companyCode);
     revalidatePath("/revenue/dashboard");
@@ -201,23 +261,52 @@ export async function updateDeal(formData: FormData) {
   const expectedCloseDate = formData.get("expectedCloseDate") as string;
   const priority = formData.get("priority") as string;
   const riskLevel = formData.get("riskLevel") as string;
+  const owner = formData.get("owner") as string;
+  const contactName = formData.get("contactName") as string;
+  const campaignId = formData.get("campaignId") as string;
+  const checklist = parseChecklistField(formData);
+  const hasChecklistField = formData.has("checklist");
 
-  if (dealId) {
+  if (!dealId) throw new Error("Missing dealId — deal update aborted, nothing was saved.");
+  {
     const data: any = { name, amount, stage };
     if (projectId !== undefined) data.projectId = projectId || null;
     if (pipelineId !== undefined) data.pipelineId = pipelineId || null;
+    if (campaignId !== undefined) data.campaignId = campaignId || null;
+    if (owner !== undefined && owner !== null) data.owner = owner;
+    if (contactName !== undefined && contactName !== null) data.contactName = contactName;
     if (clientName !== undefined) data["client.name"] = clientName;
     if (clientIndustry !== undefined) data["client.industry"] = clientIndustry;
     if (clientRegion !== undefined) data["client.region"] = clientRegion;
     if (expectedCloseDate) data.expectedCloseDate = new Date(expectedCloseDate);
     if (priority) data["metadata.priority"] = priority;
     if (riskLevel) data["metadata.riskLevel"] = riskLevel;
+    if (hasChecklistField) data.checklist = checklist;
     
     await Deal.findByIdAndUpdate(dealId, data);
     const session = await getCurrentSession();
     await syncTenantWrite("Deal", "update", dealId, data, session.companyCode);
     revalidatePath("/revenue/dashboard");
   }
+}
+
+export async function toggleDealChecklistItem(dealId: string, index: number) {
+  await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
+  const deal = await Deal.findById(dealId);
+  if (!deal) throw new Error("Deal not found");
+  let checklist: { text: string; completed: boolean }[] = Array.isArray((deal as any).checklist)
+    ? (deal as any).checklist.map((c: any) => ({ text: String(c.text), completed: Boolean(c.completed) }))
+    : [];
+  if (checklist.length === 0) {
+    checklist = defaultDealChecklist(deal);
+  }
+  if (index < 0 || index >= checklist.length) throw new Error("Checklist item not found");
+  checklist[index].completed = !checklist[index].completed;
+  await Deal.findByIdAndUpdate(dealId, { checklist });
+  await syncTenantWrite("Deal", "update", dealId, { checklist }, session.companyCode);
+  revalidatePath("/revenue/dashboard");
 }
 
 export async function deleteDeal(formData: FormData) {
@@ -251,15 +340,49 @@ export async function updateLead(formData: FormData) {
   const status = formData.get("status") as string;
   const source = formData.get("source") as string;
   const campaignId = formData.get("campaignId") as string;
+  const contactName = formData.get("contactName") as string;
+  const priority = formData.get("priority") as string;
+  const checklist = parseChecklistField(formData);
+  const hasChecklistField = formData.has("checklist");
 
-  if (leadId) {
+  if (!leadId) throw new Error("Missing leadId — lead update aborted, nothing was saved.");
+  {
     const data: any = { name, owner, status, source };
+    if (contactName !== undefined) data.contactName = contactName;
+    if (priority) data.priority = priority;
     if (campaignId !== undefined) data.campaignId = campaignId || null;
+    if (hasChecklistField) data.checklist = checklist;
     await Lead.findByIdAndUpdate(leadId, data);
     const session = await getCurrentSession();
     await syncTenantWrite("Lead", "update", leadId, data, session.companyCode);
     revalidatePath("/sales/dashboard");
   }
+}
+
+export async function toggleLeadChecklistItem(leadId: string, index: number) {
+  await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
+  const lead = await Lead.findById(leadId);
+  if (!lead) throw new Error("Lead not found");
+  let checklist: { text: string; completed: boolean }[] = Array.isArray((lead as any).checklist)
+    ? (lead as any).checklist.map((c: any) => ({ text: String(c.text), completed: Boolean(c.completed) }))
+    : [];
+  if (checklist.length === 0) {
+    let campaignName = "Direct inbound";
+    if ((lead as any).campaignId) {
+      try {
+        const c = await Campaign.findById((lead as any).campaignId).lean() as any;
+        if (c?.name) campaignName = c.name;
+      } catch { /* keep default */ }
+    }
+    checklist = defaultLeadChecklist(lead, campaignName);
+  }
+  if (index < 0 || index >= checklist.length) throw new Error("Checklist item not found");
+  checklist[index].completed = !checklist[index].completed;
+  await Lead.findByIdAndUpdate(leadId, { checklist });
+  await syncTenantWrite("Lead", "update", leadId, { checklist }, session.companyCode);
+  revalidatePath("/sales/dashboard");
 }
 
 export async function deleteLead(formData: FormData) {

@@ -1,8 +1,24 @@
 import mongoose, { Schema, Model } from "mongoose";
 
+export type WhiteboardNodeType =
+  | "task"
+  | "shape"
+  | "sticky"
+  | "text"
+  | "frame"
+  | "logo"
+  | "legend"
+  | "drawing"
+  | "image"
+  | "file"
+  | "pdf"
+  | "markdown"
+  | "json"
+  | "graphml";
+
 export interface IWhiteboardNode {
   id: string;
-  type: "task" | "shape" | "sticky" | "text" | "frame" | "logo" | "legend" | "drawing" | "image";
+  type: WhiteboardNodeType;
   x: number;
   y: number;
   width: number;
@@ -23,6 +39,13 @@ export interface IWhiteboardNode {
   strokeWidth?: number;
   imageUrl?: string;
   progress?: number;
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  fileExtension?: string;
+  s3Key?: string;
+  previewText?: string;
+  metaData?: Record<string, any>;
 }
 
 export interface IWhiteboardEdge {
@@ -90,10 +113,32 @@ const whiteboardSchema = new Schema<IWhiteboard>(
         id: { type: String, required: true },
         type: {
           type: String,
-          enum: ["task", "shape", "sticky", "text", "frame", "logo", "legend", "drawing", "image"],
+          enum: [
+            "task",
+            "shape",
+            "sticky",
+            "text",
+            "frame",
+            "logo",
+            "legend",
+            "drawing",
+            "image",
+            "file",
+            "pdf",
+            "markdown",
+            "json",
+            "graphml",
+          ],
           default: "shape",
         },
         imageUrl: { type: String, default: "" },
+        fileUrl: { type: String, default: "" },
+        fileName: { type: String, default: "" },
+        fileSize: { type: Number, default: 0 },
+        fileExtension: { type: String, default: "" },
+        s3Key: { type: String, default: "" },
+        previewText: { type: String, default: "" },
+        metaData: { type: Schema.Types.Mixed, default: {} },
         progress: { type: Number, default: 0 },
         x: { type: Number, required: true },
         y: { type: Number, required: true },

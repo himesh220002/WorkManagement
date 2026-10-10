@@ -47,6 +47,12 @@ export default async function RevenueDashboardPage() {
     name: d.name,
     amount: d.amount,
     stage: d.stage,
+    owner: d.owner || "",
+    contactName: d.contactName || "",
+    campaignId: d.campaignId ? d.campaignId.toString() : null,
+    checklist: Array.isArray(d.checklist)
+      ? d.checklist.map((c: any) => ({ text: String(c.text || ""), completed: Boolean(c.completed) }))
+      : [],
     client: d.client ? { ...d.client } : null,
     expectedCloseDate: d.expectedCloseDate ? new Date(d.expectedCloseDate).toISOString() : null,
     status: d.status,

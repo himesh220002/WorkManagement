@@ -396,14 +396,14 @@ export default function MeetingsClient({
         };
       case "slack":
         return {
-          label: "Slack Channel / Huddle",
+          label: "Slack",
           icon: MessageSquare,
           color: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
           accent: "#A855F7",
         };
       case "discord":
         return {
-          label: "Discord Channel",
+          label: "Discord",
           icon: Mic,
           color: "bg-[#5865F2]/10 text-[#5865F2] border-[#5865F2]/20",
           accent: "#5865F2",
@@ -420,7 +420,7 @@ export default function MeetingsClient({
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF9F8] dark:bg-[#1E1E1E] text-gray-900 dark:text-gray-100 p-4 md:p-8 space-y-8">
+    <div className="min-h-screen bg-[#FAF9F8] dark:bg-[#1E1E1E] text-gray-900 dark:text-gray-100 space-y-8">
       {/* Toast feedback */}
       {actionFeedback && (
         <div className="fixed top-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-lg bg-emerald-600 text-white shadow-xl animate-in fade-in slide-in-from-top-4">
@@ -436,7 +436,7 @@ export default function MeetingsClient({
             <span className="p-2 rounded-lg bg-[#0078D4]/10 text-[#0078D4] dark:bg-[#0078D4]/20">
               <Video className="w-6 h-6" />
             </span>
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+            <h1 className="text-lg lg:text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
               Meetings & Discussions Hub
             </h1>
           </div>
@@ -450,24 +450,22 @@ export default function MeetingsClient({
           <button
             onClick={() => openScheduleModal("recurring")}
             disabled={isGuest}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold shadow-xs transition-colors ${
-              isGuest
-                ? "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600"
-                : "bg-white dark:bg-[#252423] text-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#2C2B29] cursor-pointer"
-            }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold shadow-xs transition-colors ${isGuest
+              ? "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600"
+              : "bg-white dark:bg-[#252423] text-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#2C2B29] cursor-pointer"
+              }`}
           >
             <Repeat className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-            <span>+ Auto-Scheduler Cadence</span>
+            <span>Scheduler</span>
           </button>
 
           <button
             onClick={() => openScheduleModal("standard")}
             disabled={isGuest}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold shadow-xs transition-colors ${
-              isGuest
-                ? "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600"
-                : "bg-[#0078D4] hover:bg-[#106EBE] text-white cursor-pointer"
-            }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold shadow-xs transition-colors ${isGuest
+              ? "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600"
+              : "bg-[#0078D4] hover:bg-[#106EBE] text-white cursor-pointer"
+              }`}
           >
             <Plus className="w-4 h-4" />
             <span>Schedule Meeting</span>
@@ -520,31 +518,28 @@ export default function MeetingsClient({
         <div className="flex items-center gap-1.5 p-1 bg-gray-100 dark:bg-[#1E1E1E] rounded-lg text-xs font-medium">
           <button
             onClick={() => setActiveTab("all")}
-            className={`px-3 py-1.5 rounded-md transition-colors ${
-              activeTab === "all"
-                ? "bg-white dark:bg-[#2D2C2A] text-gray-900 dark:text-white shadow-xs font-semibold"
-                : "text-gray-500 hover:text-gray-800 dark:hover:text-gray-300"
-            }`}
+            className={`px-3 py-1.5 rounded-md transition-colors ${activeTab === "all"
+              ? "bg-white dark:bg-[#2D2C2A] text-gray-900 dark:text-white shadow-xs font-semibold"
+              : "text-gray-500 hover:text-gray-800 dark:hover:text-gray-300"
+              }`}
           >
             All Meetings ({meetings.length})
           </button>
           <button
             onClick={() => setActiveTab("cadences")}
-            className={`px-3 py-1.5 rounded-md transition-colors ${
-              activeTab === "cadences"
-                ? "bg-white dark:bg-[#2D2C2A] text-gray-900 dark:text-white shadow-xs font-semibold"
-                : "text-gray-500 hover:text-gray-800 dark:hover:text-gray-300"
-            }`}
+            className={`px-3 py-1.5 rounded-md transition-colors ${activeTab === "cadences"
+              ? "bg-white dark:bg-[#2D2C2A] text-gray-900 dark:text-white shadow-xs font-semibold"
+              : "text-gray-500 hover:text-gray-800 dark:hover:text-gray-300"
+              }`}
           >
             Auto-Cadences ({stats.cadences})
           </button>
           <button
             onClick={() => setActiveTab("transcripts")}
-            className={`px-3 py-1.5 rounded-md transition-colors ${
-              activeTab === "transcripts"
-                ? "bg-white dark:bg-[#2D2C2A] text-gray-900 dark:text-white shadow-xs font-semibold"
-                : "text-gray-500 hover:text-gray-800 dark:hover:text-gray-300"
-            }`}
+            className={`px-3 py-1.5 rounded-md transition-colors ${activeTab === "transcripts"
+              ? "bg-white dark:bg-[#2D2C2A] text-gray-900 dark:text-white shadow-xs font-semibold"
+              : "text-gray-500 hover:text-gray-800 dark:hover:text-gray-300"
+              }`}
           >
             Transcripts & Minutes ({stats.withTranscripts})
           </button>
@@ -608,18 +603,17 @@ export default function MeetingsClient({
           <button
             onClick={() => openScheduleModal("standard")}
             disabled={isGuest}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-colors ${
-              isGuest
-                ? "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
-                : "bg-[#0078D4] hover:bg-[#106EBE] text-white cursor-pointer"
-            }`}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-colors ${isGuest
+              ? "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
+              : "bg-[#0078D4] hover:bg-[#106EBE] text-white cursor-pointer"
+              }`}
           >
             <Plus className="w-4 h-4" />
             <span>Schedule First Meeting</span>
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {filteredMeetings.map((meeting) => {
             const platformConfig = getPlatformBadge(meeting.platform);
             const PlatformIcon = platformConfig.icon;
@@ -641,7 +635,7 @@ export default function MeetingsClient({
                     </span>
 
                     {/* Status Dropdown */}
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-col items-center gap-1.5">
                       {meeting.isRecurring && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
                           <Repeat className="w-3 h-3" />
@@ -653,15 +647,14 @@ export default function MeetingsClient({
                         value={meeting.status}
                         onChange={(e) => handleStatusChange(meeting._id, e.target.value)}
                         disabled={isGuest || isPending}
-                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border outline-none ${
-                          meeting.status === "Completed"
-                            ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
-                            : meeting.status === "In Progress"
+                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border outline-none ${meeting.status === "Completed"
+                          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                          : meeting.status === "In Progress"
                             ? "bg-amber-500/10 text-amber-600 border-amber-500/30 animate-pulse"
                             : meeting.status === "Cancelled"
-                            ? "bg-red-500/10 text-red-600 border-red-500/30"
-                            : "bg-blue-500/10 text-blue-600 border-blue-500/30"
-                        } ${isGuest ? "cursor-not-allowed opacity-80" : "cursor-pointer"}`}
+                              ? "bg-red-500/10 text-red-600 border-red-500/30"
+                              : "bg-blue-500/10 text-blue-600 border-blue-500/30"
+                          } ${isGuest ? "cursor-not-allowed opacity-80" : "cursor-pointer"}`}
                       >
                         <option value="Scheduled">Scheduled</option>
                         <option value="In Progress">In Progress</option>
@@ -786,10 +779,10 @@ export default function MeetingsClient({
                         {meeting.platform === "discord"
                           ? "Join Discord Voice"
                           : meeting.platform === "slack"
-                          ? "Open Slack Huddle"
-                          : meeting.platform === "zoom"
-                          ? "Join Zoom Video"
-                          : "Join Google Meet"}
+                            ? "Open Slack Huddle"
+                            : meeting.platform === "zoom"
+                              ? "Join Zoom Video"
+                              : "Join Google Meet"}
                       </span>
                       <ExternalLink className="w-3 h-3 opacity-80" />
                     </a>
@@ -834,9 +827,8 @@ export default function MeetingsClient({
                         onClick={() => handleDeleteMeeting(meeting._id)}
                         disabled={isGuest}
                         title="Delete Meeting"
-                        className={`p-1 text-gray-400 hover:text-red-500 transition-colors ${
-                          isGuest ? "cursor-not-allowed opacity-50" : "cursor-pointer"
-                        }`}
+                        className={`p-1 text-gray-400 hover:text-red-500 transition-colors ${isGuest ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                          }`}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -932,11 +924,10 @@ export default function MeetingsClient({
                         key={p.id}
                         type="button"
                         onClick={() => setFormPlatform(p.id as any)}
-                        className={`flex flex-col items-center justify-center p-3 rounded-lg border text-xs font-semibold transition-all ${
-                          isSel
-                            ? "border-[#0078D4] bg-[#0078D4]/10 text-[#0078D4] shadow-xs"
-                            : "border-gray-200 dark:border-gray-800 bg-white dark:bg-[#252423] text-gray-600 dark:text-gray-400 hover:border-gray-400"
-                        }`}
+                        className={`flex flex-col items-center justify-center p-3 rounded-lg border text-xs font-semibold transition-all ${isSel
+                          ? "border-[#0078D4] bg-[#0078D4]/10 text-[#0078D4] shadow-xs"
+                          : "border-gray-200 dark:border-gray-800 bg-white dark:bg-[#252423] text-gray-600 dark:text-gray-400 hover:border-gray-400"
+                          }`}
                       >
                         <Icon className="w-5 h-5 mb-1.5" />
                         <span>{p.label}</span>
@@ -1015,29 +1006,29 @@ export default function MeetingsClient({
                     const launcher =
                       formPlatform === "google_meet"
                         ? {
-                            url: "https://meet.google.com/new",
-                            label: "Create Google Meet Room ↗",
-                            color: "bg-emerald-600 hover:bg-emerald-700 text-white",
-                          }
+                          url: "https://meet.google.com/new",
+                          label: "Create Google Meet Room ↗",
+                          color: "bg-emerald-600 hover:bg-emerald-700 text-white",
+                        }
                         : formPlatform === "zoom"
-                        ? {
+                          ? {
                             url: "https://zoom.us/meeting/schedule",
                             label: "Schedule on Zoom ↗",
                             color: "bg-sky-600 hover:bg-sky-700 text-white",
                           }
-                        : formPlatform === "slack"
-                        ? {
-                            url: "https://app.slack.com/",
-                            label: "Open Slack App ↗",
-                            color: "bg-purple-600 hover:bg-purple-700 text-white",
-                          }
-                        : formPlatform === "discord"
-                        ? {
-                            url: "https://discord.com/app",
-                            label: "Open Discord & Copy Channel Link ↗",
-                            color: "bg-[#5865F2] hover:bg-[#4752C4] text-white",
-                          }
-                        : null;
+                          : formPlatform === "slack"
+                            ? {
+                              url: "https://app.slack.com/",
+                              label: "Open Slack App ↗",
+                              color: "bg-purple-600 hover:bg-purple-700 text-white",
+                            }
+                            : formPlatform === "discord"
+                              ? {
+                                url: "https://discord.com/app",
+                                label: "Open Discord & Copy Channel Link ↗",
+                                color: "bg-[#5865F2] hover:bg-[#4752C4] text-white",
+                              }
+                              : null;
 
                     if (!launcher) return null;
                     return (
@@ -1064,12 +1055,12 @@ export default function MeetingsClient({
                       formPlatform === "google_meet"
                         ? "https://meet.google.com/xxx-yyyy-zzz"
                         : formPlatform === "zoom"
-                        ? "https://zoom.us/j/94827103819"
-                        : formPlatform === "slack"
-                        ? "https://app.slack.com/client/T000/C000"
-                        : formPlatform === "discord"
-                        ? "https://discord.gg/your-channel or https://discord.com/channels/..."
-                        : "Enter room or location link"
+                          ? "https://zoom.us/j/94827103819"
+                          : formPlatform === "slack"
+                            ? "https://app.slack.com/client/T000/C000"
+                            : formPlatform === "discord"
+                              ? "https://discord.gg/your-channel or https://discord.com/channels/..."
+                              : "Enter room or location link"
                     }
                     className="flex-1 p-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1E1E1E] text-xs text-gray-900 dark:text-white outline-none focus:border-[#0078D4]"
                   />
@@ -1288,19 +1279,18 @@ export default function MeetingsClient({
                 <button
                   type="submit"
                   disabled={isGuest || isPending}
-                  className={`px-5 py-2.5 rounded-lg text-xs font-semibold shadow-xs transition-colors ${
-                    isGuest
-                      ? "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600"
-                      : "bg-[#0078D4] hover:bg-[#106EBE] text-white cursor-pointer"
-                  }`}
+                  className={`px-5 py-2.5 rounded-lg text-xs font-semibold shadow-xs transition-colors ${isGuest
+                    ? "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600"
+                    : "bg-[#0078D4] hover:bg-[#106EBE] text-white cursor-pointer"
+                    }`}
                 >
                   {isGuest
                     ? "Disabled in Guest Mode"
                     : isPending
-                    ? "Saving Schedule..."
-                    : modalMode === "recurring"
-                    ? "Establish Auto-Scheduler"
-                    : "Create & Broadcast Meeting"}
+                      ? "Saving Schedule..."
+                      : modalMode === "recurring"
+                        ? "Establish Auto-Scheduler"
+                        : "Create & Broadcast Meeting"}
                 </button>
               </div>
             </form>
@@ -1473,11 +1463,10 @@ export default function MeetingsClient({
                           className="rounded accent-emerald-600"
                         />
                         <span
-                          className={`${
-                            act.completed
-                              ? "line-through text-gray-400 dark:text-gray-500"
-                              : "text-gray-800 dark:text-gray-200 font-medium"
-                          }`}
+                          className={`${act.completed
+                            ? "line-through text-gray-400 dark:text-gray-500"
+                            : "text-gray-800 dark:text-gray-200 font-medium"
+                            }`}
                         >
                           {act.text}
                         </span>
@@ -1576,11 +1565,10 @@ export default function MeetingsClient({
                   type="button"
                   onClick={handleSaveTranscript}
                   disabled={isGuest || isPending}
-                  className={`px-5 py-2.5 rounded-lg text-xs font-semibold shadow-xs transition-colors ${
-                    isGuest
-                      ? "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600"
-                      : "bg-[#0078D4] hover:bg-[#106EBE] text-white cursor-pointer"
-                  }`}
+                  className={`px-5 py-2.5 rounded-lg text-xs font-semibold shadow-xs transition-colors ${isGuest
+                    ? "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600"
+                    : "bg-[#0078D4] hover:bg-[#106EBE] text-white cursor-pointer"
+                    }`}
                 >
                   {isGuest ? "Disabled in Guest Mode" : isPending ? "Saving Records..." : "Save Records to DB"}
                 </button>

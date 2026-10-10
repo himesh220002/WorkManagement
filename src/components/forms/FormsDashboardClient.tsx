@@ -96,7 +96,7 @@ export default function FormsDashboardClient({
             <div className="w-8 h-8 rounded-lg bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-500 dark:text-rose-400">
               <FileText className="w-5 h-5" />
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+            <h1 className="text-xl sm:text-lg lg:text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
               Forms &amp; Surveys
             </h1>
           </div>

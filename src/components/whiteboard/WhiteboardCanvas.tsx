@@ -53,6 +53,15 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  Cloud,
+  CloudOff,
+  AlertTriangle,
+  ExternalLink,
+  Download,
+  FileCode,
+  Loader2,
+  Network,
+  File,
 } from "lucide-react";
 import { IWhiteboardNode, IWhiteboardEdge } from "@/models/whiteboard";
 import { WHITEBOARD_TEMPLATES, createFunctionalArea } from "@/lib/whiteboardTemplates";
@@ -186,6 +195,16 @@ export default function WhiteboardCanvas({
 
   // Direct file upload ref for images, SVGs, graphs, diagrams
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDraggingFileOver, setIsDraggingFileOver] = useState(false);
+
+  // S3 object deletion modal & notification state ("Delete from here" vs "Delete here + S3")
+  const [s3DeleteModal, setS3DeleteModal] = useState<{
+    nodeIds: string[];
+    s3Nodes: IWhiteboardNode[];
+  } | null>(null);
+  const [isDeletingFromS3, setIsDeletingFromS3] = useState(false);
+  const [deleteToastMessage, setDeleteToastMessage] = useState<string | null>(null);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -358,88 +377,252 @@ export default function WhiteboardCanvas({
     };
   }, [isFullscreen]);
 
-  // Direct File Upload & Drag-and-Drop Handler (Images, SVGs, Graphs, Diagrams)
+  // GraphML XML Topology Parser Helper
+  const parseGraphML = (xmlString: string) => {
+    try {
+      if (typeof window === "undefined") return { nodes: [], edges: [] };
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlString, "application/xml");
+      if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
+        return { nodes: [], edges: [] };
+      }
+
+      const nodeElements = Array.from(xmlDoc.querySelectorAll("node"));
+      const edgeElements = Array.from(xmlDoc.querySelectorAll("edge"));
+
+      const parsedNodes = nodeElements.map((el, i) => {
+        const id = el.getAttribute("id") || `node-${i + 1}`;
+        const dataEls = Array.from(el.querySelectorAll("data"));
+        let label = "";
+        for (const d of dataEls) {
+          const text = d.textContent?.trim();
+          if (text && !text.startsWith("http") && text.length < 100) {
+            label = text;
+            break;
+          }
+        }
+        return { id, label: label || id };
+      });
+
+      const parsedEdges = edgeElements
+        .map((el, i) => {
+          const from = el.getAttribute("source") || "";
+          const to = el.getAttribute("target") || "";
+          return { id: el.getAttribute("id") || `edge-${i + 1}`, from, to };
+        })
+        .filter((e) => Boolean(e.from && e.to));
+
+      return { nodes: parsedNodes, edges: parsedEdges };
+    } catch (err) {
+      console.warn("Failed to parse GraphML XML:", err);
+      return { nodes: [], edges: [] };
+    }
+  };
+
+  // Convert GraphML nodes & edges directly into native interactive whiteboard shape cards on canvas
+  const handleImportGraphMLToCanvas = (graphNode: IWhiteboardNode) => {
+    if (!graphNode.previewText) return;
+    const { nodes: gNodes, edges: gEdges } = parseGraphML(graphNode.previewText);
+    if (gNodes.length === 0) return;
+
+    const startX = graphNode.x + graphNode.width + 80;
+    const startY = graphNode.y;
+    const cols = Math.ceil(Math.sqrt(gNodes.length));
+    const cellW = 180;
+    const cellH = 90;
+
+    const idMapping: Record<string, string> = {};
+    const newCanvasNodes: IWhiteboardNode[] = gNodes.map((gn, idx) => {
+      const r = Math.floor(idx / cols);
+      const c = idx % cols;
+      const newId = `gnode-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+      idMapping[gn.id] = newId;
+
+      return {
+        id: newId,
+        type: "shape",
+        shapeType: "rounded",
+        x: startX + c * (cellW + 40),
+        y: startY + r * (cellH + 50),
+        width: cellW,
+        height: cellH,
+        title: gn.label,
+        subtitle: `GraphML: ${gn.id}`,
+        color: "#8B5CF6",
+        fillType: "solid",
+        fontSize: "Medium",
+        zIndex: nodes.length + idx + 1,
+      };
+    });
+
+    const newCanvasEdges: IWhiteboardEdge[] = [];
+    gEdges.forEach((ge, idx) => {
+      const fromMapped = idMapping[ge.from];
+      const toMapped = idMapping[ge.to];
+      if (fromMapped && toMapped) {
+        newCanvasEdges.push({
+          id: `gedge-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+          from: fromMapped,
+          to: toMapped,
+          color: "#A78BFA",
+          style: "orthogonal",
+          arrowDirection: "forward",
+        });
+      }
+    });
+
+    const updatedNodes = [...nodes, ...newCanvasNodes];
+    const updatedEdges = [...edges, ...newCanvasEdges];
+    setNodes(updatedNodes);
+    setEdges(updatedEdges);
+    pushHistory(updatedNodes, updatedEdges);
+  };
+
+  // Direct File Upload & Drag-and-Drop Handler (Supports .graphml, .pdf, .json, .md, images, SVGs)
+  // Uploads file directly to AWS S3 to prevent large base64 payloads from slowing Vercel/MongoDB down
   const processUploadedFiles = useCallback(
-    (files: FileList | File[], clientX?: number, clientY?: number) => {
+    async (files: FileList | File[], clientX?: number, clientY?: number) => {
       const coords =
         clientX !== undefined && clientY !== undefined
           ? getCanvasCoords(clientX, clientY)
           : { x: Math.round(-pan.x / zoom + 400), y: Math.round(-pan.y / zoom + 300) };
 
-      Array.from(files).forEach((file, index) => {
-        if (!file.type.startsWith("image/") && !file.name.toLowerCase().endsWith(".svg")) return;
+      const fileList = Array.from(files);
 
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const result = event.target?.result as string;
-          if (!result) return;
+      for (let index = 0; index < fileList.length; index++) {
+        const file = fileList[index];
+        const ext = file.name.split(".").pop()?.toLowerCase() || "";
+        const isImage = file.type.startsWith("image/") || ext === "svg";
+        const isPdf = ext === "pdf";
+        const isGraphml = ext === "graphml" || (ext === "xml" && file.name.toLowerCase().includes("graph"));
+        const isJson = ext === "json";
+        const isMarkdown = ext === "md" || ext === "markdown";
 
-          const img = new window.Image();
-          img.onload = () => {
-            let w = img.width || 320;
-            let h = img.height || 220;
-            const maxDim = 400;
-            if (w > maxDim || h > maxDim) {
-              if (w > h) {
-                h = Math.round((h * maxDim) / w);
-                w = maxDim;
-              } else {
-                w = Math.round((w * maxDim) / h);
-                h = maxDim;
-              }
+        // Determine whiteboard node type
+        let nodeType: "image" | "pdf" | "graphml" | "json" | "markdown" | "file" = "file";
+        if (isImage) nodeType = "image";
+        else if (isPdf) nodeType = "pdf";
+        else if (isGraphml) nodeType = "graphml";
+        else if (isJson) nodeType = "json";
+        else if (isMarkdown) nodeType = "markdown";
+
+        const tempId = `asset-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`;
+        const localBlobUrl = isImage ? URL.createObjectURL(file) : "";
+
+        // Read local text for instant zero-wait card preview
+        let localPreviewText = "";
+        const localMetaData: Record<string, any> = { isUploadingToS3: true };
+
+        if (isGraphml || isJson || isMarkdown || ext === "txt") {
+          try {
+            const rawText = await file.text();
+            localPreviewText = rawText.slice(0, 15000);
+            if (isGraphml) {
+              const parsed = parseGraphML(rawText);
+              localMetaData.nodeCount = parsed.nodes.length;
+              localMetaData.edgeCount = parsed.edges.length;
+            } else if (isJson) {
+              try {
+                const j = JSON.parse(rawText);
+                localMetaData.keyCount = typeof j === "object" && j !== null ? Object.keys(j).length : 0;
+                localMetaData.isArray = Array.isArray(j);
+              } catch {}
             }
+          } catch {}
+        }
 
-            const newId = `image-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`;
-            const newNode: IWhiteboardNode = {
-              id: newId,
-              type: "image",
-              x: coords.x + index * 40,
-              y: coords.y + index * 40,
-              width: Math.max(120, w),
-              height: Math.max(80, h),
-              title: file.name.replace(/\.[^/.]+$/, ""),
-              imageUrl: result,
-              zIndex: nodes.length + index + 2,
-            };
+        const initialW = isImage ? 320 : isPdf ? 300 : isGraphml ? 340 : isJson ? 340 : isMarkdown ? 340 : 280;
+        const initialH = isImage ? 220 : isPdf ? 210 : isGraphml ? 220 : isJson ? 240 : isMarkdown ? 260 : 160;
 
-            setNodes((prev) => {
-              const updated = [...prev, newNode];
-              pushHistory(updated, edges);
-              return updated;
-            });
-            setSelectedNodeId(newId);
-            setSelectedNodeIds([newId]);
-          };
-
-          img.onerror = () => {
-            const newId = `image-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`;
-            const newNode: IWhiteboardNode = {
-              id: newId,
-              type: "image",
-              x: coords.x + index * 40,
-              y: coords.y + index * 40,
-              width: 320,
-              height: 220,
-              title: file.name.replace(/\.[^/.]+$/, ""),
-              imageUrl: result,
-              zIndex: nodes.length + index + 2,
-            };
-
-            setNodes((prev) => {
-              const updated = [...prev, newNode];
-              pushHistory(updated, edges);
-              return updated;
-            });
-            setSelectedNodeId(newId);
-            setSelectedNodeIds([newId]);
-          };
-
-          img.src = result;
+        const optimisticNode: IWhiteboardNode = {
+          id: tempId,
+          type: nodeType,
+          x: coords.x + index * 45,
+          y: coords.y + index * 45,
+          width: initialW,
+          height: initialH,
+          title: file.name,
+          imageUrl: localBlobUrl,
+          fileUrl: "",
+          fileName: file.name,
+          fileSize: file.size,
+          fileExtension: ext,
+          previewText: localPreviewText,
+          metaData: localMetaData,
+          zIndex: nodes.length + index + 2,
         };
-        reader.readAsDataURL(file);
-      });
+
+        // Render optimistic node immediately so user perceives instant zero-lag action
+        setNodes((prev) => [...prev, optimisticNode]);
+        setSelectedNodeId(tempId);
+        setSelectedNodeIds([tempId]);
+
+        // Background stream to AWS S3 via /api/whiteboards/upload
+        try {
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("boardId", boardId);
+
+          const res = await fetch("/api/whiteboards/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const json = await res.json();
+
+          if (json.success && json.data) {
+            const s3Data = json.data;
+            setNodes((prev) => {
+              const updated = prev.map((n) => {
+                if (n.id === tempId) {
+                  return {
+                    ...n,
+                    imageUrl: isImage ? s3Data.url : n.imageUrl, // Store clean S3 URL (no heavy base64!)
+                    fileUrl: s3Data.url,
+                    s3Key: s3Data.s3Key,
+                    previewText: s3Data.previewText || n.previewText,
+                    metaData: {
+                      ...n.metaData,
+                      ...s3Data.metaData,
+                      isUploadingToS3: false,
+                      s3Stored: true,
+                    },
+                  };
+                }
+                return n;
+              });
+              pushHistory(updated, edges);
+              return updated;
+            });
+          } else {
+            // S3 upload failed or warning: remove upload badge
+            setNodes((prev) => {
+              const updated = prev.map((n) =>
+                n.id === tempId
+                  ? {
+                      ...n,
+                      metaData: { ...n.metaData, isUploadingToS3: false, s3Error: json.error || "Upload warning" },
+                    }
+                  : n
+              );
+              pushHistory(updated, edges);
+              return updated;
+            });
+          }
+        } catch (uploadErr) {
+          console.error("Whiteboard S3 upload failed:", uploadErr);
+          setNodes((prev) => {
+            const updated = prev.map((n) =>
+              n.id === tempId
+                ? { ...n, metaData: { ...n.metaData, isUploadingToS3: false, s3Error: "Network error" } }
+                : n
+            );
+            pushHistory(updated, edges);
+            return updated;
+          });
+        }
+      }
     },
-    [pan, zoom, nodes, edges]
+    [pan, zoom, nodes, edges, boardId]
   );
 
   // Global Clipboard Paste Listener (Ctrl+V paste screenshots/images directly from PC)
@@ -1020,29 +1203,129 @@ export default function WhiteboardCanvas({
     }
   };
 
-  // Delete Selected Node(s) - Supports Multi-Delete
-  const handleDeleteSelected = () => {
+  // Core canvas node deletion helper (synchronous UI update + auto-save)
+  const executeCanvasDelete = useCallback(
+    (idsToDelete: string[]) => {
+      const updatedNodes = nodes.filter((n) => !idsToDelete.includes(n.id));
+      const updatedEdges = edges.filter(
+        (e) => !idsToDelete.includes(e.from) && !idsToDelete.includes(e.to)
+      );
+      setNodes(updatedNodes);
+      setEdges(updatedEdges);
+      pushHistory(updatedNodes, updatedEdges);
+      triggerAutoSave(updatedNodes, updatedEdges);
+      setSelectedNodeId(null);
+      setSelectedNodeIds([]);
+      setEditingNodeId(null);
+    },
+    [nodes, edges, pushHistory, triggerAutoSave]
+  );
+
+  // Temporary toast banner notification for user feedback
+  const showTemporaryToast = useCallback((msg: string) => {
+    setDeleteToastMessage(msg);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => {
+      setDeleteToastMessage(null);
+    }, 4500);
+  }, []);
+
+  // Delete Selected Node(s) - Supports Multi-Delete & S3 confirmation for external uploaded files
+  const handleDeleteSelected = useCallback(() => {
     const idsToDelete =
       selectedNodeIds.length > 0 ? selectedNodeIds : selectedNodeId ? [selectedNodeId] : [];
     if (idsToDelete.length === 0) return;
 
-    const updatedNodes = nodes.filter((n) => !idsToDelete.includes(n.id));
-    const updatedEdges = edges.filter(
-      (e) => !idsToDelete.includes(e.from) && !idsToDelete.includes(e.to)
-    );
-    setNodes(updatedNodes);
-    setEdges(updatedEdges);
-    pushHistory(updatedNodes, updatedEdges);
-    triggerAutoSave(updatedNodes, updatedEdges);
-    setSelectedNodeId(null);
-    setSelectedNodeIds([]);
-    setEditingNodeId(null);
-  };
+    const targetNodes = nodes.filter((n) => idsToDelete.includes(n.id));
+
+    // Identify if any selected node is an external file uploaded to AWS S3
+    const s3Nodes = targetNodes.filter((n) => {
+      if (n.s3Key && n.s3Key.trim().length > 0) return true;
+      if (n.fileUrl && (n.fileUrl.includes(".amazonaws.com") || n.fileUrl.startsWith("http"))) {
+        return true;
+      }
+      if (
+        n.type === "image" &&
+        n.imageUrl &&
+        (n.imageUrl.includes(".amazonaws.com") ||
+          (n.imageUrl.startsWith("http") && !n.imageUrl.startsWith("data:")))
+      ) {
+        return true;
+      }
+      return false;
+    });
+
+    if (s3Nodes.length > 0) {
+      // Must prompt user: Delete from here only OR Delete here + S3
+      setS3DeleteModal({
+        nodeIds: idsToDelete,
+        s3Nodes,
+      });
+      return;
+    }
+
+    // Regular native nodes -> delete immediately from canvas
+    executeCanvasDelete(idsToDelete);
+  }, [selectedNodeIds, selectedNodeId, nodes, executeCanvasDelete]);
+
+  // Confirmation Option 1: Delete from canvas only (keeps S3 file intact)
+  const handleConfirmDeleteCanvasOnly = useCallback(() => {
+    if (!s3DeleteModal) return;
+    executeCanvasDelete(s3DeleteModal.nodeIds);
+    setS3DeleteModal(null);
+    showTemporaryToast("Removed from whiteboard canvas (file preserved in S3)");
+  }, [s3DeleteModal, executeCanvasDelete, showTemporaryToast]);
+
+  // Confirmation Option 2: Delete from canvas + S3 (cleans up S3 storage)
+  const handleConfirmDeleteCanvasAndS3 = useCallback(async () => {
+    if (!s3DeleteModal) return;
+    setIsDeletingFromS3(true);
+
+    const { nodeIds, s3Nodes } = s3DeleteModal;
+    const s3Keys = s3Nodes
+      .map((n) => n.s3Key || n.fileUrl || n.imageUrl || "")
+      .filter((k) => k.length > 0);
+
+    // 1. Remove from whiteboard canvas immediately
+    executeCanvasDelete(nodeIds);
+    setS3DeleteModal(null);
+    setIsDeletingFromS3(false);
+
+    // 2. Call backend S3 deletion route
+    try {
+      if (s3Keys.length > 0) {
+        const res = await fetch("/api/whiteboards/upload", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ s3Keys }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          showTemporaryToast(
+            `Removed from whiteboard & deleted ${s3Keys.length > 1 ? `${s3Keys.length} files` : "file"} from S3 storage`
+          );
+        } else {
+          showTemporaryToast("Removed from canvas. Note: S3 deletion had warnings.");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to delete object from S3:", err);
+      showTemporaryToast("Removed from canvas, but failed to connect to S3.");
+    }
+  }, [s3DeleteModal, executeCanvasDelete, showTemporaryToast]);
 
   // Keybindings (Delete, Backspace, Esc, Shortcuts)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (editingNodeId) return; // Typing in input
+
+      // If S3 deletion modal is open, Escape closes it and other shortcuts are suppressed
+      if (s3DeleteModal) {
+        if (e.key === "Escape") {
+          setS3DeleteModal(null);
+        }
+        return;
+      }
 
       if (e.key === "Delete" || e.key === "Backspace") {
         handleDeleteSelected();
@@ -1076,7 +1359,16 @@ export default function WhiteboardCanvas({
 
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [selectedNodeId, editingNodeId, nodes, edges, activeTool, connectingFromNodeId]);
+  }, [
+    selectedNodeId,
+    editingNodeId,
+    nodes,
+    edges,
+    activeTool,
+    connectingFromNodeId,
+    s3DeleteModal,
+    handleDeleteSelected,
+  ]);
 
   // Synchronize zoom and pan refs for wheel listener
   const zoomRef = useRef(zoom);
@@ -1177,8 +1469,8 @@ export default function WhiteboardCanvas({
 
   // Geometric Shape Geometry SVG Vector Renderer
   const renderShapeGeometry = (node: IWhiteboardNode) => {
-    const w = node.width;
-    const h = node.height;
+    const w = Math.round(node.width);
+    const h = Math.round(node.height);
     const fill =
       node.fillType === "solid"
         ? node.color || "#0078D4"
@@ -1193,50 +1485,62 @@ export default function WhiteboardCanvas({
         return (
           <svg width="100%" height="100%" className="overflow-visible pointer-events-none drop-shadow-md">
             <ellipse
-              cx={w / 2}
-              cy={h / 2}
-              rx={Math.max(2, w / 2 - strokeWidth)}
-              ry={Math.max(2, h / 2 - strokeWidth)}
+              cx={Math.round(w / 2)}
+              cy={Math.round(h / 2)}
+              rx={Math.max(2, Math.round(w / 2 - strokeWidth))}
+              ry={Math.max(2, Math.round(h / 2 - strokeWidth))}
               fill={fill}
               stroke={stroke}
               strokeWidth={strokeWidth}
+              suppressHydrationWarning
             />
           </svg>
         );
-      case "diamond":
+      case "diamond": {
+        const cx = Math.round(w / 2);
+        const cy = Math.round(h / 2);
+        const pts = `${cx},${strokeWidth} ${w - strokeWidth},${cy} ${cx},${h - strokeWidth} ${strokeWidth},${cy}`;
         return (
           <svg width="100%" height="100%" className="overflow-visible pointer-events-none drop-shadow-md">
             <polygon
-              points={`${w / 2},${strokeWidth} ${w - strokeWidth},${h / 2} ${w / 2},${h - strokeWidth} ${strokeWidth},${h / 2}`}
+              points={pts}
               fill={fill}
               stroke={stroke}
               strokeWidth={strokeWidth}
               strokeLinejoin="round"
+              suppressHydrationWarning
             />
           </svg>
         );
-      case "triangle":
+      }
+      case "triangle": {
+        const cx = Math.round(w / 2);
+        const pts = `${cx},${strokeWidth} ${w - strokeWidth},${h - strokeWidth} ${strokeWidth},${h - strokeWidth}`;
         return (
           <svg width="100%" height="100%" className="overflow-visible pointer-events-none drop-shadow-md">
             <polygon
-              points={`${w / 2},${strokeWidth} ${w - strokeWidth},${h - strokeWidth} ${strokeWidth},${h - strokeWidth}`}
+              points={pts}
               fill={fill}
               stroke={stroke}
               strokeWidth={strokeWidth}
               strokeLinejoin="round"
+              suppressHydrationWarning
             />
           </svg>
         );
+      }
       case "star": {
-        const cx = w / 2,
-          cy = h / 2,
-          outerR = Math.min(w, h) / 2 - strokeWidth,
-          innerR = outerR * 0.42;
+        const cx = Math.round(w / 2);
+        const cy = Math.round(h / 2);
+        const outerR = Math.min(w, h) / 2 - strokeWidth;
+        const innerR = outerR * 0.42;
         const pts: string[] = [];
         for (let i = 0; i < 10; i++) {
           const angle = (i * Math.PI) / 5 - Math.PI / 2;
           const r = i % 2 === 0 ? outerR : innerR;
-          pts.push(`${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`);
+          const px = Math.round(cx + r * Math.cos(angle));
+          const py = Math.round(cy + r * Math.sin(angle));
+          pts.push(`${px},${py}`);
         }
         return (
           <svg width="100%" height="100%" className="overflow-visible pointer-events-none drop-shadow-md">
@@ -1246,19 +1550,22 @@ export default function WhiteboardCanvas({
               stroke={stroke}
               strokeWidth={strokeWidth}
               strokeLinejoin="round"
+              suppressHydrationWarning
             />
           </svg>
         );
       }
       case "hexagon": {
-        const cx = w / 2,
-          cy = h / 2,
-          rx = w / 2 - strokeWidth,
-          ry = h / 2 - strokeWidth;
+        const cx = Math.round(w / 2);
+        const cy = Math.round(h / 2);
+        const rx = w / 2 - strokeWidth;
+        const ry = h / 2 - strokeWidth;
         const pts: string[] = [];
         for (let i = 0; i < 6; i++) {
           const angle = (i * Math.PI) / 3;
-          pts.push(`${cx + rx * Math.cos(angle)},${cy + ry * Math.sin(angle)}`);
+          const px = Math.round(cx + rx * Math.cos(angle));
+          const py = Math.round(cy + ry * Math.sin(angle));
+          pts.push(`${px},${py}`);
         }
         return (
           <svg width="100%" height="100%" className="overflow-visible pointer-events-none drop-shadow-md">
@@ -1268,6 +1575,7 @@ export default function WhiteboardCanvas({
               stroke={stroke}
               strokeWidth={strokeWidth}
               strokeLinejoin="round"
+              suppressHydrationWarning
             />
           </svg>
         );
@@ -1499,12 +1807,28 @@ export default function WhiteboardCanvas({
 
   return (
     <div
+      onDragEnter={(e) => {
+        e.preventDefault();
+        if (e.dataTransfer.types.includes("Files")) {
+          setIsDraggingFileOver(true);
+        }
+      }}
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
+        if (!isDraggingFileOver && e.dataTransfer.types.includes("Files")) {
+          setIsDraggingFileOver(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) {
+          setIsDraggingFileOver(false);
+        }
       }}
       onDrop={(e) => {
         e.preventDefault();
+        setIsDraggingFileOver(false);
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
           processUploadedFiles(e.dataTransfer.files, e.clientX, e.clientY);
         }
@@ -1515,11 +1839,23 @@ export default function WhiteboardCanvas({
           : "relative w-full h-[calc(100vh-64px)]"
       } overflow-hidden bg-[#0D0E11] text-[#E1DFDD] select-none`}
     >
-      {/* Hidden File Input for Image, SVG, Graph, Diagram upload from PC */}
+      {/* Drag & Drop Visual Drop Zone Overlay */}
+      {isDraggingFileOver && (
+        <div className="absolute inset-0 z-50 pointer-events-none bg-blue-500/10 backdrop-blur-[2px] border-2 border-dashed border-blue-400/60 rounded-xl flex items-center justify-center m-4 animate-in fade-in-50">
+          <div className="bg-[#12141A]/95 border border-blue-500/40 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 text-white">
+            <Upload className="w-6 h-6 text-blue-400 animate-bounce" />
+            <div>
+              <p className="font-semibold text-sm text-blue-100">Drop files onto Whiteboard Canvas</p>
+              <p className="text-xs text-gray-400">Supports .graphml, .pdf, .json, .md, images & diagrams (Hosted on AWS S3)</p>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Hidden File Input for Image, SVG, PDF, GraphML, JSON, and Markdown upload from PC */}
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,.svg"
+        accept="image/*,.svg,.graphml,.xml,.pdf,.json,.md,.markdown,.txt"
         multiple
         className="hidden"
         onChange={(e) => {
@@ -1978,7 +2314,7 @@ export default function WhiteboardCanvas({
             </>
           )}
 
-          {/* E. IMAGE CONTROLS */}
+          {/* E. IMAGE & FILE CONTROLS */}
           {selectedNode.type === "image" && (
             <>
               <button
@@ -1989,6 +2325,37 @@ export default function WhiteboardCanvas({
                 <Upload className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Replace</span>
               </button>
+            </>
+          )}
+
+          {(selectedNode.type === "pdf" ||
+            selectedNode.type === "graphml" ||
+            selectedNode.type === "json" ||
+            selectedNode.type === "markdown" ||
+            selectedNode.type === "file") && (
+            <>
+              {selectedNode.fileUrl && (
+                <a
+                  href={selectedNode.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#252834] hover:bg-[#2E3242] text-white text-[11px] font-medium transition-colors"
+                  title="Open file from AWS S3"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Open S3 File</span>
+                </a>
+              )}
+              {selectedNode.type === "graphml" && selectedNode.previewText && (
+                <button
+                  onClick={() => handleImportGraphMLToCanvas(selectedNode)}
+                  className="flex items-center gap-1.5 px-2 py-1 rounded bg-indigo-600/40 hover:bg-indigo-600/60 text-indigo-200 text-[11px] font-medium transition-colors border border-indigo-500/30"
+                  title="Unpack GraphML topology into native canvas nodes & arrows"
+                >
+                  <Network className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Unpack Topology</span>
+                </button>
+              )}
             </>
           )}
 
@@ -2408,9 +2775,10 @@ export default function WhiteboardCanvas({
                 setDoubleClickMenu(null);
               }}
               className="col-span-2 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-emerald-300 hover:bg-[#22242D] hover:text-white border border-emerald-500/30 transition-colors"
+              title="Upload .graphml, .pdf, .json, .md, images or diagrams directly to canvas (S3 hosted)"
             >
               <Upload className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Upload Image / Diagram</span>
+              <span>Upload File / Diagram (.pdf, .graphml, .json, .md)</span>
             </button>
           </div>
         </div>
@@ -2824,8 +3192,9 @@ export default function WhiteboardCanvas({
               );
             }
 
-            // 5. IMAGE / MEDIA / SVG / DIAGRAM NODE (Direct Upload or Drag-and-Drop)
+            // 5. IMAGE / MEDIA / SVG / DIAGRAM NODE (Stored in AWS S3)
             if (node.type === "image") {
+              const isUploading = Boolean(node.metaData?.isUploadingToS3);
               return (
                 <div
                   key={node.id}
@@ -2857,9 +3226,476 @@ export default function WhiteboardCanvas({
                     </div>
                   )}
 
+                  {/* S3 Storage Cloud Badge */}
+                  <div className="absolute top-1.5 right-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-xs text-[9px] text-emerald-400 border border-emerald-500/30 select-none">
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="w-2.5 h-2.5 animate-spin text-amber-400" />
+                        <span className="text-amber-300">Syncing S3...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Cloud className="w-2.5 h-2.5" />
+                        <span>AWS S3</span>
+                      </>
+                    )}
+                  </div>
+
                   {node.title && (
-                    <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-xs py-0.5 px-2 text-[10px] text-gray-300 truncate pointer-events-none text-center">
-                      {node.title}
+                    <div className="absolute bottom-0 inset-x-0 bg-black/70 backdrop-blur-xs py-1 px-2 text-[10px] text-gray-200 truncate pointer-events-none text-center flex items-center justify-between">
+                      <span className="truncate">{node.title}</span>
+                      {node.fileUrl && (
+                        <a
+                          href={node.fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="pointer-events-auto text-emerald-400 hover:text-emerald-300 p-0.5 ml-1"
+                          title="Open S3 asset in new tab"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {isSelected && renderResizeHandles(node)}
+                </div>
+              );
+            }
+
+            // 5b. PDF DOCUMENT NODE (Stored in AWS S3)
+            if (node.type === "pdf") {
+              const isUploading = Boolean(node.metaData?.isUploadingToS3);
+              const fileSizeMb = node.fileSize ? (node.fileSize / (1024 * 1024)).toFixed(1) + " MB" : "";
+              return (
+                <div
+                  key={node.id}
+                  onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
+                  style={{
+                    position: "absolute",
+                    left: `${node.x}px`,
+                    top: `${node.y}px`,
+                    width: `${node.width}px`,
+                    height: `${node.height}px`,
+                  }}
+                  className={`group/pdf cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#1A1517] border border-red-500/30 ${
+                    isSelected
+                      ? "ring-2 ring-red-400 shadow-[0_0_20px_rgba(239,68,68,0.3)]"
+                      : "shadow-xl hover:border-red-500/50"
+                  }`}
+                >
+                  {/* PDF Header */}
+                  <div className="px-3 py-2 bg-gradient-to-r from-red-950/80 to-[#2A181C] border-b border-red-500/30 flex items-center justify-between gap-2 shrink-0">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="px-1.5 py-0.5 rounded bg-red-600 text-white font-bold text-[9px] uppercase tracking-wider">
+                        PDF
+                      </span>
+                      <span className="text-xs font-semibold text-white truncate" title={node.title}>
+                        {node.title || "Document.pdf"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[9px] text-red-300 shrink-0">
+                      {isUploading ? (
+                        <span className="flex items-center gap-1 text-amber-300">
+                          <Loader2 className="w-2.5 h-2.5 animate-spin" /> Uploading...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-emerald-400 font-mono">
+                          <Cloud className="w-2.5 h-2.5" /> S3
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* PDF Body / Preview */}
+                  <div className="flex-1 p-3 flex flex-col items-center justify-center text-center overflow-hidden bg-black/20">
+                    <div className="w-12 h-12 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 mb-2 shadow-inner">
+                      <FileText className="w-6 h-6" />
+                    </div>
+                    <p className="text-xs text-gray-200 font-medium truncate max-w-full px-2">
+                      {node.fileName || node.title}
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      {fileSizeMb ? `${fileSizeMb} • ` : ""}Adobe PDF Document
+                    </p>
+                  </div>
+
+                  {/* Actions Footer */}
+                  <div className="px-3 py-2 bg-[#141012] border-t border-red-500/20 flex items-center justify-between gap-2 shrink-0">
+                    <a
+                      href={node.fileUrl || "#"}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => {
+                        if (!node.fileUrl) e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-300 text-[11px] font-semibold transition-colors border border-red-500/30 ${
+                        !node.fileUrl ? "opacity-50 pointer-events-none" : ""
+                      }`}
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>Open PDF</span>
+                    </a>
+                    {node.fileUrl && (
+                      <a
+                        href={node.fileUrl}
+                        download={node.fileName || "document.pdf"}
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-1 text-gray-400 hover:text-white transition-colors"
+                        title="Download from S3"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
+
+                  {isSelected && renderResizeHandles(node)}
+                </div>
+              );
+            }
+
+            // 5c. GRAPHML NETWORK / TOPOLOGY NODE (Stored in AWS S3 with One-Click Canvas Import)
+            if (node.type === "graphml") {
+              const isUploading = Boolean(node.metaData?.isUploadingToS3);
+              const nodeCount = node.metaData?.nodeCount || 0;
+              const edgeCount = node.metaData?.edgeCount || 0;
+              return (
+                <div
+                  key={node.id}
+                  onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
+                  style={{
+                    position: "absolute",
+                    left: `${node.x}px`,
+                    top: `${node.y}px`,
+                    width: `${node.width}px`,
+                    height: `${node.height}px`,
+                  }}
+                  className={`group/graphml cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#161424] border border-purple-500/40 ${
+                    isSelected
+                      ? "ring-2 ring-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.3)]"
+                      : "shadow-xl hover:border-purple-500/60"
+                  }`}
+                >
+                  {/* GraphML Header */}
+                  <div className="px-3 py-2 bg-gradient-to-r from-purple-950/80 to-[#221838] border-b border-purple-500/30 flex items-center justify-between gap-2 shrink-0">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="px-1.5 py-0.5 rounded bg-purple-600 text-white font-bold text-[9px] uppercase tracking-wider">
+                        GraphML
+                      </span>
+                      <span className="text-xs font-semibold text-white truncate" title={node.title}>
+                        {node.title || "Network.graphml"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[9px] text-purple-300 shrink-0 font-mono">
+                      {isUploading ? (
+                        <span className="flex items-center gap-1 text-amber-300">
+                          <Loader2 className="w-2.5 h-2.5 animate-spin" /> Uploading...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-emerald-400">
+                          <Cloud className="w-2.5 h-2.5" /> S3
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* GraphML Metrics & Preview */}
+                  <div className="flex-1 p-3 flex flex-col justify-between overflow-hidden bg-black/20">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/30 text-[10px] text-purple-300 font-medium">
+                        <Network className="w-3 h-3 text-purple-400" /> {nodeCount} Nodes
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/30 text-[10px] text-indigo-300 font-medium">
+                        <GitFork className="w-3 h-3 text-indigo-400" /> {edgeCount} Connections
+                      </span>
+                    </div>
+
+                    {node.previewText ? (
+                      <div className="flex-1 bg-black/40 rounded-lg p-2 font-mono text-[9px] text-purple-200/80 overflow-y-auto max-h-24 select-text border border-purple-500/20">
+                        {node.previewText.slice(0, 300)}...
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center text-[10px] text-gray-400">
+                        GraphML topology stored in S3
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions Bar: One-Click Unpack into Board Nodes + Download */}
+                  <div className="px-3 py-2 bg-[#12101E] border-t border-purple-500/20 flex items-center justify-between gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleImportGraphMLToCanvas(node);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-semibold transition-colors shadow-xs cursor-pointer"
+                      title="Convert GraphML nodes & edges directly into whiteboard cards on canvas"
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-300" />
+                      <span>Place Nodes on Canvas</span>
+                    </button>
+                    {node.fileUrl && (
+                      <a
+                        href={node.fileUrl}
+                        download={node.fileName || "network.graphml"}
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-1 text-gray-400 hover:text-white transition-colors"
+                        title="Download raw GraphML from S3"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
+
+                  {isSelected && renderResizeHandles(node)}
+                </div>
+              );
+            }
+
+            // 5d. JSON DATASET NODE (Stored in AWS S3)
+            if (node.type === "json") {
+              const isUploading = Boolean(node.metaData?.isUploadingToS3);
+              const keyCount = node.metaData?.keyCount || 0;
+              return (
+                <div
+                  key={node.id}
+                  onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
+                  style={{
+                    position: "absolute",
+                    left: `${node.x}px`,
+                    top: `${node.y}px`,
+                    width: `${node.width}px`,
+                    height: `${node.height}px`,
+                  }}
+                  className={`group/json cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#171614] border border-amber-500/30 ${
+                    isSelected
+                      ? "ring-2 ring-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.3)]"
+                      : "shadow-xl hover:border-amber-500/50"
+                  }`}
+                >
+                  {/* JSON Header */}
+                  <div className="px-3 py-2 bg-gradient-to-r from-amber-950/80 to-[#262016] border-b border-amber-500/30 flex items-center justify-between gap-2 shrink-0">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="px-1.5 py-0.5 rounded bg-amber-600 text-white font-bold text-[9px] uppercase tracking-wider font-mono">
+                        {"{ }"} JSON
+                      </span>
+                      <span className="text-xs font-semibold text-white truncate" title={node.title}>
+                        {node.title || "Dataset.json"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[9px] text-amber-300 shrink-0 font-mono">
+                      {isUploading ? (
+                        <span className="flex items-center gap-1 text-amber-300">
+                          <Loader2 className="w-2.5 h-2.5 animate-spin" /> Uploading...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-emerald-400">
+                          <Cloud className="w-2.5 h-2.5" /> S3
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* JSON Code Preview */}
+                  <div className="flex-1 p-2.5 bg-black/40 overflow-hidden flex flex-col">
+                    <div className="flex items-center justify-between text-[10px] text-amber-400/80 pb-1 mb-1 border-b border-amber-500/10">
+                      <span>{keyCount ? `${keyCount} root keys` : "JSON Object"}</span>
+                      <span className="text-[9px] text-gray-500 font-mono">read-only preview</span>
+                    </div>
+                    <pre className="flex-1 font-mono text-[10px] text-amber-200/90 overflow-auto p-1 select-text whitespace-pre-wrap break-all">
+                      {node.previewText || "{}"}
+                    </pre>
+                  </div>
+
+                  {/* JSON Footer Actions */}
+                  <div className="px-3 py-1.5 bg-[#12110F] border-t border-amber-500/20 flex items-center justify-between gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (node.previewText) {
+                          navigator.clipboard.writeText(node.previewText);
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 text-[10px] font-semibold transition-colors border border-amber-500/30 cursor-pointer"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>Copy JSON</span>
+                    </button>
+                    {node.fileUrl && (
+                      <a
+                        href={node.fileUrl}
+                        download={node.fileName || "data.json"}
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-1 text-gray-400 hover:text-white transition-colors"
+                        title="Download JSON from S3"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
+
+                  {isSelected && renderResizeHandles(node)}
+                </div>
+              );
+            }
+
+            // 5e. MARKDOWN SPECIFICATION NODE (Stored in AWS S3)
+            if (node.type === "markdown") {
+              const isUploading = Boolean(node.metaData?.isUploadingToS3);
+              return (
+                <div
+                  key={node.id}
+                  onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
+                  style={{
+                    position: "absolute",
+                    left: `${node.x}px`,
+                    top: `${node.y}px`,
+                    width: `${node.width}px`,
+                    height: `${node.height}px`,
+                  }}
+                  className={`group/md cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#131722] border border-blue-500/30 ${
+                    isSelected
+                      ? "ring-2 ring-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.3)]"
+                      : "shadow-xl hover:border-blue-500/50"
+                  }`}
+                >
+                  {/* Markdown Header */}
+                  <div className="px-3 py-2 bg-gradient-to-r from-blue-950/80 to-[#182035] border-b border-blue-500/30 flex items-center justify-between gap-2 shrink-0">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="px-1.5 py-0.5 rounded bg-blue-600 text-white font-bold text-[9px] uppercase tracking-wider font-mono">
+                        MD
+                      </span>
+                      <span className="text-xs font-semibold text-white truncate" title={node.title}>
+                        {node.title || "Notes.md"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[9px] text-blue-300 shrink-0 font-mono">
+                      {isUploading ? (
+                        <span className="flex items-center gap-1 text-amber-300">
+                          <Loader2 className="w-2.5 h-2.5 animate-spin" /> Uploading...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-emerald-400">
+                          <Cloud className="w-2.5 h-2.5" /> S3
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Markdown Body Preview */}
+                  <div className="flex-1 p-3 bg-black/30 overflow-y-auto select-text text-gray-200 text-xs leading-relaxed font-sans">
+                    <div className="whitespace-pre-wrap break-words">
+                      {node.previewText || node.body || "Empty markdown document."}
+                    </div>
+                  </div>
+
+                  {/* Markdown Footer Actions */}
+                  <div className="px-3 py-1.5 bg-[#0F121C] border-t border-blue-500/20 flex items-center justify-between gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (node.previewText || node.body) {
+                          navigator.clipboard.writeText(node.previewText || node.body || "");
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-[10px] font-semibold transition-colors border border-blue-500/30 cursor-pointer"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>Copy MD</span>
+                    </button>
+                    {node.fileUrl && (
+                      <a
+                        href={node.fileUrl}
+                        download={node.fileName || "document.md"}
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-1 text-gray-400 hover:text-white transition-colors"
+                        title="Download Markdown from S3"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
+
+                  {isSelected && renderResizeHandles(node)}
+                </div>
+              );
+            }
+
+            // 5f. GENERIC FILE ATTACHMENT NODE (Stored in AWS S3)
+            if (node.type === "file") {
+              const isUploading = Boolean(node.metaData?.isUploadingToS3);
+              const fileSizeKb = node.fileSize ? (node.fileSize / 1024).toFixed(0) + " KB" : "";
+              return (
+                <div
+                  key={node.id}
+                  onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
+                  style={{
+                    position: "absolute",
+                    left: `${node.x}px`,
+                    top: `${node.y}px`,
+                    width: `${node.width}px`,
+                    height: `${node.height}px`,
+                  }}
+                  className={`group/file cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#181A22] border border-gray-700 ${
+                    isSelected
+                      ? "ring-2 ring-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.3)]"
+                      : "shadow-xl hover:border-gray-600"
+                  }`}
+                >
+                  {/* File Header */}
+                  <div className="px-3 py-2 bg-[#20222C] border-b border-gray-700 flex items-center justify-between gap-2 shrink-0">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="px-1.5 py-0.5 rounded bg-gray-700 text-gray-200 font-bold text-[9px] uppercase tracking-wider">
+                        {node.fileExtension || "FILE"}
+                      </span>
+                      <span className="text-xs font-semibold text-white truncate" title={node.title}>
+                        {node.title}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[9px] text-gray-400 shrink-0 font-mono">
+                      {isUploading ? (
+                        <span className="flex items-center gap-1 text-amber-300">
+                          <Loader2 className="w-2.5 h-2.5 animate-spin" /> Uploading...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-emerald-400">
+                          <Cloud className="w-2.5 h-2.5" /> S3
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* File Body */}
+                  <div className="flex-1 p-3 flex flex-col items-center justify-center text-center overflow-hidden">
+                    <File className="w-7 h-7 text-gray-400 mb-1.5" />
+                    <p className="text-xs text-gray-200 font-medium truncate max-w-full">
+                      {node.fileName || node.title}
+                    </p>
+                    {fileSizeKb && <p className="text-[10px] text-gray-500 mt-0.5">{fileSizeKb}</p>}
+                  </div>
+
+                  {/* File Footer */}
+                  {node.fileUrl && (
+                    <div className="px-3 py-1.5 bg-[#13141B] border-t border-gray-700/50 flex items-center justify-end shrink-0">
+                      <a
+                        href={node.fileUrl}
+                        download={node.fileName || "attachment"}
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 text-[10px] font-semibold"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>Download</span>
+                      </a>
                     </div>
                   )}
 
@@ -3368,11 +4204,11 @@ export default function WhiteboardCanvas({
           <Maximize className="w-4 h-4" />
         </button>
 
-        {/* Upload Media / Images / Graphs / SVGs / Diagrams from PC */}
+        {/* Upload Media / Files / Graphs / SVGs / Diagrams from PC (AWS S3) */}
         <button
           onClick={() => fileInputRef.current?.click()}
           className="p-2 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-[#22242D] transition-colors cursor-pointer"
-          title="Upload Image, SVG, Graph or Diagram from PC"
+          title="Upload or Drag & Drop .graphml, .pdf, .json, .md, images or diagrams (Hosted on AWS S3)"
         >
           <Upload className="w-4 h-4" />
         </button>
@@ -3538,6 +4374,146 @@ export default function WhiteboardCanvas({
           <Redo2 className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Toast Notification for S3 Deletion & Storage Cleanup */}
+      {deleteToastMessage && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[10000000] bg-[#1A1C24] border border-[#2D303E] text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs animate-in fade-in slide-in-from-bottom-2">
+          <Cloud className="w-4 h-4 text-emerald-400" />
+          <span className="font-medium text-gray-200">{deleteToastMessage}</span>
+        </div>
+      )}
+
+      {/* S3 File Object Deletion Dialog ("Delete from here" vs "Delete here + S3") */}
+      {s3DeleteModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[10000000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in-50"
+          onClick={() => {
+            if (!isDeletingFromS3) setS3DeleteModal(null);
+          }}
+        >
+          <div
+            className="bg-[#15161C] border border-[#2A2C38] rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 text-[#E1DFDD]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-6 pt-6 pb-4 border-b border-[#232530] flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white">Delete Uploaded Object</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    This item is linked to an outside uploaded file stored in AWS S3
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setS3DeleteModal(null)}
+                className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-[#20222B] transition-colors cursor-pointer"
+                title="Cancel"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content: File details */}
+            <div className="p-6 space-y-4">
+              <div className="bg-[#1C1E26] border border-[#2B2E3C] rounded-xl p-3.5 space-y-2">
+                <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider flex items-center justify-between">
+                  <span>Target File{s3DeleteModal.s3Nodes.length > 1 ? "s" : ""}</span>
+                  <span className="flex items-center gap-1 text-emerald-400">
+                    <Cloud className="w-3 h-3" />
+                    <span>AWS S3 Storage</span>
+                  </span>
+                </div>
+                {s3DeleteModal.s3Nodes.slice(0, 3).map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between text-xs bg-[#14151B] p-2 rounded-lg border border-[#272935]"
+                  >
+                    <div className="flex items-center gap-2 truncate pr-2">
+                      <FileText className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                      <span className="truncate text-gray-200 font-medium">
+                        {item.fileName || item.title || "Uploaded File"}
+                      </span>
+                    </div>
+                    {item.fileSize ? (
+                      <span className="text-[11px] text-gray-400 whitespace-nowrap">
+                        {(item.fileSize / 1024).toFixed(1)} KB
+                      </span>
+                    ) : null}
+                  </div>
+                ))}
+                {s3DeleteModal.s3Nodes.length > 3 && (
+                  <p className="text-[11px] text-gray-400 text-center">
+                    + {s3DeleteModal.s3Nodes.length - 3} more files
+                  </p>
+                )}
+              </div>
+
+              <p className="text-xs text-gray-300 leading-relaxed">
+                Choose how you want to delete this file object. Deleting from{" "}
+                <strong className="text-white">here + S3</strong> permanently removes the file from your AWS S3 bucket to ensure unneeded objects do not accumulate in cloud storage.
+              </p>
+
+              {/* Action Choices */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                {/* 1. Delete from here only */}
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteCanvasOnly}
+                  disabled={isDeletingFromS3}
+                  className="p-3.5 rounded-xl border border-[#2C2F3D] bg-[#1E202A] hover:bg-[#252835] text-left transition-all hover:border-gray-500 flex flex-col justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <X className="w-4 h-4 text-gray-400 group-hover:text-white" />
+                    <span className="text-xs font-semibold text-gray-200 group-hover:text-white">
+                      Delete from here
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-400 leading-snug">
+                    Removes from canvas only. The file remains saved in S3.
+                  </p>
+                </button>
+
+                {/* 2. Delete here + S3 */}
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteCanvasAndS3}
+                  disabled={isDeletingFromS3}
+                  className="p-3.5 rounded-xl border border-rose-500/40 bg-rose-600/20 hover:bg-rose-600/30 text-left transition-all hover:border-rose-500 flex flex-col justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Trash2 className="w-4 h-4 text-rose-400 group-hover:text-rose-300" />
+                    <span className="text-xs font-semibold text-rose-300 group-hover:text-white">
+                      Delete here + S3
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-rose-300/80 leading-snug">
+                    Removes from canvas AND permanently deletes from S3 storage.
+                  </p>
+                </button>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3.5 bg-[#121318] border-t border-[#232530] flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setS3DeleteModal(null)}
+                disabled={isDeletingFromS3}
+                className="px-3.5 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-[#20222B] transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

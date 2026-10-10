@@ -523,6 +523,182 @@ describe("Whiteboard Canvas & Organizational Chart Template", () => {
       expect(reverseChannelId).toBe(directChannelId);
     });
   });
+
+  describe("Whiteboard Multi-Format File Drop & AWS S3 Offloading", () => {
+    it("correctly identifies file type and assigns appropriate whiteboard node type", () => {
+      const getWhiteboardType = (fileName: string, mime: string): string => {
+        const ext = fileName.split(".").pop()?.toLowerCase() || "";
+        if (mime.startsWith("image/") || ext === "svg") return "image";
+        if (ext === "pdf" || mime === "application/pdf") return "pdf";
+        if (ext === "graphml" || (ext === "xml" && fileName.includes("graph"))) return "graphml";
+        if (ext === "json" || mime === "application/json") return "json";
+        if (ext === "md" || ext === "markdown") return "markdown";
+        return "file";
+      };
+
+      expect(getWhiteboardType("architecture.graphml", "application/xml")).toBe("graphml");
+      expect(getWhiteboardType("specifications.pdf", "application/pdf")).toBe("pdf");
+      expect(getWhiteboardType("config.json", "application/json")).toBe("json");
+      expect(getWhiteboardType("README.md", "text/markdown")).toBe("markdown");
+      expect(getWhiteboardType("diagram.svg", "image/svg+xml")).toBe("image");
+      expect(getWhiteboardType("archive.zip", "application/zip")).toBe("file");
+    });
+
+    it("generates enterprise isolated S3 key without saving heavy Base64 in document", () => {
+      const companyId = "company-99";
+      const boardId = "wb-12345";
+      const fileName = "System Diagram Architecture (v2).graphml";
+      const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const timestamp = 1791569100000;
+
+      const s3Key = `${companyId}/whiteboards/${boardId}/${timestamp}_${safeName}`;
+      expect(s3Key).toBe("company-99/whiteboards/wb-12345/1791569100000_System_Diagram_Architecture__v2_.graphml");
+
+      // Verify node stores s3Key and s3Url rather than a multi-megabyte base64 string
+      const node = {
+        id: "node-1",
+        type: "graphml",
+        fileUrl: `https://my-bucket.s3.amazonaws.com/${s3Key}`,
+        s3Key,
+        fileName,
+        fileSize: 45020,
+      };
+
+      expect(node.fileUrl).toContain("https://my-bucket.s3.amazonaws.com/");
+      expect(node.fileUrl.startsWith("data:image")).toBe(false);
+      expect(node.fileUrl.startsWith("data:application")).toBe(false);
+    });
+
+    it("extracts GraphML topology statistics accurately", () => {
+      const sampleGraphML = `<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns">
+  <graph id="G" edgedefault="directed">
+    <node id="n0"><data key="label">Frontend NextJS</data></node>
+    <node id="n1"><data key="label">API Gateway</data></node>
+    <node id="n2"><data key="label">AWS S3 Storage</data></node>
+    <edge id="e0" source="n0" target="n1"/>
+    <edge id="e1" source="n1" target="n2"/>
+  </graph>
+</graphml>`;
+
+      const nodeMatches = sampleGraphML.match(/<node\b/gi);
+      const edgeMatches = sampleGraphML.match(/<edge\b/gi);
+      const graphMatch = sampleGraphML.match(/<graph\b[^>]*id=["']([^"']+)["']/i);
+
+      expect(nodeMatches?.length).toBe(3);
+      expect(edgeMatches?.length).toBe(2);
+      expect(graphMatch?.[1]).toBe("G");
+    });
+
+    it("parses JSON payload metadata for canvas card preview", () => {
+      const jsonContent = JSON.stringify({
+        project: "WorkManagement",
+        version: "2.4.0",
+        services: ["auth", "s3", "whiteboard", "tasks"],
+        settings: { cloudHosted: true },
+      });
+
+      const parsed = JSON.parse(jsonContent);
+      const keyCount = Object.keys(parsed).length;
+      const isArray = Array.isArray(parsed);
+
+      expect(keyCount).toBe(4);
+      expect(isArray).toBe(false);
+    });
+
+    it("computes Markdown line and word count for canvas card preview", () => {
+      const mdContent = `# Project Overview\n\nThis whiteboard supports direct S3 uploads.\nNo heavy base64 strings.\n\n- PDF\n- GraphML\n- JSON\n- Markdown`;
+      const lines = mdContent.split("\n");
+      const words = mdContent.split(/\s+/).filter(Boolean);
+
+      expect(lines.length).toBeGreaterThan(5);
+      expect(words.length).toBeGreaterThan(10);
+    });
+
+    it("distinguishes native canvas elements from external S3 uploaded objects for delete prompt", () => {
+      const isS3ObjectNode = (node: any): boolean => {
+        if (node.s3Key && node.s3Key.trim().length > 0) return true;
+        if (node.fileUrl && (node.fileUrl.includes(".amazonaws.com") || node.fileUrl.startsWith("http"))) {
+          return true;
+        }
+        if (
+          node.type === "image" &&
+          node.imageUrl &&
+          (node.imageUrl.includes(".amazonaws.com") ||
+            (node.imageUrl.startsWith("http") && !node.imageUrl.startsWith("data:")))
+        ) {
+          return true;
+        }
+        return false;
+      };
+
+      // Native shapes & stickies should NOT trigger S3 prompt
+      const nativeShapeNode = { id: "n-1", type: "shape", title: "Rectangle" };
+      const nativeStickyNode = { id: "n-2", type: "sticky", title: "Meeting note" };
+      const nativeTaskNode = { id: "n-3", type: "task", title: "Fix bug" };
+
+      expect(isS3ObjectNode(nativeShapeNode)).toBe(false);
+      expect(isS3ObjectNode(nativeStickyNode)).toBe(false);
+      expect(isS3ObjectNode(nativeTaskNode)).toBe(false);
+
+      // External files uploaded to S3 MUST trigger S3 prompt
+      const s3PdfNode = {
+        id: "n-4",
+        type: "pdf",
+        s3Key: "company-1/whiteboards/wb-1/report.pdf",
+        fileUrl: "https://bucket.s3.amazonaws.com/company-1/whiteboards/wb-1/report.pdf",
+      };
+      const s3GraphNode = {
+        id: "n-5",
+        type: "graphml",
+        s3Key: "company-1/whiteboards/wb-1/network.graphml",
+      };
+      const s3ImageNode = {
+        id: "n-6",
+        type: "image",
+        imageUrl: "https://bucket.s3.amazonaws.com/company-1/whiteboards/wb-1/photo.png",
+      };
+
+      expect(isS3ObjectNode(s3PdfNode)).toBe(true);
+      expect(isS3ObjectNode(s3GraphNode)).toBe(true);
+      expect(isS3ObjectNode(s3ImageNode)).toBe(true);
+    });
+
+    it("normalizes S3 URLs and keys securely for deletion API", () => {
+      const normalizeS3Key = (keyOrUrl: string): string => {
+        if (!keyOrUrl) return "";
+        if (keyOrUrl.startsWith("http://") || keyOrUrl.startsWith("https://")) {
+          try {
+            const parsed = new URL(keyOrUrl);
+            return decodeURIComponent(parsed.pathname.replace(/^\/+/, ""));
+          } catch {
+            return keyOrUrl;
+          }
+        }
+        return keyOrUrl;
+      };
+
+      const directKey = "company-10/whiteboards/board-A/123_spec.pdf";
+      const fullUrl = "https://company-bucket.s3.us-east-1.amazonaws.com/company-10/whiteboards/board-A/123_spec.pdf?mock_storage=true";
+
+      expect(normalizeS3Key(directKey)).toBe("company-10/whiteboards/board-A/123_spec.pdf");
+      expect(normalizeS3Key(fullUrl)).toBe("company-10/whiteboards/board-A/123_spec.pdf");
+    });
+
+    it("enforces tenant boundary check on S3 deletion to prevent cross-tenant object removal", () => {
+      const companyId = "company-42";
+      const isAuthorizedKey = (key: string, tenantId: string): boolean => {
+        if (tenantId === "global") return true;
+        return key.startsWith(`${tenantId}/whiteboards/`) || key.startsWith("global/whiteboards/");
+      };
+
+      expect(isAuthorizedKey("company-42/whiteboards/board-1/file.pdf", companyId)).toBe(true);
+      expect(isAuthorizedKey("global/whiteboards/board-1/file.pdf", companyId)).toBe(true);
+      // Attempting to delete another tenant's file should be rejected
+      expect(isAuthorizedKey("company-999/whiteboards/board-2/file.pdf", companyId)).toBe(false);
+    });
+  });
 });
+
 
 

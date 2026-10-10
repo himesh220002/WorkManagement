@@ -130,10 +130,10 @@ const rbacTiers = [
   { role: "Employee", scope: "Personal tasks, logs, document uploads", access: "SELF SCOPED", rank: "Rank 20", bar: "border-zinc-400", chip: "text-zinc-500" },
 ];
 
-const docVaults = [  { name: "Project & Deliverables", limit: "25 MB", ext: ".pdf, .png, .zip, .docx, .xlsx, .pptx, .md", subs: "7 sub-types · roadmaps, EDDs, QA plans" },
-  { name: "Employee & Onboarding", limit: "5 MB", ext: ".pdf, .png, .jpg, .doc, .docx", subs: "4 sub-types · CVs, IDs, certificates" },
-  { name: "Sales & Client Pipeline", limit: "15 MB", ext: ".pdf, .docx, .pptx, .xlsx, .csv", subs: "4 sub-types · proposals, contracts" },
-  { name: "Salary, Payroll & Finance", limit: "10 MB", ext: ".pdf, .xlsx, .csv, .png, .jpg", subs: "4 sub-types · slips, balance sheets" },
+const docVaults = [{ name: "Project & Deliverables", limit: "25 MB", ext: ".pdf, .png, .zip, .docx, .xlsx, .pptx, .md", subs: "7 sub-types · roadmaps, EDDs, QA plans" },
+{ name: "Employee & Onboarding", limit: "5 MB", ext: ".pdf, .png, .jpg, .doc, .docx", subs: "4 sub-types · CVs, IDs, certificates" },
+{ name: "Sales & Client Pipeline", limit: "15 MB", ext: ".pdf, .docx, .pptx, .xlsx, .csv", subs: "4 sub-types · proposals, contracts" },
+{ name: "Salary, Payroll & Finance", limit: "10 MB", ext: ".pdf, .xlsx, .csv, .png, .jpg", subs: "4 sub-types · slips, balance sheets" },
 ];
 
 const faqs = [
@@ -222,10 +222,10 @@ export default function Home() {
               <a href="#pricing" className="hover:text-[#0078d4] border-b-2 border-transparent hover:border-[#0078d4] py-3">Pricing</a>
             </nav>
           </div>
-          
+
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link href="/auth/login" className="px-3 py-1.5 text-xs font-semibold border border-[#0078d4]/30 text-[#0078d4] rounded-sm hover:bg-[#EBF3FC] transition-colors">Sign In</Link>
-            <Link href="/auth/signup" className="bg-[#0078d4] text-white px-3 sm:px-4 py-1.5 font-medium hover:bg-[#005a9e] transition-colors rounded-sm text-xs sm:text-sm">Get Started ($3/user/mo)</Link>
+            <Link href="/auth/signup" className="bg-[#0078d4] text-white px-3 sm:px-4 py-1.5 font-medium hover:bg-[#005a9e] transition-colors rounded-sm text-xs sm:text-sm">Get Started</Link>
             <ThemeToggle />
           </div>
         </div>

@@ -336,6 +336,8 @@ export interface IDeal {
   amount: number;
   owner?: string;
   ownerId?: Types.ObjectId | string;
+  contactName?: string;
+  checklist?: { text: string; completed: boolean }[];
   client?: {
     name: string;
     industry?: string;
@@ -361,8 +363,11 @@ export interface ILead {
   status?: LeadStatusType | string;
   owner?: string;
   ownerId?: Types.ObjectId | string;
+  contactName?: string;
+  priority?: string;
   source?: string;
   campaignId?: Types.ObjectId | string;
+  checklist?: { text: string; completed: boolean }[];
   createdAt?: Date;
   updatedAt?: Date;
 }

@@ -2,6 +2,14 @@ import mongoose, { Schema, Model } from "mongoose";
 import { ILead } from "./types";
 import { LeadStatus } from "./enums";
 
+const checklistItemSchema = new Schema(
+  {
+    text: { type: String, required: true },
+    completed: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
+
 const leadSchema = new Schema<ILead>(
   {
     companyId: { type: Schema.Types.ObjectId, ref: "Company", index: true },
@@ -13,8 +21,11 @@ const leadSchema = new Schema<ILead>(
     },
     owner: { type: String, default: "Unassigned" }, // legacy
     ownerId: { type: Schema.Types.ObjectId, ref: "User", index: true },
+    contactName: { type: String, default: "" },
+    priority: { type: String, default: "Medium" },
     source: { type: String },
     campaignId: { type: Schema.Types.ObjectId, ref: "Campaign", index: true },
+    checklist: { type: [checklistItemSchema], default: [] },
   },
   { timestamps: true }
 );

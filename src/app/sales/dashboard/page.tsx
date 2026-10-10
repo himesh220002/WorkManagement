@@ -43,8 +43,13 @@ export default async function SalesDashboardPage() {
     name: l.name,
     status: l.status,
     owner: l.owner,
+    contactName: l.contactName || "",
+    priority: l.priority || "Medium",
     source: l.source,
     campaignId: l.campaignId ? l.campaignId.toString() : null,
+    checklist: Array.isArray(l.checklist)
+      ? l.checklist.map((c: any) => ({ text: String(c.text || ""), completed: Boolean(c.completed) }))
+      : [],
   }));
 
   const cleanCampaigns = campaigns.map((c: any) => ({

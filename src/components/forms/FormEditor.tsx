@@ -223,18 +223,16 @@ export default function FormEditor({ initialForm, orgCode = "", onSaved }: FormE
           <button
             type="button"
             onClick={() => setActiveTab("builder")}
-            className={`px-3 py-1 rounded text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === "builder" ? "bg-[#0078D4] text-white shadow-sm" : "text-gray-400 hover:text-white"
-            }`}
+            className={`px-3 py-1 rounded text-xs font-semibold transition-all cursor-pointer ${activeTab === "builder" ? "bg-[#0078D4] text-white shadow-sm" : "text-gray-400 hover:text-white"
+              }`}
           >
             Builder
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("preview")}
-            className={`px-3 py-1 rounded text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === "preview" ? "bg-[#0078D4] text-white shadow-sm" : "text-gray-400 hover:text-white"
-            }`}
+            className={`px-3 py-1 rounded text-xs font-semibold transition-all cursor-pointer ${activeTab === "preview" ? "bg-[#0078D4] text-white shadow-sm" : "text-gray-400 hover:text-white"
+              }`}
           >
             <span className="flex items-center gap-1">
               <Eye className="w-3 h-3" />
@@ -244,18 +242,16 @@ export default function FormEditor({ initialForm, orgCode = "", onSaved }: FormE
           <button
             type="button"
             onClick={() => setActiveTab("submissions")}
-            className={`px-3 py-1 rounded text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === "submissions" ? "bg-[#0078D4] text-white shadow-sm" : "text-gray-400 hover:text-white"
-            }`}
+            className={`px-3 py-1 rounded text-xs font-semibold transition-all cursor-pointer ${activeTab === "submissions" ? "bg-[#0078D4] text-white shadow-sm" : "text-gray-400 hover:text-white"
+              }`}
           >
             Submissions ({form.submissions?.length || 0})
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("share")}
-            className={`px-3 py-1 rounded text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === "share" ? "bg-[#0078D4] text-white shadow-sm" : "text-gray-400 hover:text-white"
-            }`}
+            className={`px-3 py-1 rounded text-xs font-semibold transition-all cursor-pointer ${activeTab === "share" ? "bg-[#0078D4] text-white shadow-sm" : "text-gray-400 hover:text-white"
+              }`}
           >
             <span className="flex items-center gap-1">
               <Share2 className="w-3 h-3" />
@@ -299,7 +295,7 @@ export default function FormEditor({ initialForm, orgCode = "", onSaved }: FormE
                 value={form.title}
                 onChange={(e) => handleUpdateField("title", e.target.value)}
                 placeholder="Form Title"
-                className="w-full bg-transparent text-2xl font-bold text-white placeholder-gray-500 focus:outline-none border-b border-transparent hover:border-[#383842] focus:border-[#0078D4] transition-colors pb-1"
+                className="w-full bg-transparenttext-lg lg:text-2xl font-bold text-white placeholder-gray-500 focus:outline-none border-b border-transparent hover:border-[#383842] focus:border-[#0078D4] transition-colors pb-1"
               />
               <textarea
                 value={form.description || ""}
@@ -727,11 +723,10 @@ export default function FormEditor({ initialForm, orgCode = "", onSaved }: FormE
                                       : [...currentSelected, opt];
                                     setPreviewAnswers({ ...previewAnswers, [q.id]: next });
                                   }}
-                                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                                    isChecked
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${isChecked
                                       ? "bg-[#0078D4] text-white border-[#0078D4]"
                                       : "bg-[#1E1E24] text-gray-300 border-[#2E2E36] hover:bg-[#282830]"
-                                  }`}
+                                    }`}
                                 >
                                   {opt}
                                 </button>

@@ -266,7 +266,7 @@ export default function ResourceDashboardClient({
   }, [resources]);
 
   return (
-    <main className="flex flex-col min-w-0 p-3 sm:p-6 flex-1 max-w-[1400px] mx-auto w-full">
+    <main className="flex flex-col min-w-0 p-3 sm:p-6 flex-1 max-w-[1600px] mx-auto w-full">
       {/* ================= HEADER ================= */}
       <header className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-5 sm:p-6 mb-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>

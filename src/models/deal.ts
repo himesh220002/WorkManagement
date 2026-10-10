@@ -2,6 +2,14 @@ import mongoose, { Schema, Model } from "mongoose";
 import { IDeal } from "./types";
 import { DealStage, DealStatus } from "./enums";
 
+const dealChecklistItemSchema = new Schema(
+  {
+    text: { type: String, required: true },
+    completed: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
+
 const dealSchema = new Schema<IDeal>(
   {
     companyId: { type: Schema.Types.ObjectId, ref: "Company", index: true },
@@ -18,6 +26,8 @@ const dealSchema = new Schema<IDeal>(
     amount: { type: Number, default: 0 },
     owner: { type: String, default: "Unassigned" }, // legacy
     ownerId: { type: Schema.Types.ObjectId, ref: "User", index: true },
+    contactName: { type: String, default: "" },
+    checklist: { type: [dealChecklistItemSchema], default: [] },
     client: {
       name: { type: String },
       industry: { type: String },

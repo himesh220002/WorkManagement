@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -19,7 +19,9 @@ import {
   updateDealStage,
   updateDeal,
   deleteDeal,
+  toggleDealChecklistItem,
 } from "@/actions";
+import KanbanChecklistField from "@/components/KanbanChecklistField";
 import PipelineCard from "@/components/PipelineCard";
 import RevenueExampleModal from "@/components/RevenueExampleModal";
 import { Badge } from "@/components/ui/Badge";
@@ -49,6 +51,8 @@ import {
   SlidersHorizontal,
   Shield,
   ShieldCheck,
+  Check,
+  Users,
 } from "lucide-react";
 
 ChartJS.register(
@@ -92,6 +96,10 @@ interface DealItem {
   name: string;
   amount: number;
   stage: string;
+  owner?: string;
+  contactName?: string;
+  campaignId?: string | null;
+  checklist?: { text: string; completed: boolean }[];
   client?: {
     name?: string;
     industry?: string;
@@ -105,6 +113,42 @@ interface DealItem {
   } | null;
   projectId?: string | null;
   pipelineId?: string | null;
+}
+
+const DEAL_AVATAR_BG = ["#E9C6F2", "#C9DEFA", "#F6CFA0", "#BEE6C8", "#F5C6C6", "#FFE9A8"];
+const DEAL_PRIORITY_STYLE: Record<string, string> = {
+  High: "bg-[#F7C5C3] text-[#8C1D18]",
+  Medium: "bg-[#FBE3A1] text-[#7A5200]",
+  Low: "bg-[#CDEACF] text-[#1C5E2A]",
+};
+
+function dealInitials(name?: string) {
+  if (!name) return "•";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function dealAvatarBg(name?: string) {
+  if (!name) return DEAL_AVATAR_BG[0];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 997;
+  return DEAL_AVATAR_BG[h % DEAL_AVATAR_BG.length];
+}
+
+function dealCode(deal: DealItem) {
+  const raw = String(deal?._id || deal?.name || "0000").replace(/[^a-zA-Z0-9]/g, "");
+  return `DL-${raw.slice(-4).toUpperCase().padStart(4, "0")}`;
+}
+
+function realDealChecks(deal: DealItem): { text: string; completed: boolean }[] {
+  if (!Array.isArray(deal?.checklist)) return [];
+  return deal.checklist
+    .map((c) => ({
+      text: String(c?.text || "").trim(),
+      completed: Boolean(c?.completed),
+    }))
+    .filter((c) => c.text.length > 0);
 }
 
 interface TargetItem {
@@ -208,6 +252,75 @@ export default function RevenueDashboardClient({
   const [draggedDealId, setDraggedDealId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Optimistic tick state: instant paint, server persists quietly in bg.
+  // Only stores completed flags keyed by item index — text always comes from server,
+  // so editing text in the modal never goes stale.
+  const [doneOverrides, setDoneOverrides] = useState<Record<string, Record<number, boolean>>>({});
+  const pendingToggles = useRef<Record<string, number>>({});
+
+  // Forget local overrides once server data catches up (and nothing is still in flight).
+  useEffect(() => {
+    setDoneOverrides((prev) => {
+      const ids = Object.keys(prev);
+      if (ids.length === 0) return prev;
+      let changed = false;
+      const next = { ...prev };
+      for (const id of ids) {
+        if ((pendingToggles.current[id] || 0) > 0) continue;
+        const serverDeal = deals.find((d) => d._id === id);
+        const serverChecks = realDealChecks(serverDeal as DealItem);
+        const ov = prev[id];
+        const pruned: Record<number, boolean> = {};
+        for (const [idxStr, val] of Object.entries(ov)) {
+          const idx = Number(idxStr);
+          if (serverChecks[idx]?.completed !== val) pruned[idx] = val;
+        }
+        if (Object.keys(pruned).length === 0) {
+          delete next[id];
+          changed = true;
+        } else if (Object.keys(pruned).length !== Object.keys(ov).length) {
+          next[id] = pruned;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [deals]);
+
+  const visibleDealChecks = (deal: DealItem) => {
+    const server = realDealChecks(deal);
+    const ov = doneOverrides[deal?._id];
+    if (!ov) return server;
+    return server.map((c, i) => (ov[i] === undefined ? c : { ...c, completed: ov[i] }));
+  };
+
+  const handleToggleDealCheck = (deal: DealItem, index: number) => {
+    if (isGuest) return;
+    // 1. paint instantly
+    setDoneOverrides((prev) => {
+      const ov = prev[deal._id] || {};
+      const cur = ov[index] ?? realDealChecks(deal)[index]?.completed ?? false;
+      return { ...prev, [deal._id]: { ...ov, [index]: !cur } };
+    });
+    // 2. persist in background without disturbing the UI
+    pendingToggles.current[deal._id] = (pendingToggles.current[deal._id] || 0) + 1;
+    toggleDealChecklistItem(deal._id, index)
+      .catch(() => {
+        // roll back to server truth on failure
+        setDoneOverrides((prev) => {
+          const ov = { ...(prev[deal._id] || {}) };
+          delete ov[index];
+          const next = { ...prev };
+          if (Object.keys(ov).length > 0) next[deal._id] = ov;
+          else delete next[deal._id];
+          return next;
+        });
+      })
+      .finally(() => {
+        pendingToggles.current[deal._id] = Math.max(0, (pendingToggles.current[deal._id] || 1) - 1);
+      });
+  };
 
   // Filtered Deals
   const filteredDeals = useMemo(() => {
@@ -722,11 +835,11 @@ export default function RevenueDashboardClient({
 
       {/* ===================== TAB 1: KANBAN BOARD ===================== */}
       {activeTab === "kanban" && (
-        <section className="flex flex-col min-w-0">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3">
+        <section className="flex flex-col min-w-0 space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-[#605E5C] dark:text-[#C8C6C4] uppercase tracking-wider">
-                Deals Pipeline Flow (Drag cards across stages)
+              <span className="text-[11px] font-bold text-[#6B5D43] uppercase tracking-widest">
+                Deals Pipeline Flow — drag cards across stages, tick boxes directly
               </span>
               {isPending && (
                 <span className="text-xs text-[#0078D4] animate-pulse font-medium">
@@ -739,188 +852,257 @@ export default function RevenueDashboardClient({
             </span>
           </div>
 
-          {/* Kanban Columns Horizontal Container */}
-          <div className="flex gap-4 overflow-x-auto pb-4 items-start min-h-[580px]">
-            {DEAL_STAGES.map((stage) => {
-              const stageDeals = filteredDeals.filter((d) => d.stage === stage);
-              const info = STAGE_CONFIG[stage];
-              const total = stageTotals[stage]?.sum || 0;
-              const isOver = dragOverStage === stage;
+          {/* Kraft-paper board — same pattern as sales */}
+          <div
+            className="rounded-[14px] border-[2px] border-[#2E2A24] shadow-[0_12px_32px_rgba(62,42,10,0.22)] overflow-hidden"
+            style={{ backgroundColor: "#FCE3A1" }}
+          >
+            <div className="flex overflow-x-auto items-stretch divide-x-[2px] divide-[#2E2A24]/85 divide-solid min-h-[560px]">
+              {DEAL_STAGES.map((stage) => {
+                const stageDeals = filteredDeals.filter((d) => d.stage === stage);
+                const info = STAGE_CONFIG[stage];
+                const total = stageTotals[stage]?.sum || 0;
+                const isOver = dragOverStage === stage;
 
-              return (
-                <div
-                  key={stage}
-                  onDragOver={(e) => handleDragOver(e, stage)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, stage)}
-                  className={`flex-1 min-w-[280px] max-w-[320px] bg-[#FAF9F8] dark:bg-[#1B1A19] rounded-[8px] border transition-all duration-150 flex flex-col ${isOver
-                    ? "border-[#0078D4] ring-2 ring-[#0078D4]/40 bg-[#EBF3FC]/60 dark:bg-[#1C2B3D]/60"
-                    : "border-[#E1DFDD] dark:border-[#3B3A39]"
+                return (
+                  <div
+                    key={stage}
+                    onDragOver={(e) => handleDragOver(e, stage)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, stage)}
+                    className={`flex-1 min-w-[272px] max-w-[330px] flex flex-col transition-colors ${
+                      isOver ? "bg-[#FFF3C0]/70" : ""
                     }`}
-                >
-                  {/* Column Header */}
-                  <div className="p-3 border-b border-[#E1DFDD] dark:border-[#3B3A39] flex items-center justify-between bg-white dark:bg-[#201F1E] rounded-t-[8px]">
-                    <div>
-                      <div className="flex items-center gap-2">
+                  >
+                    <div className="px-3 pt-5 pb-3 text-center">
+                      <div className="flex items-center justify-center gap-1.5 text-[#2E2A24]">
                         <span
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          className="w-2.5 h-2.5 rounded-full shrink-0 border border-[#2E2A24]/50"
                           style={{ backgroundColor: info.accentColor }}
                         />
-                        <h3 className="font-semibold text-xs text-[#242424] dark:text-[#FFFFFF] truncate">
+                        <span className="font-extrabold text-[14px] leading-tight tracking-tight truncate">
                           {stage}
-                        </h3>
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-[#F3F2F1] dark:bg-[#292827] text-[#605E5C] dark:text-[#C8C6C4]">
+                        </span>
+                        <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-[#FFF6D9] border border-[#2E2A24]/40 text-[#2E2A24]">
                           {stageDeals.length}
                         </span>
                       </div>
-                      <div className="text-[11px] font-bold text-[#107C10] dark:text-[#54B054] mt-1">
+                      <div className="mt-1 text-[11px] font-extrabold text-[#1C5E2A]">
                         ${total.toLocaleString()}
                       </div>
+                      {!isGuest && (
+                        <button
+                          onClick={() => openAddDealModal(stage)}
+                          className="mt-1.5 text-[10px] font-bold text-[#2E2A24] underline hover:no-underline cursor-pointer"
+                          title={`Add deal to ${stage}`}
+                        >
+                          + Add deal here
+                        </button>
+                      )}
                     </div>
 
-                    {isGuest ? (
-                      <span className="p-1 text-gray-300 dark:text-gray-600 cursor-not-allowed">
-                        <Plus className="w-4 h-4" />
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => openAddDealModal(stage)}
-                        className="p-1 text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#0078D4] dark:hover:text-[#479EF5] hover:bg-[#F3F2F1] dark:hover:bg-[#292827] rounded-[4px] transition-colors cursor-pointer"
-                        title={`Add deal to ${stage}`}
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
+                    <div className="relative h-[2px] bg-[#2E2A24] mx-0">
+                      <span className="absolute -left-[5px] -top-[3px] w-[8px] h-[8px] rounded-full bg-[#2E2A24]" />
+                      <span className="absolute -right-[4px] -top-[3px] w-[8px] h-[8px] rounded-full bg-[#2E2A24]" />
+                    </div>
 
-                  {/* Cards Drop Area */}
-                  <div className="p-2.5 space-y-2.5 flex-1 min-h-[300px] overflow-y-auto max-h-[70vh]">
-                    {stageDeals.map((deal) => {
-                      const priority = deal.metadata?.priority || "Medium";
-                      const isDragging = draggedDealId === deal._id;
+                    <div className="p-4 space-y-4 flex-1">
+                      {stageDeals.map((deal, idx) => {
+                        const priority = deal.metadata?.priority || "Medium";
+                        const isDragging = draggedDealId === deal._id;
+                        const checks = visibleDealChecks(deal);
 
-                      return (
-                        <div
-                          key={deal._id}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, deal._id)}
-                          onDragEnd={handleDragEnd}
-                          className={`bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] p-3 shadow-sm hover:shadow-md hover:border-[#0078D4] transition-all cursor-grab active:cursor-grabbing group ${isDragging ? "opacity-40 scale-95" : ""
+                        return (
+                          <div
+                            key={deal._id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, deal._id)}
+                            onDragEnd={handleDragEnd}
+                            style={{
+                              transform: `rotate(${idx % 2 === 0 ? "-0.6deg" : "0.6deg"})`,
+                            }}
+                            className={`group relative bg-[#FFFEF7] rounded-[10px] border border-[#E2D3A3] p-3.5 shadow-[2px_3px_0_rgba(46,42,36,0.22),0_10px_20px_rgba(46,42,36,0.10)] hover:shadow-[2px_5px_0_rgba(46,42,36,0.25),0_14px_24px_rgba(46,42,36,0.14)] hover:-translate-y-0.5 transition-all cursor-grab active:cursor-grabbing ${
+                              isDragging ? "opacity-40 scale-[0.98]" : ""
                             }`}
-                        >
-                          <div className="flex items-start justify-between gap-2 mb-1.5">
-                            <span className="font-semibold text-xs text-[#242424] dark:text-[#FFFFFF] leading-snug line-clamp-2">
-                              {deal.name}
-                            </span>
-                            <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 shrink-0">
-                              <button
-                                type="button"
-                                draggable={false}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  setEditingDeal(deal);
-                                }}
-                                className="p-1 text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#0078D4] transition-colors rounded cursor-pointer"
-                                title={canManageRevenue ? "Edit Deal" : "Inspect / Advance Deal Stage"}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-mono text-[10px] font-bold tracking-wide text-[#6B5D43]">
+                                {dealCode(deal)}
+                              </span>
+                              <span
+                                className={`text-[10px] font-extrabold px-2 py-[2px] rounded-[4px] leading-none ${DEAL_PRIORITY_STYLE[priority] || DEAL_PRIORITY_STYLE.Medium}`}
                               >
-                                <Edit3 className="w-3.5 h-3.5 pointer-events-none" />
-                              </button>
-                              {!isGuest && canManageRevenue && (
-                                <form
-                                  action={deleteDeal}
-                                  onSubmit={(e) => {
-                                    if (!window.confirm(`Delete deal "${deal.name}"?`)) {
-                                      e.preventDefault();
-                                    }
-                                  }}
-                                >
-                                  <input type="hidden" name="dealId" value={deal._id} />
-                                  <button
-                                    type="submit"
-                                    className="p-1 text-[#605E5C] dark:text-[#C8C6C4] hover:text-[#D13438] transition-colors rounded cursor-pointer"
-                                    title="Delete Deal"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </form>
+                                {priority}
+                              </span>
+                            </div>
+
+                            <h4 className="mt-1.5 font-extrabold text-[14px] leading-snug text-[#221C12] line-clamp-2">
+                              {deal.name}
+                            </h4>
+                            <div className="mt-0.5 text-[13px] font-extrabold text-[#1C5E2A]">
+                              ${(deal.amount || 0).toLocaleString()}
+                            </div>
+
+                            {/* Info rows — not checkboxes */}
+                            <div className="mt-2 space-y-1 text-[11px] font-medium text-[#4A4132]">
+                              <div className="flex items-center gap-1.5 truncate">
+                                <Users className="w-3 h-3 text-[#6B5D43] shrink-0" />
+                                <span className="truncate">Contact: {deal.contactName || deal.owner || "—"}</span>
+                              </div>
+                              {deal.client?.name && (
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <Building2 className="w-3 h-3 text-[#6B5D43] shrink-0" />
+                                  <span className="truncate">{deal.client.name}</span>
+                                </div>
+                              )}
+                              {deal.expectedCloseDate && (
+                                <div className="flex items-center gap-1.5">
+                                  <Calendar className="w-3 h-3 text-[#6B5D43] shrink-0" />
+                                  <span>
+                                    Close: {new Date(deal.expectedCloseDate).toLocaleDateString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                      year: "numeric",
+                                    })}
+                                  </span>
+                                </div>
                               )}
                             </div>
+
+                            {/* Real checklist items only — tick directly on board */}
+                            {checks.length > 0 && (
+                              <div className="mt-2.5 space-y-[7px] pt-2.5 border-t border-dashed border-[#E2D3A3]">
+                                {checks.map((c, cIdx) => {
+                                  return (
+                                    <div key={`${c.text}-${cIdx}`} className="flex items-center gap-2 min-w-0">
+                                      <button
+                                        type="button"
+                                        draggable={false}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleToggleDealCheck(deal, cIdx);
+                                        }}
+                                        disabled={isGuest}
+                                        title={c.completed ? "Untick" : "Tick"}
+                                        className={`w-[15px] h-[15px] shrink-0 rounded-[3px] border-[1.5px] flex items-center justify-center transition-colors cursor-pointer ${
+                                          c.completed
+                                            ? "bg-[#107C10] border-[#107C10] text-white"
+                                            : "border-[#9A8C6B] bg-white text-transparent hover:border-[#2E2A24]"
+                                        } ${isGuest ? "cursor-not-allowed" : ""}`}
+                                      >
+                                        <Check className="w-2.5 h-2.5" strokeWidth={4} />
+                                      </button>
+                                      <span
+                                        className={`truncate text-[12px] font-medium text-[#4A4132] ${
+                                          c.completed ? "line-through opacity-60" : ""
+                                        }`}
+                                      >
+                                        {c.text}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            <div className="mt-3 pt-2.5 border-t border-dashed border-[#E2D3A3] flex items-center gap-2">
+                              <span
+                                className="w-6 h-6 rounded-full border border-[#2E2A24]/40 flex items-center justify-center text-[9px] font-extrabold text-[#2E2A24] shrink-0"
+                                style={{ backgroundColor: dealAvatarBg(deal.owner || deal.contactName) }}
+                              >
+                                {dealInitials(deal.owner || deal.contactName)}
+                              </span>
+                              <span className="truncate text-[12px] font-semibold text-[#2E2A24]">
+                                {deal.owner || "Unassigned"}
+                              </span>
+                              <span className="ml-auto flex items-center gap-0.5 opacity-50 2xl:opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  type="button"
+                                  draggable={false}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    setEditingDeal(deal);
+                                  }}
+                                  className="p-1.5 text-[#6B5D43] hover:text-[#221C12] hover:bg-black/5 rounded-md transition-colors cursor-pointer"
+                                  title={canManageRevenue ? "Edit Deal" : "Inspect Deal"}
+                                >
+                                  <Edit3 className="w-3.5 h-3.5 pointer-events-none" />
+                                </button>
+                                {!isGuest && canManageRevenue && (
+                                  <span onMouseDown={(e) => e.stopPropagation()} className="inline-flex">
+                                    <form
+                                      action={deleteDeal}
+                                      onSubmit={(e) => {
+                                        if (!window.confirm(`Delete deal "${deal.name}"?`)) {
+                                          e.preventDefault();
+                                        }
+                                      }}
+                                    >
+                                      <input type="hidden" name="dealId" value={deal._id} />
+                                      <button
+                                        type="submit"
+                                        className="p-1.5 text-[#6B5D43] hover:text-[#B42318] hover:bg-red-500/10 rounded-md transition-colors cursor-pointer"
+                                        title="Delete Deal"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </form>
+                                  </span>
+                                )}
+                              </span>
+                            </div>
                           </div>
+                        );
+                      })}
 
-                          {/* Deal Value & Priority Badge */}
-                          <div className="flex items-center justify-between gap-2 mb-2">
-                            <span className="text-sm font-bold text-[#107C10] dark:text-[#54B054]">
-                              ${(deal.amount || 0).toLocaleString()}
-                            </span>
-                            <span
-                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-[3px] ${priority === "High"
-                                ? "bg-[#FDE7E9] text-[#D13438] dark:bg-[#44171A] dark:text-[#F1707B]"
-                                : priority === "Low"
-                                  ? "bg-[#DFF6DD] text-[#107C10] dark:bg-[#0F3818] dark:text-[#54B054]"
-                                  : "bg-[#FFF4CE] text-[#8F6B00] dark:bg-[#4A3E09] dark:text-[#FFD335]"
-                                }`}
-                            >
-                              {priority}
-                            </span>
-                          </div>
-
-                          {/* Client & Metadata Details */}
-                          <div className="space-y-1 text-[11px] text-[#605E5C] dark:text-[#C8C6C4] pt-2 border-t border-[#F3F2F1] dark:border-[#292827]">
-                            {deal.client?.name && (
-                              <div className="flex items-center gap-1.5 truncate">
-                                <Building2 className="w-3 h-3 text-[#0078D4] shrink-0" />
-                                <span className="truncate">{deal.client.name}</span>
-                              </div>
-                            )}
-
-                            {deal.expectedCloseDate && (
-                              <div className="flex items-center gap-1.5">
-                                <Calendar className="w-3 h-3 text-[#605E5C] shrink-0" />
-                                <span>
-                                  Close: {new Date(deal.expectedCloseDate).toLocaleDateString("en-US", {
-                                    month: "short",
-                                    day: "numeric",
-                                    year: "numeric",
-                                  })}
-                                </span>
-                              </div>
-                            )}
-
-                            {deal.projectId && (
-                              <div className="flex items-center gap-1.5 truncate text-[#0078D4] dark:text-[#479EF5]">
-                                <FolderKanban className="w-3 h-3 shrink-0" />
-                                <span className="truncate">
-                                  {options.projects.find((p) => p.id === deal.projectId)?.name || "Project"}
-                                </span>
-                              </div>
-                            )}
-
-                            {deal.pipelineId && (
-                              <div className="flex items-center gap-1.5 truncate text-[#5C2D91] dark:text-[#B4A0FF]">
-                                <Workflow className="w-3 h-3 shrink-0" />
-                                <span className="truncate">
-                                  {pipelines.find((p) => p._id === deal.pipelineId)?.name || "Pipeline"}
-                                </span>
-                              </div>
-                            )}
-                          </div>
+                      {stageDeals.length === 0 && (
+                        <div className="border-2 border-dashed border-[#2E2A24]/30 rounded-[10px] p-5 text-center bg-[#FFF7D6]/60">
+                          <p className="text-[12px] font-bold text-[#7A6B4F]">Empty stage</p>
+                          <p className="text-[11px] text-[#8A7D61] mt-0.5">Drag a deal here</p>
                         </div>
-                      );
-                    })}
+                      )}
 
-                    {stageDeals.length === 0 && (
-                      <div className="border border-dashed border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] p-4 text-center text-xs text-[#8A8886] flex flex-col items-center justify-center min-h-[140px]">
-                        <GripVertical className="w-4 h-4 text-[#C8C6C4] mb-1" />
-                        <span>No deals in this stage</span>
-                        <span className="text-[10px] text-[#A19F9D]">Drag cards here</span>
-                      </div>
-                    )}
+                      {isOver && stageDeals.length > 0 && (
+                        <div className="border-2 border-dashed border-[#2E2A24]/60 rounded-[10px] p-3 text-center text-[11px] font-bold text-[#2E2A24] bg-white/60">
+                          Drop to move to {stage}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+
+            <div className="border-t-[2px] border-[#2E2A24] bg-[#F9D98C] px-4 py-3 flex justify-center">
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 bg-[#FFF3C9] border-[1.5px] border-[#2E2A24] rounded-[8px] px-4 py-2 shadow-[2px_2px_0_rgba(46,42,36,0.3)]">
+                <span className="flex items-center gap-2 text-[11px] font-bold text-[#2E2A24]">
+                  <span className="font-extrabold">Priority legend:</span>
+                  <span className="px-1.5 py-0.5 rounded-[4px] bg-[#F7C5C3] text-[#8C1D18]">High</span>
+                  <span className="px-1.5 py-0.5 rounded-[4px] bg-[#FBE3A1] text-[#7A5200] border border-[#2E2A24]/20">Medium</span>
+                  <span className="px-1.5 py-0.5 rounded-[4px] bg-[#CDEACF] text-[#1C5E2A]">Low</span>
+                </span>
+                <span className="hidden sm:inline w-px h-5 bg-[#2E2A24]/40" />
+                <span className="flex items-center gap-2 text-[11px] font-bold text-[#2E2A24]">
+                  <span className="font-extrabold">Owner:</span>
+                  <span className="flex -space-x-1.5">
+                    {filteredDeals.slice(0, 3).map((d) => (
+                      <span
+                        key={d._id}
+                        title={d.owner}
+                        className="w-5 h-5 rounded-full border border-[#2E2A24]/50 flex items-center justify-center text-[7px] font-extrabold"
+                        style={{ backgroundColor: dealAvatarBg(d.owner) }}
+                      >
+                        {dealInitials(d.owner)}
+                      </span>
+                    ))}
+                  </span>
+                  {filteredDeals.length > 3 && <span className="text-[#6B5D43]">+ more</span>}
+                </span>
+              </div>
+            </div>
           </div>
         </section>
       )}
@@ -1366,6 +1548,31 @@ export default function RevenueDashboardClient({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-semibold text-[#242424] dark:text-[#FFFFFF] mb-1">
+                    Deal Owner
+                  </label>
+                  <input
+                    type="text"
+                    name="owner"
+                    placeholder="e.g. Alex Morgan"
+                    className="w-full p-2 bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#242424] dark:text-[#FFFFFF] mb-1">
+                    Contact Name
+                  </label>
+                  <input
+                    type="text"
+                    name="contactName"
+                    placeholder="e.g. Priya Sharma"
+                    className="w-full p-2 bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-semibold text-[#242424] dark:text-[#FFFFFF] mb-1">
                     Associated Project
                   </label>
                   <select
@@ -1397,6 +1604,13 @@ export default function RevenueDashboardClient({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#242424] dark:text-[#FFFFFF] mb-1">
+                  Kanban Checklist
+                </label>
+                <KanbanChecklistField key="add-deal" initial={[]} />
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-[#E1DFDD] dark:border-[#3B3A39]">
@@ -1607,6 +1821,42 @@ export default function RevenueDashboardClient({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-semibold text-[#242424] dark:text-[#FFFFFF] mb-1">
+                    Deal Owner
+                  </label>
+                  <input
+                    type="text"
+                    name="owner"
+                    defaultValue={editingDeal.owner || ""}
+                    placeholder="e.g. Alex Morgan"
+                    className="w-full p-2 bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#242424] dark:text-[#FFFFFF] mb-1">
+                    Contact Name
+                  </label>
+                  <input
+                    type="text"
+                    name="contactName"
+                    defaultValue={editingDeal.contactName || ""}
+                    placeholder="e.g. Priya Sharma"
+                    className="w-full p-2 bg-white dark:bg-[#292827] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[4px] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block font-semibold text-[#242424] dark:text-[#FFFFFF] mb-1">
+                  Kanban Checklist
+                </label>
+                <KanbanChecklistField
+                  key={editingDeal._id}
+                  initial={Array.isArray(editingDeal.checklist) ? editingDeal.checklist : []}
+                />
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-[#E1DFDD] dark:border-[#3B3A39]">
