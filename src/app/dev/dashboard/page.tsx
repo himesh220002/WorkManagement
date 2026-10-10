@@ -1,5 +1,5 @@
 import connectToDatabase from "@/lib/mongodb";
-import { Project, TaskNode, Pipeline, Cycle } from "@/models";
+import { Project, TaskNode, Pipeline, Cycle, Team, User } from "@/models";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import DevDashboardClient from "@/app/dev/dashboard/DevDashboardClient";
 import { fetchWithCache } from "@/lib/cache";
@@ -20,11 +20,22 @@ export default async function DevDashboardPage(
   let tasks: any[] = [];
   let pipelines: any[] = [];
   let cycles: any[] = [];
+  let teams: any[] = [];
+  let members: any[] = [];
 
   try {
     projects = await fetchWithCache(`dev_projects:${cId}`, 30, () =>
       Project.find(tenantFilter).lean()
     );
+
+    [teams, members] = await Promise.all([
+      fetchWithCache(`dev_teams:${cId}`, 30, () =>
+        Team.find(tenantFilter).select("name members").lean()
+      ),
+      fetchWithCache(`dev_members:${cId}`, 30, () =>
+        User.find(tenantFilter).select("name role email").lean()
+      ),
+    ]);
     
     if (projects.length > 0) {
       const projectIds = projects.map(p => p._id);
@@ -198,6 +209,21 @@ export default async function DevDashboardPage(
     projectId: t.projectId ? t.projectId.toString() : null,
     pipelineId: t.pipelineId ? t.pipelineId.toString() : null,
     cycleId: t.cycleId ? t.cycleId.toString() : null,
+    stageRef: t.stageRef || "",
+    assigneeIds: Array.isArray(t.assigneeIds) ? t.assigneeIds.map((a: any) => a.toString()) : [],
+    subtasks: Array.isArray(t.subtasks)
+      ? t.subtasks.map((s: any) => ({
+          title: String(s.title || ""),
+          status: s.status || "Open",
+          assignees: Array.isArray(s.assignees)
+            ? s.assignees.map((a: any) => ({
+                userId: String(a.userId || ""),
+                name: String(a.name || ""),
+                teamName: String(a.teamName || ""),
+              }))
+            : [],
+        }))
+      : [],
     startDate: t.startDate ? new Date(t.startDate).toISOString() : null,
     endDate: t.endDate ? new Date(t.endDate).toISOString() : null,
   }));
@@ -240,12 +266,36 @@ export default async function DevDashboardPage(
     endDate: c.endDate ? new Date(c.endDate).toISOString() : null,
   }));
 
+  // Cross-team directory for assignment pickers: every member under each team.
+  const cleanTeams = teams.map((t: any) => ({
+    _id: t._id.toString(),
+    name: t.name,
+    memberIds: Array.isArray(t.members) ? t.members.map((m: any) => m.toString()) : [],
+  }));
+  const memberTeamNames = new Map<string, string[]>();
+  for (const t of teams) {
+    for (const m of (t.members || [])) {
+      const key = m.toString();
+      if (!memberTeamNames.has(key)) memberTeamNames.set(key, []);
+      memberTeamNames.get(key)!.push(t.name);
+    }
+  }
+  const cleanMembers = members.map((u: any) => ({
+    id: u._id.toString(),
+    name: u.name,
+    role: u.role || "member",
+    email: u.email || "",
+    teamNames: memberTeamNames.get(u._id.toString()) || [],
+  }));
+
   return (
     <DevDashboardClient
       projects={cleanProjects}
       tasks={cleanTasks}
       pipelines={cleanPipelines}
       cycles={cleanCycles}
+      teams={cleanTeams}
+      members={cleanMembers}
       avgPipelineProgress={avgPipelineProgress}
       avgCycleTime={avgCycleTime}
       selectedProjectId={selectedProjectId}

@@ -8,6 +8,7 @@ const pipelineSchema = new Schema<IPipeline>(
     projectId: { type: Schema.Types.ObjectId, ref: "Project", index: true },
     teamId: { type: Schema.Types.ObjectId, ref: "Team", index: true },
     taskId: { type: Schema.Types.ObjectId, ref: "TaskNode" },
+    goalId: { type: Schema.Types.ObjectId, ref: "Goal", index: true },
     name: { type: String, required: true },
     category: {
       type: String,
@@ -59,7 +60,8 @@ const pipelineSchema = new Schema<IPipeline>(
 );
 
 if (process.env.NODE_ENV === "development" && mongoose.models.Pipeline) {
-  if (!mongoose.models.Pipeline.schema.paths["ownerId"]) {
+  const paths = (mongoose.models.Pipeline.schema as any).paths || {};
+  if (!paths.ownerId || !paths.goalId) {
     delete mongoose.models.Pipeline;
   }
 }

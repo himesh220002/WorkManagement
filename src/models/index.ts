@@ -13,6 +13,7 @@ export { Assignment } from "./assignment";
 export { ActivityLog } from "./activityLog";
 export { StatusSnapshot } from "./statusSnapshot";
 export { Pipeline } from "./pipeline";
+export { PipelineProgressSnapshot } from "./pipelineSnapshot";
 export { Deal } from "./deal";
 export { Lead } from "./lead";
 export { Campaign } from "./campaign";

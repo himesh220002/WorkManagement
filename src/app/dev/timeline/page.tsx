@@ -1,5 +1,5 @@
 import connectToDatabase from "@/lib/mongodb";
-import { Pipeline, Project, Team, TaskNode, User } from "@/models";
+import { Pipeline, Project, Team, TaskNode, User, Goal } from "@/models";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import TimelineClient from "@/app/dev/timeline/TimelineClient";
 import { fetchWithCache } from "@/lib/cache";
@@ -15,9 +15,10 @@ export default async function TimelinePage() {
   let teams: any[] = [];
   let taskNodes: any[] = [];
   let users: any[] = [];
+  let goals: any[] = [];
 
   try {
-    [tasks, projects, teams, taskNodes, users] = await Promise.all([
+    [tasks, projects, teams, taskNodes, users, goals] = await Promise.all([
       fetchWithCache(`timeline_tasks:${cId}`, 25, () =>
         Pipeline.find(tenantFilter).populate("projectId teamId taskId").lean()
       ),
@@ -28,10 +29,13 @@ export default async function TimelinePage() {
         Team.find(tenantFilter, { name: 1 }).lean()
       ),
       fetchWithCache(`timeline_tasknodes:${cId}`, 30, () =>
-        TaskNode.find(tenantFilter, { name: 1, status: 1, pipelineId: 1 }).lean()
+        TaskNode.find(tenantFilter, { name: 1, status: 1, progress: 1, pipelineId: 1, subtasks: 1 }).lean()
       ),
       fetchWithCache(`timeline_users:${cId}`, 30, () =>
         User.find(tenantFilter, { name: 1, role: 1, position: 1, rank: 1 }).lean()
+      ),
+      fetchWithCache(`timeline_goals:${cId}`, 30, () =>
+        Goal.find(tenantFilter, { title: 1, status: 1 }).sort({ createdAt: -1 }).lean()
       ),
     ]);
   } catch (err) {
@@ -79,15 +83,25 @@ export default async function TimelinePage() {
       id: u._id.toString(),
       name: `${u.name} - ${u.role} ${u.position ? `(${u.position})` : ''} - Rank ${u.rank || 1}`
     })),
+    goals: goals.map((g: any) => ({ id: g._id.toString(), title: g.title })),
   };
 
-  // Granular deliverables linked to pipelines (status + pipelineId drive progress bars)
-  const linkedTasks = taskNodes.map((t: any) => ({
-    id: t._id.toString(),
-    name: t.name,
-    status: t.status || "Todo",
-    pipelineId: t.pipelineId ? t.pipelineId.toString() : null,
-  }));
+  // Granular deliverables linked to pipelines (status + branches drive progress bars)
+  const linkedTasks = taskNodes.map((t: any) => {
+    const subs = Array.isArray(t.subtasks) ? t.subtasks : [];
+    return {
+      id: t._id.toString(),
+      name: t.name,
+      status: t.status || "Todo",
+      progress: Number(t.progress || 0),
+      pipelineId: t.pipelineId ? t.pipelineId.toString() : null,
+      subtasks: subs.map((s: any) => ({
+        title: String(s.title || ""),
+        status: s.status || "Open",
+        progress: Number(s.progress || 0),
+      })),
+    };
+  });
 
   const projectMetrics = projects.map((p: any) => {
     const pIdStr = p._id.toString();

@@ -6,3 +6,40 @@ The update to upgradechangecontext.json is clean, structurally sound, and suppor
 You are incredibly close to 100% complete parity. Here is how you can close the two partial implementations during the Phase 7 workflow:
 1. Tracking Gantt Baseline: In ParallelPipelineRoadmap.tsx, render an absolute-positioned, semi-transparent row directly beneath the active task bar. Use a background utility like bg-slate-400/30 to serve as the static baseline "ghost bar."
 2. Detail Gantt Slack Time: In TimelineClient.tsx, introduce a minor date-diff function (Late Finish - Early Finish) and render the result as a "Schedule Slack / Float" counter badge inside the task detail drawer.
+
+
+
+the table should show line projects [pipeline name[inside this all the stages [sub branches]]] the sub branch dragable must be in grid of 3 so it will be in compact design ,,, can u show the desing of the table im thinking of +---------------------------------------------------------------------------------------------------------------------------------------------------------+
+| [v] TASK/PROJECT: UI Design & Wireframes   STATUS: [In Progress v]   EST: 120   ACTUAL: 1   PIPELINE: [devpipe1 v]   TOTAL: [====---- 59%]   [+ Branch]  |
++---------------------------------------------------------------------------------------------------------------------------------------------------------+
+|  |                                                                                                                                                      |
+|  +--> PIPELINE: devpipe1                                                                                 PIPELINE PROGRESS: [======-- 64%] (5 Branches) |
+|       |                                                                                                                                                 |
+|       +-- STAGE 1: Discovery & Research (2) ----------------------------------------------------------------------- STAGE PROGRESS: [======-- 60%] -----+   |
+|       |   GRID OF 3:                                                                                                                                    |
+|       |   +-----------------------------+     +-----------------------------+     +-----------------------------+                                       |
+|       |   | [::] subbranch-wireframe-01 |     | [::] subbranch-userflow     |     | [+ Drop / Add Sub-branch]   |                                       |
+|       |   | Prog: [====------] 40%      |     | Prog: [========--] 80%      |     |                             |                                       |
+|       |   | Assignee: Himesh            |     | Assignee: Dev Team          |     |                             |                                       |
+|       |   | Status: Open            [x] |     | Status: Open            [x] |     |                             |                                       |
+|       |   +-----------------------------+     +-----------------------------+     +-----------------------------+                                       |
+|       +-----------------------------------------------------------------------------------------------------------------------------------------+   |
+|       |                                                                                                                                                 |
+|       +-- STAGE 2: Component Architecture (3) --------------------------------------------------------------------- STAGE PROGRESS: [=====--- 58%] -----+   |
+|       |   GRID OF 3:                                                                                                                                    |
+|       |   +-----------------------------+     +-----------------------------+     +-----------------------------+                                       |
+|       |   | [::] subbranch1             |     | [::] subbranch2             |     | [::] subbranch3             |                                       |
+|       |   | Prog: [=====-----] 50%      |     | Prog: [==========] 100%     |     | Prog: [==--------] 25%      |                                       |
+|       |   | Assignee: Himesh Satyam     |     | Assignee: UIUX_Dev          |     | Assignee: Unassigned        |                                       |
+|       |   | Status: Open            [x] |     | Status: Review          [x] |     | Status: Open            [x] |                                       |
+|       |   +-----------------------------+     +-----------------------------+     +-----------------------------+                                       |
+|       |   +-----------------------------+                                                                                                               |
+|       |   | [+ New Sub-Branch]          |                                                                                                               |
+|       |   +-----------------------------+                                                                                                               |
+|       +-----------------------------------------------------------------------------------------------------------------------------------------+   |
+|       |                                                                                                                                                 |
+|       +-- STAGE 3: QA & Review (0) --------------------------------------------------------------------------------- STAGE PROGRESS: [--------  0%] -----+   |
+|           [ Drop sub-branches here to update stage & pipeline progress...                                                                             ] |
++---------------------------------------------------------------------------------------------------------------------------------------------------------+
+| [>] TASK/PROJECT: Frontend Component Development   STATUS: [Todo v]        EST: 0     ACTUAL: 0   PIPELINE: [devpipe1 v]   TOTAL: [--------  0%] [+ Branch] |
++---------------------------------------------------------------------------------------------------------------------------------------------------------+  [Image 1] ,, i have increased the bar but it reverted back to 0  check if the db is accepting such ,,, 

@@ -30,5 +30,12 @@ const leadSchema = new Schema<ILead>(
   { timestamps: true }
 );
 
+if (process.env.NODE_ENV === "development" && mongoose.models.Lead) {
+  const paths = (mongoose.models.Lead.schema as any).paths || {};
+  if (!paths.checklist || !paths.contactName || !paths.priority) {
+    delete mongoose.models.Lead;
+  }
+}
+
 export const Lead: Model<ILead> =
   mongoose.models.Lead || mongoose.model<ILead>("Lead", leadSchema);

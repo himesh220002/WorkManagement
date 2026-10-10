@@ -189,6 +189,16 @@ export interface ITask {
   assignee?: string;
   assignees?: (Types.ObjectId | string)[];
   assigneeIds?: (Types.ObjectId | string)[];
+  /** Structural pipeline stage (e.g. "UI Design" = Pt2 of its pipeline). */
+  stageRef?: string;
+  /** Deep sub-division branches with cross-team assignees. */
+  subtasks?: {
+    title: string;
+    status?: string;
+    progress?: number;
+    stage?: string;
+    assignees?: { userId?: string; name: string; teamName?: string }[];
+  }[];
   labels?: string[];
   order?: number;
   createdAt?: Date;
@@ -292,6 +302,7 @@ export interface IPipeline {
   projectId?: Types.ObjectId | string;
   teamId?: Types.ObjectId | string;
   taskId?: Types.ObjectId | string;
+  goalId?: Types.ObjectId | string;
   name: string;
   category: PipelineCategoryType;
   owner?: string;

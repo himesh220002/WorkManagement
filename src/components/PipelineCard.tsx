@@ -11,7 +11,7 @@ import {
   getAssigneeOptions,
 } from "@/actions";
 import { PREDEFINED_PIPELINE_TASKS } from "@/utils/taskConstants";
-import { computePipelineProgress } from "@/utils/pipelineProgress";
+import { computePipelineProgress, taskCompletion } from "@/utils/pipelineProgress";
 import { StatusBadge, Badge } from "@/components/ui/Badge";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import {
@@ -44,7 +44,7 @@ export default function PipelineCard({
   pipeline: any;
   currentRole?: string;
   /** Granular TaskNodes linked via pipelineId — blended into progress with the checklist. */
-  linkedTasks?: Array<{ status?: string }>;
+  linkedTasks?: Array<{ status?: string; progress?: number; name?: string; subtasks?: Array<{ progress?: number; status?: string; title?: string }> }>;
 }) {
   const role = (currentRole || "manager").toLowerCase();
   const canManagePipeline = ["owner", "manager", "superuser"].includes(role);
@@ -62,6 +62,21 @@ export default function PipelineCard({
   const [editEnd, setEditEnd] = useState("");
   const [isSavingDates, setIsSavingDates] = useState(false);
   const [datesFeedback, setDatesFeedback] = useState<string | null>(null);
+
+  // Daily-delta triple: day-before -> yesterday -> today (lazy-loaded on open)
+  const [history, setHistory] = useState<{ points: { date: string; value: number }[]; deltas: number[] } | null>(null);
+  useEffect(() => {
+    if (!isModalOpen) return;
+    setHistory(null);
+    const pid = pipeline?._id ? String(pipeline._id) : "";
+    if (!pid) return;
+    fetch(`/api/progress-history?scope=pipeline&id=${encodeURIComponent(pid)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.success) setHistory({ points: d.points || [], deltas: d.deltas || [] });
+      })
+      .catch(() => {});
+  }, [isModalOpen, pipeline?._id]);
 
   const toDateInput = (v: any) => {
     if (!v) return "";
@@ -496,6 +511,73 @@ export default function PipelineCard({
                     </div>
                   </div>
                 </div>
+
+                {/* Daily rhythm: day-before -> yesterday -> today +deltas */}
+                <div className="bg-[#FAF9F8] dark:bg-[#292827] p-4 rounded-[8px] border border-[#E1DFDD] dark:border-[#3B3A39]">
+                  <span className="text-xs font-semibold text-[#605E5C] dark:text-[#C8C6C4] uppercase tracking-wider block mb-2">
+                    Daily Rhythm (5pm snapshots)
+                  </span>
+                  {!history ? (
+                    <p className="text-[11px] text-[#A19F9D]">Loading daily pairs…</p>
+                  ) : history.points.length === 0 ? (
+                    <p className="text-[11px] text-[#A19F9D]">
+                      No snapshots yet — the daily 5pm job starts the series tonight.
+                    </p>
+                  ) : (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {history.points.map((p, i) => (
+                        <span key={p.date} className="flex items-center gap-1.5">
+                          <span className="text-center">
+                            <span className="block text-sm font-extrabold text-[#242424] dark:text-[#FFFFFF] tabular-nums">
+                              {p.value}%
+                            </span>
+                            <span className="block text-[9px] text-[#A19F9D] font-medium">
+                              {p.date.slice(5).replace("-", "/")}
+                            </span>
+                          </span>
+                          {i < history.points.length - 1 && (
+                            <span className="flex flex-col items-center mx-0.5">
+                              <span className="text-gray-300 dark:text-gray-600">→</span>
+                              <span className={`text-[10px] font-extrabold tabular-nums ${history.deltas[i] > 0 ? "text-[#107C10]" : history.deltas[i] < 0 ? "text-[#D13438]" : "text-[#A19F9D]"}`}>
+                                {history.deltas[i] > 0 ? `+${history.deltas[i]}%` : `${history.deltas[i]}%`}
+                              </span>
+                            </span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Linked granular deliverables (dev-dashboard tasks) */}
+                {linkedTasks.length > 0 && (
+                  <div className="bg-[#FAF9F8] dark:bg-[#292827] p-4 rounded-[8px] border border-[#E1DFDD] dark:border-[#3B3A39]">
+                    <span className="text-xs font-semibold text-[#605E5C] dark:text-[#C8C6C4] uppercase tracking-wider block mb-2">
+                      Linked Deliverables ({linkedTasks.length})
+                    </span>
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-0.5">
+                      {linkedTasks.map((t: any, i: number) => {
+                        const pct = taskCompletion(t);
+                        return (
+                          <div key={i} className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] px-2.5 py-2">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <span className="text-xs font-semibold text-[#242424] dark:text-[#FFFFFF] truncate" title={t.name}>
+                                {t.name || "Linked task"}
+                              </span>
+                              <span className="text-[11px] font-extrabold text-[#0078D4] tabular-nums shrink-0">{pct}%</span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-[#EDEBE9] dark:bg-[#3B3A39] overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${pct >= 100 ? "bg-[#107C10]" : pct >= 50 ? "bg-[#0078D4]" : "bg-[#F7630C]"}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Financial Summary */}
                 {(pipeline.cashFlowProjectionUSD > 0 || pipeline.expensesUSD > 0 || pipeline.budget) && (

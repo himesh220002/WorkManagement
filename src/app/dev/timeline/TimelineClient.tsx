@@ -7,14 +7,49 @@ import mermaid from "mermaid";
 import { addPipeline, updatePipelineProgress, updatePipelineDates } from "@/actions";
 
 interface Option { id: string, name: string }
-interface Options { projects: Option[], teams: Option[], tasks: Option[], users: Option[] }
+interface GoalOption { id: string, title: string }
+interface Options { projects: Option[], teams: Option[], tasks: Option[], users: Option[], goals?: GoalOption[] }
+
+/** Usual objective types offered alongside exec-dashboard strategic goals + custom. */
+const OBJECTIVE_USUALS = [
+  "Revenue Growth",
+  "Market Expansion",
+  "Operational Efficiency",
+  "Product Launch",
+  "Customer Retention",
+  "Cost Optimization",
+  "Quality & Compliance",
+  "Team Capability Building",
+];
+
+/** Usual KPI types offered alongside custom free text. */
+const KPI_PRESETS = [
+  "Latency < 200ms",
+  "Uptime 99.9%",
+  "Task Completion 100%",
+  "Defect Rate < 2%",
+  "On-Time Delivery 95%",
+  "Customer Satisfaction 4.5/5",
+  "Revenue Target 100%",
+  "Sprint Velocity Target",
+];
 import PipelineCard from "@/components/PipelineCard";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import { PREDEFINED_PIPELINE_TASKS } from "@/utils/taskConstants";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import ParallelPipelineTrackViewer from "@/components/pipelines/ParallelPipelineTrackViewer";
 import ParallelPipelineRoadmap from "@/components/pipelines/ParallelPipelineRoadmap";
+import { computePipelineProgress } from "@/utils/pipelineProgress";
 import { triggerGuestRestriction } from "@/components/showcase/ShowcaseGuestCard";
+
+export interface LinkedDeliverable {
+  id: string;
+  name: string;
+  status?: string;
+  progress?: number;
+  pipelineId?: string | null;
+  subtasks?: Array<{ title: string; status?: string; progress?: number }>;
+}
 
 export default function TimelineClient({
   tasks,
@@ -26,7 +61,7 @@ export default function TimelineClient({
 }: {
   tasks: any[];
   options?: Options;
-  linkedTasks?: Array<{ id: string; name: string; status?: string; pipelineId?: string | null }>;
+  linkedTasks?: LinkedDeliverable[];
   projectMetrics?: any[];
   currentRole?: string;
   isGuest?: boolean;
@@ -38,10 +73,42 @@ export default function TimelineClient({
   const [activeCategory, setActiveCategory] = useState("All");
   const [activeViewTab, setActiveViewTab] = useState<"roadmap" | "mesh" | "cards" | "classic">("roadmap");
   const [highlightedPipelineId, setHighlightedPipelineId] = useState<string | null>(null);
-  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(true);
   const [formCategory, setFormCategory] = useState("Development");
   const [dayZoom, setDayZoom] = useState("Week");
   const [showExamplesModal, setShowExamplesModal] = useState(false);
+
+  // Pipeline creator: seeded execution tasks (multi-select Pt workstreams)
+  const [seedTaskNames, setSeedTaskNames] = useState<string[]>([]);
+  const toggleSeedTask = (name: string) =>
+    setSeedTaskNames((prev) => (prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]));
+
+  // Objectives: strategic goals (exec dashboard) + usual types + custom free text
+  const [objectivePreset, setObjectivePreset] = useState<string>("__custom");
+  const [objectiveText, setObjectiveText] = useState<string>("");
+  const [objectiveGoalId, setObjectiveGoalId] = useState<string>("");
+  const handleObjectivePreset = (value: string) => {
+    setObjectivePreset(value);
+    if (value.startsWith("goal:")) {
+      const gid = value.slice(5);
+      const goal = (options?.goals || []).find((g) => g.id === gid);
+      setObjectiveGoalId(gid);
+      if (goal) setObjectiveText(goal.title);
+    } else if (value === "__custom") {
+      setObjectiveGoalId("");
+    } else {
+      setObjectiveGoalId("");
+      setObjectiveText(value);
+    }
+  };
+
+  // KPIs: presets + custom free text
+  const [kpiPreset, setKpiPreset] = useState<string>("__custom");
+  const [kpiText, setKpiText] = useState<string>("");
+  const handleKpiPreset = (value: string) => {
+    setKpiPreset(value);
+    if (value !== "__custom") setKpiText(value);
+  };
 
   const categories = ["Company Pipeline", "All", "Development", "Sales", "Finance", "HR", "Operations", "Marketing", "General"];
 
@@ -57,12 +124,12 @@ export default function TimelineClient({
 
   // Granular deliverables grouped by pipeline — one progress formula everywhere.
   const linkedByPipeline = useMemo(() => {
-    const map: Record<string, Array<{ status?: string }>> = {};
+    const map: Record<string, LinkedDeliverable[]> = {};
     for (const t of linkedTasks) {
       if (!t.pipelineId) continue;
       const key = String(t.pipelineId);
       if (!map[key]) map[key] = [];
-      map[key].push({ status: t.status });
+      map[key].push(t);
     }
     return map;
   }, [linkedTasks]);
@@ -128,24 +195,13 @@ export default function TimelineClient({
       initialValues[t._id] = { start, end, progress };
 
       // Derive progress from execution checklist + linked deliverables
-      // (same formula as the server). Falls back to stored progress.
+      // (the one shared formula — see @/utils/pipelineProgress).
       const todos = Array.isArray((t as any).todos) ? (t as any).todos : [];
       const linked = linkedByPipeline[String(t._id)] || [];
-      const doneLinked = linked.filter((lt) =>
-        ["done", "completed"].includes(String(lt?.status || "").toLowerCase())
-      ).length;
-      let derived: number;
-      if (todos.length > 0 && linked.length > 0) {
-        derived = Math.round(
-          ((todos.filter((td: any) => td.completed).length + doneLinked) / (todos.length + linked.length)) * 100
-        );
-      } else if (todos.length > 0) {
-        derived = Math.round((todos.filter((td: any) => td.completed).length / todos.length) * 100);
-      } else if (linked.length > 0) {
-        derived = Math.round((doneLinked / linked.length) * 100);
-      } else {
-        derived = progress;
-      }
+      const derived = computePipelineProgress(
+        { progress, todos },
+        linked.map((lt) => ({ status: lt.status, progress: lt.progress, subtasks: lt.subtasks }))
+      );
       derivedProgress[String(t._id)] = derived;
 
       let rawDeps: string[] = [];
@@ -388,7 +444,7 @@ export default function TimelineClient({
                 </div>
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Category</label>
-                  <select name="category" value={formCategory} onChange={(e) => setFormCategory(e.target.value)} className="tech-input">
+                  <select name="category" value={formCategory} onChange={(e) => { setFormCategory(e.target.value); setSeedTaskNames([]); }} className="tech-input">
                     {categories.filter(c => c !== "All" && c !== "Company Pipeline").map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
@@ -445,22 +501,41 @@ export default function TimelineClient({
                     <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
                       <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Link Existing Task</label>
                       <select name="taskId" className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
-                        <option value="">None (or Auto-Create Below)</option>
+                        <option value="">None (or Seed Below)</option>
                         {options.tasks.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                       </select>
                     </div>
-                    <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
-                      <label className="mb-2 font-semibold text-blue-600 dark:text-blue-400">Auto-Create Category Task</label>
-                      <select name="createTaskName" className="w-full px-4 py-2.5 rounded-lg border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm">
-                        <option value="">Select Predefined Task...</option>
-                        {PREDEFINED_PIPELINE_TASKS[formCategory]?.map(t => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
-                      </select>
+                    <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400 lg:col-span-2">
+                      <label className="mb-2 font-semibold text-blue-600 dark:text-blue-400">Seed Execution Tasks (Pt workstreams — creates linked deliverables + checklist)</label>
+                      <input type="hidden" name="seedTasks" value={JSON.stringify(seedTaskNames)} />
+                      <div className="w-full px-3 py-2.5 rounded-lg border border-blue-300 dark:border-blue-600 bg-blue-50/50 dark:bg-blue-900/10 max-h-36 overflow-y-auto space-y-1">
+                        {(PREDEFINED_PIPELINE_TASKS[formCategory] || []).length === 0 && (
+                          <p className="text-xs text-gray-500">No predefined tasks for this category — add customs below.</p>
+                        )}
+                        {(PREDEFINED_PIPELINE_TASKS[formCategory] || []).map(t => {
+                          const on = seedTaskNames.includes(t);
+                          return (
+                            <label key={t} className="flex items-center gap-2 cursor-pointer text-xs text-gray-900 dark:text-gray-100 hover:bg-white/60 dark:hover:bg-white/5 px-1.5 py-1 rounded transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={on}
+                                onChange={() => toggleSeedTask(t)}
+                                className="rounded accent-[#0078D4] w-3.5 h-3.5 cursor-pointer shrink-0"
+                              />
+                              <span className={on ? "font-semibold" : ""}>{t}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      {seedTaskNames.length > 0 && (
+                        <p className="text-[11px] text-blue-600 dark:text-blue-400 mt-1 font-medium">
+                          {seedTaskNames.length} workstream{seedTaskNames.length === 1 ? "" : "s"} will be created as linked deliverables + checklist items.
+                        </p>
+                      )}
                     </div>
-                    <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
-                      <label className="mb-2 font-semibold text-blue-600 dark:text-blue-400">Or Custom Task Name</label>
-                      <input type="text" name="customTaskName" className="w-full px-4 py-2.5 rounded-lg border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder="Generate custom execution task..." />
+                    <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400 lg:col-span-2">
+                      <label className="mb-2 font-semibold text-blue-600 dark:text-blue-400">Or Custom Task Names (one per line)</label>
+                      <textarea name="customTaskName" rows={2} className="w-full px-4 py-2.5 rounded-lg border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm" placeholder={"Generate custom execution tasks...\nOne workstream per line"} />
                     </div>
                     <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
                       <label className="mb-2 font-semibold text-violet-600 dark:text-violet-400">Generate Team on the Fly</label>
@@ -475,11 +550,57 @@ export default function TimelineClient({
 
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400 lg:col-span-2">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">Objectives / Goals</label>
-                  <input type="text" name="objectives" className="tech-input" placeholder="What does this pipeline achieve?" />
+                  <select
+                    value={objectivePreset}
+                    onChange={(e) => handleObjectivePreset(e.target.value)}
+                    className="mb-2 w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm cursor-pointer"
+                    title="Pick a strategic goal, a usual objective type, or write custom below"
+                  >
+                    <option value="__custom">Custom (type below)...</option>
+                    {(options?.goals || []).length > 0 && (
+                      <optgroup label="Strategic Goals (Exec Dashboard)">
+                        {(options?.goals || []).map((g) => (
+                          <option key={g.id} value={`goal:${g.id}`}>🎯 {g.title}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="Usual Objective Types">
+                      {OBJECTIVE_USUALS.map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                  <input type="hidden" name="goalId" value={objectiveGoalId} />
+                  <input
+                    type="text"
+                    name="objectives"
+                    value={objectiveText}
+                    onChange={(e) => { setObjectiveText(e.target.value); setObjectivePreset("__custom"); if (e.target.value === "") setObjectiveGoalId(""); }}
+                    placeholder="What does this pipeline achieve?"
+                    className="tech-input"
+                  />
                 </div>
                 <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400 lg:col-span-2">
                   <label className="mb-2 font-semibold text-gray-600 dark:text-gray-300">KPIs / Metrics</label>
-                  <input type="text" name="kpis" className="tech-input" placeholder="e.g. Latency < 200ms" />
+                  <select
+                    value={kpiPreset}
+                    onChange={(e) => handleKpiPreset(e.target.value)}
+                    className="mb-2 w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm cursor-pointer"
+                    title="Pick a usual KPI or write custom below"
+                  >
+                    <option value="__custom">Custom (type below)...</option>
+                    {KPI_PRESETS.map((k) => (
+                      <option key={k} value={k}>{k}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    name="kpis"
+                    value={kpiText}
+                    onChange={(e) => { setKpiText(e.target.value); setKpiPreset("__custom"); }}
+                    placeholder="e.g. Latency < 200ms"
+                    className="tech-input"
+                  />
                 </div>
 
                 <div className="lg:col-span-4 flex justify-end mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">

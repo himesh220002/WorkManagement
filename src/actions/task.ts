@@ -5,7 +5,8 @@ import { withAction, ActionResult } from "@/lib/action";
 import { Task, ActivityLog } from "@/models";
 import { invalidateEntity, CACHE_TAGS } from "@/lib/cache";
 import { revalidatePath } from "next/cache";
-import { recomputePipelineProgress } from "./index";
+import { getCurrentSession } from "@/server/auth/session";
+import { recomputePipelineProgress, refreshTaskProgress } from "./index";
 
 const createTaskSchema = z.object({
   name: z.string().min(1, "Task name is required"),
@@ -84,6 +85,8 @@ export async function updateTaskStatusAction(input: unknown): Promise<ActionResu
     }
     revalidatePath("/dev/dashboard");
     revalidatePath("/my-work");
+
+    await refreshTaskProgress(data.taskId, (await getCurrentSession().catch(() => null))?.companyCode);
 
     const pipelineId = (task as any).pipelineId
       ? String((task as any).pipelineId)

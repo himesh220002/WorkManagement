@@ -54,7 +54,8 @@ dealSchema.index({ companyId: 1, stage: 1 });
 dealSchema.index({ projectId: 1, status: 1 });
 
 if (process.env.NODE_ENV === "development" && mongoose.models.Deal) {
-  if (!mongoose.models.Deal.schema.paths["ownerId"]) {
+  const paths = (mongoose.models.Deal.schema as any).paths || {};
+  if (!paths.ownerId || !paths.checklist || !paths.contactName) {
     delete mongoose.models.Deal;
   }
 }

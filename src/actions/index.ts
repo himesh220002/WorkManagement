@@ -6,7 +6,26 @@ import { revalidatePath as nextRevalidatePath } from "next/cache";
 import { getCurrentSession } from "@/server/auth/session";
 import { invalidateAllAppCaches } from "@/lib/cache";
 import { syncTenantWrite } from "@/lib/tenantDb";
-import { computePipelineProgress } from "@/utils/pipelineProgress";
+import { computePipelineProgress, statusToPercent } from "@/utils/pipelineProgress";
+
+/** Task % = avg of branch bars, else status-based. Persisted for rollups. */
+export async function refreshTaskProgress(taskId: string, companyCode?: string) {
+  const task = await TaskNode.findById(taskId);
+  if (!task) return 0;
+  const subs = Array.isArray((task as any).subtasks) ? (task as any).subtasks : [];
+  const progress = subs.length > 0
+    ? Math.round(subs.reduce((a: number, s: any) => a + Number(s?.progress || 0), 0) / subs.length)
+    : statusToPercent((task as any).status);
+  await TaskNode.findByIdAndUpdate(taskId, { progress });
+  await syncTenantWrite("TaskNode", "update", taskId, { progress }, companyCode);
+  return progress;
+}
+
+function autoBranchStatus(progress: number): string {
+  if (progress >= 100) return "Completed";
+  if (progress <= 0) return "Open";
+  return "In Progress";
+}
 
 function revalidatePath(path: string) {
   invalidateAllAppCaches();
@@ -55,8 +74,20 @@ export async function addPipeline(formData: FormData) {
   const memberIds = formData.getAll("memberIds") as string[];
   const predefinedCreateTaskName = formData.get("createTaskName") as string || undefined;
   const customTaskName = formData.get("customTaskName") as string || undefined;
-  const createTaskName = customTaskName || predefinedCreateTaskName;
+  const seedTasks = parseIdListField(formData.get("seedTasks"));
+  const customTaskNames = (customTaskName || "")
+    .split(/[\n,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+  // Structural workstream names to seed: checkbox seeds + legacy single + customs.
+  const seedNames = [...new Set([
+    ...seedTasks,
+    ...(predefinedCreateTaskName ? [predefinedCreateTaskName] : []),
+    ...customTaskNames,
+  ])].slice(0, 20);
   const newTeamName = formData.get("newTeamName") as string || undefined;
+  const goalId = (formData.get("goalId") as string) || undefined;
   
   const cashFlowProjectionUSD = Number(formData.get("cashFlowProjectionUSD")) || 0;
   const expensesUSD = Number(formData.get("expensesUSD")) || 0;
@@ -76,36 +107,77 @@ export async function addPipeline(formData: FormData) {
       await Project.findByIdAndUpdate(projectId, { $addToSet: { teams: teamId } });
     }
 
-    // Auto-create initial task if requested
-    if (createTaskName && projectId) {
-      const assigneeArray = memberIds.length > 0 ? memberIds : undefined;
-      const newTask = await TaskNode.create({
-        name: createTaskName,
-        description: `Auto-generated task from pipeline: ${name}`,
-        projectId: projectId,
-        companyId: session.companyId,
-        assignee: memberIds.length > 0 ? memberIds[0] : "Unassigned", // Legacy string
-        assignees: assigneeArray, // Real ID reference
-        status: "Todo",
-        priority: priority ? priority.toLowerCase() : "medium",
-        dueDate: endDate
-      });
-      finalTaskId = newTask._id.toString();
-    }
+    // Seed execution checklist (Pt workstreams) from the chosen task names.
+    const seedTodos = seedNames.map((text) => ({ text, completed: false }));
+    const initialProgress = seedTodos.length > 0
+      ? 0
+      : progress;
 
-    const newPipe = await Pipeline.create({ 
-      name, category, owner, status, priority, startDate, endDate, progress, objectives, budget, kpis, riskLevel, dependencies, outcome,
+    const newPipe = await Pipeline.create({
+      name, category, owner, status, priority, startDate, endDate, progress: initialProgress, objectives, budget, kpis, riskLevel, dependencies, outcome,
       projectId, teamId, taskId: finalTaskId, memberIds,
+      goalId: goalId || undefined,
+      todos: seedTodos,
       cashFlowProjectionUSD, expensesUSD, roiPercent,
       companyId: session.companyId,
     } as any);
     await syncTenantWrite("Pipeline", "create", newPipe, undefined, session.companyCode);
-    
+    const newPipeId = newPipe._id.toString();
+
+    // Create one granular deliverable per seeded workstream, linked to the pipeline.
+    if (seedNames.length > 0) {
+      const assigneeArray = memberIds.length > 0 ? memberIds : undefined;
+      for (const taskName of seedNames) {
+        const newTask = await TaskNode.create({
+          name: taskName,
+          description: `Auto-generated workstream from pipeline: ${name}`,
+          projectId: projectId || undefined,
+          pipelineId: newPipe._id,
+          stageRef: taskName,
+          companyId: session.companyId,
+          assignee: memberIds.length > 0 ? memberIds[0] : "Unassigned", // Legacy string
+          assignees: assigneeArray, // Real ID references
+          assigneeIds: assigneeArray,
+          status: "Todo",
+          priority: priority ? priority.toLowerCase() : "medium",
+          dueDate: endDate
+        });
+        await syncTenantWrite("TaskNode", "create", newTask, undefined, session.companyCode);
+        if (!finalTaskId) finalTaskId = newTask._id.toString();
+      }
+      await Pipeline.findByIdAndUpdate(newPipe._id, { taskId: finalTaskId || undefined });
+    }
+
+    // Link a pre-existing task into this pipeline when chosen.
+    if (taskId) {
+      await TaskNode.findByIdAndUpdate(taskId, { pipelineId: newPipe._id });
+      finalTaskId = taskId;
+      await Pipeline.findByIdAndUpdate(newPipe._id, { taskId: finalTaskId });
+    }
+
+    await recomputePipelineProgress(newPipeId);
+
     revalidatePath("/dev/timeline");
     revalidatePath("/sales/dashboard");
     revalidatePath("/revenue/dashboard");
     revalidatePath("/projects");
   }
+}
+
+function parseIdListField(raw: unknown): string[] {
+  if (!raw || typeof raw !== "string") return [];
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+  // Accept JSON arrays (from hidden multi-select inputs) or comma-separated ids.
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      return [...new Set(parsed.map((v) => String(v)).filter(Boolean))].slice(0, 100);
+    }
+  } catch {
+    // fall through to comma split
+  }
+  return [...new Set(trimmed.split(",").map((s) => s.trim()).filter(Boolean))].slice(0, 100);
 }
 
 function parseChecklistField(formData: FormData): { text: string; completed: boolean }[] {
@@ -649,7 +721,9 @@ export async function recomputePipelineProgress(pipelineId: string): Promise<num
   const pipeline = await Pipeline.findById(pipelineId);
   if (!pipeline) return null;
   const todos = Array.isArray((pipeline as any).todos) ? (pipeline as any).todos : [];
-  const linked = await TaskNode.find({ pipelineId: (pipeline as any)._id }).select("status").lean();
+  const linked = await TaskNode.find({ pipelineId: (pipeline as any)._id })
+    .select("status progress subtasks")
+    .lean();
   const progress = computePipelineProgress(
     { progress: Number((pipeline as any).progress || 0), todos },
     Array.isArray(linked) ? linked : []
@@ -856,7 +930,9 @@ export async function addTaskNode(formData: FormData) {
   const actualHours = Number(formData.get("actualHours")) || 0;
   const pipelineId = formData.get("pipelineId") as string;
   const cycleId = formData.get("cycleId") as string;
-  
+  const stageRef = ((formData.get("stageRef") as string) || "").trim();
+  const assigneeIds = parseIdListField(formData.get("assigneeIds"));
+
   let targetProjectId = projectId;
   if (!targetProjectId || targetProjectId === "all") {
     const firstProj = await Project.findOne(
@@ -878,7 +954,12 @@ export async function addTaskNode(formData: FormData) {
     };
     if (pipelineId && pipelineId !== "none") data.pipelineId = pipelineId;
     if (cycleId && cycleId !== "none") data.cycleId = cycleId;
-    
+    if (stageRef) data.stageRef = stageRef;
+    if (assigneeIds.length > 0) {
+      data.assigneeIds = assigneeIds;
+      data.assignees = assigneeIds;
+    }
+
     const newTask = await TaskNode.create(data);
     await syncTenantWrite("TaskNode", "create", newTask, undefined, session.companyCode);
     if (data.pipelineId) await recomputePipelineProgress(String(data.pipelineId));
@@ -900,6 +981,10 @@ export async function updateTaskNode(formData: FormData) {
   const actualHours = Number(formData.get("actualHours")) || 0;
   const pipelineId = formData.get("pipelineId") as string;
   const cycleId = formData.get("cycleId") as string;
+  const hasStageRef = formData.has("stageRef");
+  const stageRef = ((formData.get("stageRef") as string) || "").trim();
+  const hasAssignees = formData.has("assigneeIds");
+  const assigneeIds = parseIdListField(formData.get("assigneeIds"));
 
   if (taskId) {
     const updateData: any = {};
@@ -910,6 +995,11 @@ export async function updateTaskNode(formData: FormData) {
     if (formData.has("actualHours")) updateData.actualHours = actualHours;
     if (pipelineId) updateData.pipelineId = pipelineId === "none" ? null : pipelineId;
     if (cycleId) updateData.cycleId = cycleId === "none" ? null : cycleId;
+    if (hasStageRef) updateData.stageRef = stageRef;
+    if (hasAssignees) {
+      updateData.assigneeIds = assigneeIds;
+      updateData.assignees = assigneeIds;
+    }
 
     const before = await TaskNode.findById(taskId).select("pipelineId").lean() as any;
     const oldPipelineId = before?.pipelineId ? String(before.pipelineId) : null;
@@ -919,6 +1009,7 @@ export async function updateTaskNode(formData: FormData) {
     const newPipelineId = updateData.pipelineId
       ? String(updateData.pipelineId)
       : oldPipelineId;
+    await refreshTaskProgress(taskId, session.companyCode);
     if (newPipelineId) await recomputePipelineProgress(newPipelineId);
     if (oldPipelineId && oldPipelineId !== newPipelineId) {
       await recomputePipelineProgress(oldPipelineId);
@@ -929,8 +1020,121 @@ export async function updateTaskNode(formData: FormData) {
   }
 }
 
-export async function addCycle(formData: FormData) {
+/**
+ * Deep sub-division branches: Pt2 -> homepage -> hero section, each with its
+ * own cross-team assignees. Branch status is informational detail — the parent
+ * task's status stays the unit counted toward pipeline progress.
+ */
+export async function addTaskSubtask(formData: FormData) {
   await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
+  const taskId = formData.get("taskId") as string;
+  const title = ((formData.get("title") as string) || "").trim();
+  const status = ((formData.get("status") as string) || "Open").trim() || "Open";
+  const assigneeIds = parseIdListField(formData.get("assigneeIds"));
+  if (!taskId || !title) return;
+
+  const users = assigneeIds.length > 0
+    ? await User.find({ _id: { $in: assigneeIds } }).select("name").lean() as any[]
+    : [];
+  const teams = await Team.find(session.companyId ? { companyId: session.companyId } : {})
+    .select("name members").lean() as any[];
+  const teamOf = new Map<string, string>();
+  for (const t of teams) {
+    for (const m of (t.members || [])) teamOf.set(String(m), t.name);
+  }
+  const task = await TaskNode.findById(taskId);
+  if (!task) throw new Error("Task not found");
+  if (!Array.isArray((task as any).subtasks)) (task as any).subtasks = [];
+  const startProgress = Math.max(0, Math.min(100, Number(formData.get("progress")) || 0));
+  const stage = ((formData.get("stage") as string) || "").trim();
+  (task as any).subtasks.push({
+    title,
+    status: autoBranchStatus(startProgress),
+    progress: startProgress,
+    stage,
+    assignees: users.map((u) => ({
+      userId: String(u._id),
+      name: u.name,
+      teamName: teamOf.get(String(u._id)) || "",
+    })),
+  });
+  await task.save();
+  await syncTenantWrite("TaskNode", "update", taskId, { subtasks: (task as any).subtasks }, session.companyCode);
+  await refreshTaskProgress(taskId, session.companyCode);
+  revalidatePipelineSurfaces();
+}
+
+export async function updateTaskSubtaskStatus(taskId: string, index: number, status: string) {
+  await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
+  const task = await TaskNode.findById(taskId);
+  if (!task) throw new Error("Task not found");
+  const subs = Array.isArray((task as any).subtasks) ? (task as any).subtasks : [];
+  if (index < 0 || index >= subs.length) throw new Error("Branch not found");
+  subs[index].status = status;
+  // Keep bar and status in agreement when status is set explicitly.
+  if (status === "Completed") subs[index].progress = 100;
+  else if (status === "Open") subs[index].progress = 0;
+  await TaskNode.findByIdAndUpdate(taskId, { subtasks: subs });
+  await syncTenantWrite("TaskNode", "update", taskId, { subtasks: subs }, session.companyCode);
+  await refreshTaskProgress(taskId, session.companyCode);
+  revalidatePipelineSurfaces();
+}
+
+/** Move a branch subsection into another stage lane. */
+export async function updateTaskSubtaskStage(taskId: string, index: number, stage: string) {
+  await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
+  const task = await TaskNode.findById(taskId);
+  if (!task) throw new Error("Task not found");
+  const subs = Array.isArray((task as any).subtasks) ? (task as any).subtasks : [];
+  if (index < 0 || index >= subs.length) throw new Error("Branch not found");
+  subs[index].stage = (stage || "").trim();
+  await TaskNode.findByIdAndUpdate(taskId, { subtasks: subs });
+  await syncTenantWrite("TaskNode", "update", taskId, { subtasks: subs }, session.companyCode);
+  revalidatePipelineSurfaces();
+  return { stage: subs[index].stage };
+}
+
+/** Worker-dragged branch bar (0-100). Status follows the bar automatically. */
+export async function updateTaskSubtaskProgress(taskId: string, index: number, progress: number) {
+  await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
+  const clamped = Math.max(0, Math.min(100, Math.round(Number(progress) || 0)));
+  const task = await TaskNode.findById(taskId);
+  if (!task) throw new Error("Task not found");
+  const subs = Array.isArray((task as any).subtasks) ? (task as any).subtasks : [];
+  if (index < 0 || index >= subs.length) throw new Error("Branch not found");
+  subs[index].progress = clamped;
+  subs[index].status = autoBranchStatus(clamped);
+  await TaskNode.findByIdAndUpdate(taskId, { subtasks: subs });
+  await syncTenantWrite("TaskNode", "update", taskId, { subtasks: subs }, session.companyCode);
+  await refreshTaskProgress(taskId, session.companyCode);
+  revalidatePipelineSurfaces();
+  return { progress: clamped, status: subs[index].status };
+}
+
+export async function deleteTaskSubtask(taskId: string, index: number) {
+  await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
+  const task = await TaskNode.findById(taskId);
+  if (!task) throw new Error("Task not found");
+  const subs = (Array.isArray((task as any).subtasks) ? (task as any).subtasks : []).filter(
+    (_: any, i: number) => i !== index
+  );
+  await TaskNode.findByIdAndUpdate(taskId, { subtasks: subs });
+  await syncTenantWrite("TaskNode", "update", taskId, { subtasks: subs }, session.companyCode);
+  await refreshTaskProgress(taskId, session.companyCode);
+  revalidatePipelineSurfaces();
+}
+
+export async function addCycle(formData: FormData) {  await connectToDatabase();
   const session = await getCurrentSession();
   assertNotGuest(session);
   const name = formData.get("name") as string;

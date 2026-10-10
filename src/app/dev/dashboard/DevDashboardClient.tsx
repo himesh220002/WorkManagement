@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -47,6 +47,8 @@ export default function DevDashboardClient({
   tasks,
   pipelines = [],
   cycles = [],
+  teams = [],
+  members = [],
   avgPipelineProgress = 0,
   avgCycleTime = 0,
   selectedProjectId,
@@ -57,6 +59,8 @@ export default function DevDashboardClient({
   tasks: any[];
   pipelines?: any[];
   cycles?: any[];
+  teams?: any[];
+  members?: { id: string; name: string; role: string; email: string; teamNames: string[] }[];
   avgPipelineProgress?: number | string;
   avgCycleTime?: number;
   selectedProjectId: string;
@@ -74,6 +78,33 @@ export default function DevDashboardClient({
     selectedProjectId !== "all" ? selectedProjectId : projects[0]?._id || ""
   );
   const [taskCategory, setTaskCategory] = useState<string>("Physical Goods & Hardware");
+
+  // Pipeline -> structural stage linkage for the new task
+  const [taskPipelineId, setTaskPipelineId] = useState<string>("none");
+  const [taskStageRef, setTaskStageRef] = useState<string>("");
+  const selectedPipeline = pipelines.find((p) => p._id === taskPipelineId);
+  const stageOptions: string[] = selectedPipeline && Array.isArray(selectedPipeline.todos)
+    ? [...new Set<string>(selectedPipeline.todos.map((t: any) => String(t.text || "").trim()).filter(Boolean))]
+    : [];
+
+  // Cross-team assignees (members from any team combination)
+  const [taskAssigneeIds, setTaskAssigneeIds] = useState<string[]>([]);
+  const toggleTaskAssignee = (id: string) =>
+    setTaskAssigneeIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const membersByTeam = useMemo(() => {
+    const groups: { team: string; members: typeof members }[] = [];
+    const seen = new Set<string>();
+    for (const t of teams) {
+      const list = members.filter((m) => t.memberIds.includes(m.id));
+      if (list.length > 0) {
+        groups.push({ team: t.name, members: list });
+        list.forEach((m) => seen.add(m.id));
+      }
+    }
+    const unteamed = members.filter((m) => !seen.has(m.id));
+    if (unteamed.length > 0) groups.push({ team: "Unassigned", members: unteamed });
+    return groups;
+  }, [teams, members]);
 
   useEffect(() => {
     setCurrentProjectId(selectedProjectId || "all");
@@ -323,9 +354,18 @@ export default function DevDashboardClient({
               </select>
             </div>
 
+            <div>
+              <label className="text-[11px] font-semibold text-[#605E5C] dark:text-[#C8C6C4] block mb-1">
+                Pipeline (Major Workstream)
+              </label>
             <div className="flex flex-col gap-2">
               <select
                 name="pipelineId"
+                value={taskPipelineId}
+                onChange={(e) => {
+                  setTaskPipelineId(e.target.value);
+                  setTaskStageRef("");
+                }}
                 className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
               >
                 <option value="none">No Pipeline</option>
@@ -335,6 +375,71 @@ export default function DevDashboardClient({
                   </option>
                 ))}
               </select>
+
+              {/* Structural stage inside the selected pipeline (Pt1..PtN checklist) */}
+              {taskPipelineId !== "none" && (
+                <select
+                  name="stageRef"
+                  value={taskStageRef}
+                  onChange={(e) => setTaskStageRef(e.target.value)}
+                  className="flex-1 p-2 rounded border border-[#0078D4]/40 dark:border-[#0078D4]/40 bg-[#EBF3FC]/40 dark:bg-[#1C2B3D]/40 text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
+                  title="Which structural task of the pipeline does this deliverable belong to?"
+                >
+                  <option value="">General (whole pipeline)</option>
+                  {stageOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {/* Cross-team assignees: any combination of members from any team */}
+              <div className="rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] p-2">
+                <input type="hidden" name="assigneeIds" value={JSON.stringify(taskAssigneeIds)} />
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-semibold text-[#605E5C] dark:text-[#C8C6C4]">
+                    Assign Members (any team combination)
+                  </span>
+                  {taskAssigneeIds.length > 0 && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#0078D4] text-white">
+                      {taskAssigneeIds.length} selected
+                    </span>
+                  )}
+                </div>
+                <div className="max-h-32 overflow-y-auto space-y-2 pr-1">
+                  {membersByTeam.length === 0 && (
+                    <p className="text-[11px] text-[#8A8886] italic">No company members found.</p>
+                  )}
+                  {membersByTeam.map((g) => (
+                    <div key={g.team}>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#8A8886] mb-0.5">
+                        {g.team}
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {g.members.map((m) => {
+                          const on = taskAssigneeIds.includes(m.id);
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => toggleTaskAssignee(m.id)}
+                              title={`${m.name} (${m.role})`}
+                              className={`px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors cursor-pointer ${
+                                on
+                                  ? "bg-[#0078D4] text-white border-[#0078D4]"
+                                  : "bg-white dark:bg-[#201F1E] text-[#605E5C] dark:text-[#C8C6C4] border-[#E1DFDD] dark:border-[#3B3A39] hover:border-[#0078D4]"
+                              }`}
+                            >
+                              {m.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
               <select
                 name="predefinedTask"
                 className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
@@ -346,6 +451,7 @@ export default function DevDashboardClient({
                   </option>
                 ))}
               </select>
+            </div>
             </div>
 
             <input
@@ -516,15 +622,20 @@ export default function DevDashboardClient({
         <h3 className="font-bold text-base text-[#242424] dark:text-[#FFFFFF] mb-3">
           Interactive Task Backlog & Execution
         </h3>
-        <EditableTaskList tasks={tasks} pipelines={pipelines} cycles={cycles} isGuest={isGuest} />
+          <EditableTaskList tasks={tasks} pipelines={pipelines} cycles={cycles} teams={teams} members={members} isGuest={isGuest} />
       </div>
 
       {/* Pipeline Cards Grid with Big Look Modal */}
       <div className="mb-8 px-4">
+        <div className="flex items-center justify-between mb-3">
         <h3 className="font-bold text-base text-[#242424] dark:text-[#FFFFFF] mb-3 flex items-center gap-2">
           <Layers className="w-4 h-4 text-[#0078D4]" />
           Production Pipelines ({pipelines.length})
         </h3>
+        <button onClick={() => router.push("/dev/timeline")} className="flex items-center gap-1 text-[#0078D4] dark:text-[#C8C6C4] text-xs font-semibold mb-3 hover:underline">
+          Add New Pipeline
+        </button>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pipelines.map((p) => (
             <PipelineCard key={p._id} pipeline={p} currentRole={isGuest ? "viewer" : "manager"} />

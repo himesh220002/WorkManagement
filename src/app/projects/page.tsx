@@ -12,6 +12,8 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import { addProject } from "@/actions";
 import { fetchWithCache, invalidateCachePrefix } from "@/lib/cache";
 import { computePipelineProgress } from "@/utils/pipelineProgress";
+import { tripleFromSnapshots } from "@/lib/progressHistory";
+import { PipelineProgressSnapshot } from "@/models/pipelineSnapshot";
 import ParallelPipelineTrackViewer from "@/components/pipelines/ParallelPipelineTrackViewer";
 import {
   FolderKanban,
@@ -133,6 +135,21 @@ export default async function ProjectsPage() {
       taskProgress,
     };
   });
+
+  // Daily-rhythm triples per project (last 3 snapshot days, same pair method).
+  const allBlueprintPipeIds = projects.flatMap((p: any) => p.pipelines.map((pp: any) => String(pp._id)));
+  const blueprintSnaps = allBlueprintPipeIds.length > 0
+    ? await PipelineProgressSnapshot.find({ pipelineId: { $in: allBlueprintPipeIds } })
+        .sort({ date: -1 })
+        .limit(allBlueprintPipeIds.length * 5)
+        .lean()
+    : [];
+  for (const p of projects) {
+    (p as any).progressTriple = tripleFromSnapshots(
+      blueprintSnaps as any,
+      p.pipelines.map((pp: any) => String(pp._id))
+    );
+  }
 
   const cleanProjects = serializeDocs<any>(projects);
   const totalProjects = cleanProjects.length;
@@ -345,6 +362,21 @@ export default async function ProjectsPage() {
                     </span>
                   </div>
                   <ProgressBar value={p.taskProgress} size="sm" tone={p.taskProgress >= 70 ? "success" : "brand"} />
+                  {p.progressTriple?.points?.length > 0 && (
+                    <div className="flex items-center gap-1 mt-1.5 text-[10px] font-bold tabular-nums">
+                      <span className="text-[#A19F9D] font-medium">Daily:</span>
+                      {p.progressTriple.points.map((pt: any, i: number) => (
+                        <span key={pt.date} className="flex items-center gap-1">
+                          <span className="text-[#242424] dark:text-[#FFFFFF]">{pt.value}%</span>
+                          {i < p.progressTriple.points.length - 1 && (
+                            <span className={p.progressTriple.deltas[i] > 0 ? "text-[#107C10]" : p.progressTriple.deltas[i] < 0 ? "text-[#D13438]" : "text-[#A19F9D]"}>
+                              {p.progressTriple.deltas[i] > 0 ? `+${p.progressTriple.deltas[i]}%` : `${p.progressTriple.deltas[i]}%`} →
+                            </span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Associated Teams */}
