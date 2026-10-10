@@ -5,6 +5,7 @@ import { withAction, ActionResult } from "@/lib/action";
 import { Task, ActivityLog } from "@/models";
 import { invalidateEntity, CACHE_TAGS } from "@/lib/cache";
 import { revalidatePath } from "next/cache";
+import { recomputePipelineProgress } from "./index";
 
 const createTaskSchema = z.object({
   name: z.string().min(1, "Task name is required"),
@@ -54,6 +55,10 @@ export async function createTaskAction(input: unknown): Promise<ActionResult> {
     revalidatePath("/dev/dashboard");
     revalidatePath("/my-work");
 
+    if ((task as any).pipelineId) {
+      await recomputePipelineProgress(String((task as any).pipelineId));
+    }
+
     return { id: task._id.toString(), name: task.name };
   });
 }
@@ -65,6 +70,7 @@ const updateTaskStatusSchema = z.object({
 
 export async function updateTaskStatusAction(input: unknown): Promise<ActionResult> {
   return withAction(updateTaskStatusSchema, input, async (data) => {
+    const before = await Task.findById(data.taskId).select("pipelineId");
     const task = await Task.findByIdAndUpdate(
       data.taskId,
       { $set: { status: data.status } },
@@ -78,6 +84,15 @@ export async function updateTaskStatusAction(input: unknown): Promise<ActionResu
     }
     revalidatePath("/dev/dashboard");
     revalidatePath("/my-work");
+
+    const pipelineId = (task as any).pipelineId
+      ? String((task as any).pipelineId)
+      : before?.pipelineId
+        ? String(before.pipelineId)
+        : null;
+    if (pipelineId) {
+      await recomputePipelineProgress(pipelineId);
+    }
 
     return { id: task._id.toString(), status: task.status };
   });
@@ -95,6 +110,10 @@ export async function deleteTaskAction(input: unknown): Promise<ActionResult> {
     }
     revalidatePath("/dev/dashboard");
     revalidatePath("/my-work");
+    const pipelineId = (task as any)?.pipelineId ? String((task as any).pipelineId) : null;
+    if (pipelineId) {
+      await recomputePipelineProgress(pipelineId);
+    }
     return { success: true };
   });
 }

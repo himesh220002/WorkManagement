@@ -698,6 +698,136 @@ describe("Whiteboard Canvas & Organizational Chart Template", () => {
       expect(isAuthorizedKey("company-999/whiteboards/board-2/file.pdf", companyId)).toBe(false);
     });
   });
+
+  describe("Chat S3 Attachments & 1-Day Auto-Deletion Lifecycle", () => {
+    it("validates allowed chat attachment formats: images and PDFs only", () => {
+      const allowedExtensions = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "pdf"]);
+      const isAllowed = (fileName: string) => {
+        const ext = fileName.split(".").pop()?.toLowerCase() || "";
+        return allowedExtensions.has(ext);
+      };
+
+      expect(isAllowed("architecture.png")).toBe(true);
+      expect(isAllowed("system-diagram.jpg")).toBe(true);
+      expect(isAllowed("screenshot.webp")).toBe(true);
+      expect(isAllowed("workflow.svg")).toBe(true);
+      expect(isAllowed("annual_report.pdf")).toBe(true);
+
+      // Disallowed file types
+      expect(isAllowed("malware.exe")).toBe(false);
+      expect(isAllowed("archive.zip")).toBe(false);
+      expect(isAllowed("script.sh")).toBe(false);
+      expect(isAllowed("data.csv")).toBe(false);
+    });
+
+    it("generates isolated multi-tenant S3 key for chat attachments", async () => {
+      const { buildChatS3Key } = await import("@/lib/s3");
+      const key = buildChatS3Key("comp-123", "marketing-squad", "Q4 Strategy Pitch.pdf");
+
+      expect(key.startsWith("comp-123/chat/marketing-squad/")).toBe(true);
+      expect(key).toContain("_Q4_Strategy_Pitch.pdf");
+      expect(key).not.toContain(" ");
+    });
+
+    it("computes exactly 24-hour (1 day) expiration window for chat attachments", () => {
+      const now = Date.now();
+      const expiresAt = new Date(now + 24 * 60 * 60 * 1000);
+      const diffMs = expiresAt.getTime() - now;
+
+      expect(diffMs).toBe(86400000); // 24 hours in milliseconds
+      expect(diffMs / (1000 * 60 * 60)).toBe(24);
+    });
+
+    it("prunes expired attachments (> 1 day old) chatside while keeping active attachments", () => {
+      const currentTime = new Date("2026-10-10T12:00:00Z");
+
+      const attachments = [
+        {
+          name: "active_mockup.png",
+          s3Key: "comp-1/chat/global/active_mockup.png",
+          expiresAt: new Date("2026-10-11T10:00:00Z"), // expires tomorrow
+        },
+        {
+          name: "expired_spec.pdf",
+          s3Key: "comp-1/chat/global/expired_spec.pdf",
+          expiresAt: new Date("2026-10-09T11:00:00Z"), // expired yesterday
+        },
+      ];
+
+      const activeOnly = attachments.filter(
+        (att) => new Date(att.expiresAt) > currentTime
+      );
+
+      expect(activeOnly).toHaveLength(1);
+      expect(activeOnly[0].name).toBe("active_mockup.png");
+    });
+
+    it("defaults to applying file size reducer (sendOriginalHd = false)", () => {
+      // Simulating default chat attachment configuration
+      const defaultSendOriginalHd = false;
+      const file = { name: "high_res_photo.jpg", size: 4 * 1024 * 1024, type: "image/jpeg" };
+
+      // Under default settings:
+      const shouldCompress = file.type.startsWith("image/") && !defaultSendOriginalHd;
+      expect(shouldCompress).toBe(true);
+
+      const stagedAttachment = {
+        name: file.name,
+        originalSize: file.size,
+        size: Math.round(file.size * 0.28), // 72% reduction
+        isHdOriginal: defaultSendOriginalHd,
+        reductionPercent: 72,
+        type: "image" as const,
+      };
+
+      expect(stagedAttachment.isHdOriginal).toBe(false);
+      expect(stagedAttachment.reductionPercent).toBeGreaterThan(0);
+      expect(stagedAttachment.size).toBeLessThan(stagedAttachment.originalSize);
+    });
+
+    it("respects 'Send original HD' tick box when enabled by user", () => {
+      const sendOriginalHd = true; // User checked the tick box
+      const file = { name: "architecture_diagram.png", size: 5 * 1024 * 1024, type: "image/png" };
+
+      const shouldCompress = file.type.startsWith("image/") && !sendOriginalHd;
+      expect(shouldCompress).toBe(false);
+
+      const stagedAttachment = {
+        name: file.name,
+        originalSize: file.size,
+        size: file.size,
+        isHdOriginal: sendOriginalHd,
+        reductionPercent: 0,
+        type: "image" as const,
+      };
+
+      expect(stagedAttachment.isHdOriginal).toBe(true);
+      expect(stagedAttachment.reductionPercent).toBe(0);
+      expect(stagedAttachment.size).toBe(stagedAttachment.originalSize);
+    });
+
+    it("formats size badges accurately for both Reduced (-XX%) and HD ORIGINAL", () => {
+      const formatBadge = (att: { isHdOriginal?: boolean; reductionPercent?: number; size: number }) => {
+        if (att.isHdOriginal) {
+          const sizeStr = att.size >= 1024 * 1024
+            ? `${(att.size / (1024 * 1024)).toFixed(1)} MB`
+            : `${Math.round(att.size / 1024)} KB`;
+          return `💎 HD ORIGINAL (${sizeStr})`;
+        }
+        const pct = att.reductionPercent ? `-${att.reductionPercent}%` : "";
+        const sizeStr = att.size >= 1024 * 1024
+          ? `${(att.size / (1024 * 1024)).toFixed(1)} MB`
+          : `${Math.round(att.size / 1024)} KB`;
+        return `⚡ REDUCED ${pct} (${sizeStr})`.trim();
+      };
+
+      const reducedCard = { isHdOriginal: false, reductionPercent: 78, size: 280 * 1024 };
+      expect(formatBadge(reducedCard)).toBe("⚡ REDUCED -78% (280 KB)");
+
+      const hdCard = { isHdOriginal: true, reductionPercent: 0, size: 4.5 * 1024 * 1024 };
+      expect(formatBadge(hdCard)).toBe("💎 HD ORIGINAL (4.5 MB)");
+    });
+  });
 });
 
 

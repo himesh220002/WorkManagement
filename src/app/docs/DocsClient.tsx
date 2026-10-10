@@ -13,7 +13,6 @@ import {
   Briefcase,
   DollarSign,
   ArrowRight,
-  ShieldCheck,
   RefreshCw,
   Folder,
   User,
@@ -1004,39 +1003,31 @@ export default function DocsClient({
   }, [filteredDocuments, startIndex, endIndex]);
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#18181B] text-[#242424] dark:text-[#E4E4E7] p-2 sm:p-4">
-      {/* Header Banner */}
-      <div className="max-w-[1600px] mx-auto mb-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 dark:border-zinc-800 pb-6">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                AWS S3 Enterprise Vault
-              </span>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                {companyCode}
-              </span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
-              Enterprise Document Storage & S3 Management
-            </h1>
-            <p className="text-sm text-gray-600 dark:text-zinc-400 mt-1">
-              Direct-to-S3 presigned transfers with strict role-based access control, isolated tenant paths, and custom size restrictions.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <p className="text-xs text-gray-500 dark:text-zinc-400">Connected AWS Bucket</p>
-              <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1">
-                <ShieldCheck className="w-4 h-4" /> taskflow-pm-storage-prod (ap-south-1)
-              </p>
-            </div>
-          </div>
+    <div className="min-h-screen bg-gradient-to-b from-[#F4F8FC] via-[#FAFBFD] to-white dark:from-[#101014] dark:via-[#141417] dark:to-[#18181B] text-[#242424] dark:text-[#E4E4E7]">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-10 sm:py-14">
+      {/* Header — minimal home-style hero */}
+      <div className="mb-10">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-100 dark:border-blue-900">
+            AWS S3 Enterprise Vault
+          </span>
+          <span className="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-gray-900 text-white dark:bg-white dark:text-gray-900">
+            {companyCode}
+          </span>
+        </div>
+        <h1 className="text-3xl sm:text-[2.75rem] font-light tracking-tight leading-[1.1] text-gray-900 dark:text-white">
+          Document vault, <span className="font-semibold">minus the clutter.</span>
+        </h1>
+        <p className="text-sm sm:text-[15px] text-gray-500 dark:text-zinc-400 mt-3 max-w-2xl leading-relaxed">
+          Direct-to-S3 uploads with strict role-based access, isolated tenant paths, and elastic storage that grows with you.
+        </p>
+        <div className="flex items-center gap-2 mt-4 text-xs text-gray-500 dark:text-zinc-400">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="font-medium">Connected · taskflow-pm-storage-prod (ap-south-1)</span>
         </div>
 
         {/* Elastic Storage Quota & Telemetry Banner */}
-        <div className="mt-6 bg-white dark:bg-[#202024] rounded-2xl border border-gray-200 dark:border-zinc-800 shadow-sm p-4 sm:p-5">
+        <div className="mt-8 bg-white/80 dark:bg-white/[0.03] backdrop-blur rounded-3xl border border-black/[0.06] dark:border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.04)] p-5 sm:p-6">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex items-start gap-3.5">
               <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 shrink-0">
@@ -1124,17 +1115,18 @@ export default function DocsClient({
             </div>
           </div>
         </div>
+        </div>
 
         {/* Upload Form Card */}
-        <div className="mt-8 bg-white dark:bg-[#202024] rounded-2xl border border-gray-200 dark:border-zinc-800 shadow-sm p-4 sm:p-8">
-          <div className="flex items-center gap-3 pb-5 border-b border-gray-100 dark:border-zinc-800">
-            <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">
+        <div className="mt-10 bg-white/80 dark:bg-white/[0.03] backdrop-blur rounded-3xl border border-black/[0.06] dark:border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.04)] p-5 sm:p-8">
+          <div className="flex items-center gap-3 pb-5">
+            <div className="p-2.5 rounded-2xl bg-blue-600 text-white shadow-md shadow-blue-600/20">
               <UploadCloud className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Quick Upload Document</h2>
+              <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Quick Upload Document</h2>
               <p className="text-xs text-gray-500 dark:text-zinc-400">
-                Select your document category to automatically configure allowed file types, size limits, and S3 folder paths.
+                Pick a category — file types, size limits, and S3 paths configure themselves.
               </p>
             </div>
           </div>
@@ -1286,7 +1278,7 @@ export default function DocsClient({
 
               {batchFiles.length === 0 ? (
                 /* Empty State Dropzone */
-                <div className="relative border-2 border-dashed border-gray-300 dark:border-zinc-700 rounded-2xl p-8 text-center hover:border-blue-500 dark:hover:border-blue-400 transition-colors bg-gray-50/50 dark:bg-zinc-900/50">
+                <div className="relative border-2 border-dashed border-gray-200 dark:border-white/15 rounded-3xl p-10 text-center hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/10 transition-all bg-gray-50/50 dark:bg-white/[0.02]">
                   <input
                     id="doc-file-upload"
                     type="file"
@@ -1298,19 +1290,19 @@ export default function DocsClient({
                   />
 
                   <div className="flex flex-col items-center justify-center pointer-events-none">
-                    <div className="p-3.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 mb-3 shadow-sm">
-                      <UploadCloud className="w-8 h-8" />
+                    <div className="p-4 rounded-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 mb-4 shadow-lg">
+                      <UploadCloud className="w-7 h-7" />
                     </div>
 
-                    <p className="text-sm font-semibold text-gray-800 dark:text-zinc-200">
-                      Drag and drop single file or multi-page batch (2–10 pages), or click to browse
+                    <p className="text-sm font-semibold tracking-tight text-gray-900 dark:text-zinc-100">
+                      Drop files here, or click to browse
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-md">
-                      Snapping document photos? Upload multiple pages at once. Merge them into 1 unified layered PDF with selective quality reduction.
+                    <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-md leading-relaxed">
+                      Single file or multi-page batch (2–10 pages). Snapped photos merge into one layered PDF with selective quality reduction.
                     </p>
-                    <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 dark:bg-zinc-800 text-[11px] text-gray-600 dark:text-zinc-400">
+                    <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white dark:bg-white/10 border border-black/[0.06] dark:border-white/10 text-[11px] text-gray-600 dark:text-zinc-400 shadow-sm">
                       <span>Vault Limit: <strong className="text-gray-900 dark:text-white">{categoryConfig.maxSizeMB} MB</strong></span>
-                      <span>•</span>
+                      <span className="text-gray-300">•</span>
                       <span>Formats: {categoryConfig.allowedExtensions.join(", ")}</span>
                     </div>
                   </div>
@@ -1634,7 +1626,7 @@ export default function DocsClient({
                     ? "Tick 'Apply Size Reducer' on oversized page(s) before uploading"
                     : undefined
                 }
-                className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow-sm hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-7 py-3 rounded-full bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 text-white font-semibold text-sm shadow-lg hover:shadow-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2"
               >
                 {isUploading ? (
                   <>
@@ -1659,37 +1651,37 @@ export default function DocsClient({
         </div>
 
         {/* Documents Library / Explorer Section */}
-        <div className="mt-12 bg-white dark:bg-[#202024] rounded-2xl border border-gray-200 dark:border-zinc-800 shadow-sm p-4 sm:p-8">
+        <div className="mt-10 bg-white/80 dark:bg-white/[0.03] backdrop-blur rounded-3xl border border-black/[0.06] dark:border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.04)] p-5 sm:p-8">
           {/* Header & Quick Text Search Ahead */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-gray-100 dark:border-zinc-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6">
             <div>
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
                 <span>{activeTab === "ARCHIVE" ? "Archived Documents Vault" : "Organization Document Vault"}</span>
-                <span className="text-xs px-2.5 py-0.5 rounded-full font-mono bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
+                <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-gray-900 text-white dark:bg-white dark:text-gray-900">
                   {filteredDocuments.length} of {activeTab === "ARCHIVE" ? countArchived : activeDocuments.length}
                 </span>
               </h2>
-              <p className="text-xs text-gray-500 dark:text-zinc-400">
+              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
                 {activeTab === "ARCHIVE"
-                  ? "Archived documents are safely stored in AWS S3 and MongoDB, kept separate from your active workspace."
-                  : `Encrypted files stored in your AWS S3 bucket for ${companyName}. Click to generate temporary 60s view links.`}
+                  ? "Safely stored in S3 and MongoDB, kept separate from your active workspace."
+                  : `Encrypted files in your S3 bucket for ${companyName}. Click a file for a temporary 60s view link.`}
               </p>
             </div>
 
             {/* Text Search Ahead */}
             <div className="relative w-full sm:w-72">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
                 placeholder="Search titles, files, projects..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-9 py-2.5 text-xs rounded-full border border-black/10 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -1697,69 +1689,69 @@ export default function DocsClient({
             </div>
           </div>
 
-          {/* Category Tabs & Archive Tab */}
-          <div className="flex flex-wrap items-center gap-2 pt-5 pb-4">
+          {/* Category Tabs — segmented control */}
+          <div className="flex flex-wrap items-center gap-1 p-1 rounded-2xl bg-gray-100/80 dark:bg-white/5 border border-black/[0.04] dark:border-white/10 w-fit max-w-full mb-2">
             <button
               onClick={() => handleCategoryFilterChange("ALL")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === "ALL"
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700"
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === "ALL"
+                  ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
             >
               All Files ({activeDocuments.length})
             </button>
             <button
               onClick={() => handleCategoryFilterChange("PROJECT")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === "PROJECT"
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700"
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === "PROJECT"
+                  ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
             >
               📁 Projects ({countProjects})
             </button>
             <button
               onClick={() => handleCategoryFilterChange("EMPLOYEE")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === "EMPLOYEE"
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700"
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === "EMPLOYEE"
+                  ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
             >
-              👤 Employee Records ({countEmployees})
+              👤 Employee ({countEmployees})
             </button>
             <button
               onClick={() => handleCategoryFilterChange("SALES")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === "SALES"
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700"
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === "SALES"
+                  ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
             >
-              💼 Sales Pipeline ({countSales})
+              💼 Sales ({countSales})
             </button>
             <button
               onClick={() => handleCategoryFilterChange("SALARY_FINANCE")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === "SALARY_FINANCE"
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700"
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === "SALARY_FINANCE"
+                  ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
             >
-              💰 Salary & Finance ({countFinance})
+              💰 Finance ({countFinance})
             </button>
 
             {/* Dedicated Archive Folder Tab */}
             <button
               onClick={() => handleCategoryFilterChange("ARCHIVE")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ml-auto ${activeTab === "ARCHIVE"
-                  ? "bg-amber-600 text-white shadow-sm"
-                  : "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200/60 dark:border-amber-800/60"
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${activeTab === "ARCHIVE"
+                  ? "bg-amber-500 text-white shadow-sm"
+                  : "text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
                 }`}
             >
               <Archive className="w-3.5 h-3.5" />
-              <span>📦 Archived Files ({countArchived})</span>
+              <span>Archived ({countArchived})</span>
             </button>
           </div>
 
           {/* Three-Branch Cascading Dropdown Filter Toolbar */}
-          <div className="bg-gray-50/80 dark:bg-zinc-900/60 p-4 rounded-xl border border-gray-200/80 dark:border-zinc-800 mb-6">
+          <div className="bg-gray-50/70 dark:bg-white/[0.03] p-4 rounded-2xl border border-black/[0.05] dark:border-white/10 mb-6">
             <div className="flex items-center gap-2 mb-3">
               <Filter className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
               <span className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300">

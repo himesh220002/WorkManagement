@@ -68,6 +68,22 @@ export function buildS3Key(
 }
 
 /**
+ * Generates an isolated S3 object key for chat attachments
+ * Format: {companyId}/chat/{channelId}/{timestamp}_{fileName}
+ */
+export function buildChatS3Key(
+  companyId: string,
+  channelId: string | null | undefined,
+  fileName: string
+): string {
+  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const timestamp = Date.now();
+  const compIdStr = String(companyId || "global");
+  const chanStr = String(channelId || "global");
+  return `${compIdStr}/chat/${chanStr}/${timestamp}_${safeName}`;
+}
+
+/**
  * Generates a short-lived presigned upload URL for direct browser-to-S3 upload
  */
 export async function generatePresignedUploadUrl(

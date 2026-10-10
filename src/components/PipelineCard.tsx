@@ -7,9 +7,11 @@ import {
   deletePipelineTodo,
   reorderPipelineTodos,
   deletePipeline,
+  updatePipelineDates,
   getAssigneeOptions,
 } from "@/actions";
 import { PREDEFINED_PIPELINE_TASKS } from "@/utils/taskConstants";
+import { computePipelineProgress } from "@/utils/pipelineProgress";
 import { StatusBadge, Badge } from "@/components/ui/Badge";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import {
@@ -37,9 +39,12 @@ import { triggerGuestRestriction } from "@/components/showcase/ShowcaseGuestCard
 export default function PipelineCard({
   pipeline,
   currentRole,
+  linkedTasks = [],
 }: {
   pipeline: any;
   currentRole?: string;
+  /** Granular TaskNodes linked via pipelineId — blended into progress with the checklist. */
+  linkedTasks?: Array<{ status?: string }>;
 }) {
   const role = (currentRole || "manager").toLowerCase();
   const canManagePipeline = ["owner", "manager", "superuser"].includes(role);
@@ -51,6 +56,50 @@ export default function PipelineCard({
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
   const [selectedAssigneeType, setSelectedAssigneeType] = useState("Individual");
+
+  // Editable timeline dates (initialized whenever the popup opens)
+  const [editStart, setEditStart] = useState("");
+  const [editEnd, setEditEnd] = useState("");
+  const [isSavingDates, setIsSavingDates] = useState(false);
+  const [datesFeedback, setDatesFeedback] = useState<string | null>(null);
+
+  const toDateInput = (v: any) => {
+    if (!v) return "";
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
+  useEffect(() => {
+    if (isModalOpen) {
+      setEditStart(toDateInput(pipeline.startDate));
+      setEditEnd(toDateInput(pipeline.endDate));
+      setDatesFeedback(null);
+    }
+  }, [isModalOpen, pipeline.startDate, pipeline.endDate]);
+
+  const handleSaveDates = async () => {
+    if (role === "viewer" || isSavingDates) return;
+    if (!editStart || !editEnd) {
+      setDatesFeedback("Pick both a start and an end date.");
+      return;
+    }
+    if (new Date(editEnd).getTime() < new Date(editStart).getTime()) {
+      setDatesFeedback("End date must be on or after the start date.");
+      return;
+    }
+    setIsSavingDates(true);
+    setDatesFeedback(null);
+    try {
+      await updatePipelineDates(pipeline._id, editStart, editEnd);
+      setDatesFeedback("Timeline saved — Gantt bars update instantly.");
+    } catch (err: any) {
+      setDatesFeedback(err?.message || "Could not save timeline dates.");
+    } finally {
+      setIsSavingDates(false);
+    }
+  };
 
   useEffect(() => {
     setTodos(pipeline.todos || []);
@@ -103,10 +152,46 @@ export default function PipelineCard({
 
   const completedTodos = todos.filter((t: any) => t.completed).length;
   const totalTodos = todos.length;
-  const dynamicProgress =
-    totalTodos > 0
-      ? Math.round((completedTodos / totalTodos) * 100)
-      : Number(pipeline.progress || 0);
+  // One formula everywhere: major checklist workstreams blended with granular
+  // linked deliverables (Done/Completed). Falls back to todos-only when no
+  // linked tasks are provided, and stored progress when both are empty.
+  const dynamicProgress = computePipelineProgress(
+    { progress: Number(pipeline.progress || 0), todos },
+    linkedTasks
+  );
+
+  // Commercial Sales Pipeline metadata (Deal Value, Stage, Win Probability)
+  const isSalesCategory =
+    (pipeline.category || "").toLowerCase().includes("sales") ||
+    (pipeline.category || "").toLowerCase().includes("commercial") ||
+    Boolean(pipeline.dealValue || pipeline.dealStage);
+
+  const dealValue: number =
+    Number(pipeline.dealValue) ||
+    Number(pipeline.cashFlowProjectionUSD) ||
+    (pipeline.budget && !isNaN(Number(pipeline.budget)) ? Number(pipeline.budget) : 0) ||
+    (isSalesCategory ? 250000 : 0);
+
+  const dealStage: string =
+    pipeline.dealStage ||
+    (isSalesCategory
+      ? dynamicProgress >= 100
+        ? "Closed Won"
+        : dynamicProgress >= 60
+        ? "Contract Negotiation"
+        : dynamicProgress >= 40
+        ? "Proposal Sent"
+        : dynamicProgress >= 20
+        ? "Qualified"
+        : "Discovery"
+      : pipeline.status === "Completed"
+      ? "Completed"
+      : "In Progress");
+
+  const winProbability: number =
+    pipeline.winProbability !== undefined && pipeline.winProbability !== null && Number(pipeline.winProbability) > 0
+      ? Number(pipeline.winProbability)
+      : Math.max(10, Math.min(100, dynamicProgress || 60));
 
   return (
     <>
@@ -175,6 +260,19 @@ export default function PipelineCard({
             </div>
           </div>
 
+          {/* Commercial Deal Strip */}
+          {(dealValue > 0 || isSalesCategory) && (
+            <div className="flex items-center justify-between text-[11px] mb-2.5 bg-[#FAF9F8] dark:bg-[#292827] px-2.5 py-1 rounded-[4px] border border-[#EDEBE9] dark:border-[#3B3A39]">
+              <div className="flex items-center gap-1 text-[#107C10] dark:text-[#54B054] font-bold">
+                <DollarSign className="w-3 h-3" />
+                <span>${dealValue.toLocaleString()} USD</span>
+              </div>
+              <span className="text-purple-700 dark:text-purple-300 font-semibold text-[10px] bg-purple-50 dark:bg-purple-900/30 px-1.5 py-0.5 rounded border border-purple-200/60 dark:border-purple-800/60">
+                {dealStage}
+              </span>
+            </div>
+          )}
+
           {/* Progress Bar */}
           <div className="mb-3">
             <div className="flex justify-between items-center text-xs mb-1">
@@ -233,10 +331,15 @@ export default function PipelineCard({
             {/* Modal Header */}
             <div className="flex justify-between items-start gap-4 pb-4 border-b border-[#E1DFDD] dark:border-[#3B3A39] mb-6">
               <div>
-                <div className="flex items-center gap-2 mb-1.5">
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                   <span className="text-xs font-bold text-[#0078D4] uppercase tracking-wider bg-[#EBF3FC] dark:bg-[#1C2B3D] px-2.5 py-0.5 rounded">
                     {pipeline.category || "General Pipeline"}
                   </span>
+                  {dealStage && (
+                    <span className="px-2.5 py-0.5 text-xs rounded font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800 flex items-center gap-1">
+                      <span>Stage: {dealStage}</span>
+                    </span>
+                  )}
                   <StatusBadge status={pipeline.status || "Active"} />
                   <span
                     className={`px-2 py-0.5 text-xs rounded font-semibold ${pipeline.priority === "High"
@@ -299,8 +402,31 @@ export default function PipelineCard({
                     <span className="font-bold text-[#0078D4] text-base">{dynamicProgress}%</span>
                   </div>
                   <ProgressBar value={dynamicProgress} size="md" tone={dynamicProgress >= 70 ? "success" : "brand"} />
+                  <p className="text-[10px] text-[#A19F9D] mt-1">Blends execution checklist ({completedTodos}/{totalTodos}) with linked deliverables — never set by hand.</p>
 
                   <div className="mt-3 pt-3 border-t border-[#E1DFDD] dark:border-[#3B3A39] text-xs space-y-1.5 text-[#605E5C] dark:text-[#C8C6C4]">
+                    {dealStage && (
+                      <div className="flex justify-between items-center">
+                        <span>Stage:</span>
+                        <strong className="text-purple-700 dark:text-purple-300 font-semibold">
+                          {dealStage}
+                        </strong>
+                      </div>
+                    )}
+                    {dealValue > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span>Deal Value:</span>
+                        <strong className="text-[#107C10] dark:text-[#54B054] font-bold">
+                          ${dealValue.toLocaleString()} USD
+                        </strong>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center">
+                      <span>Probability:</span>
+                      <strong className="text-[#0078D4] font-semibold">
+                        {winProbability}%
+                      </strong>
+                    </div>
                     <div className="flex justify-between">
                       <span>Start Date:</span>
                       <strong className="text-[#242424] dark:text-[#FFFFFF]">
@@ -313,6 +439,47 @@ export default function PipelineCard({
                         {pipeline.endDate ? pipeline.endDate.split("T")[0] : "TBD"}
                       </strong>
                     </div>
+                    {/* Editable timeline — same dates the Classic Gantt drags */}
+                    {role !== "viewer" ? (
+                      <div className="pt-2 mt-1 border-t border-[#E1DFDD] dark:border-[#3B3A39] space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="block">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider">Start</span>
+                            <input
+                              type="date"
+                              value={editStart}
+                              onChange={(e) => setEditStart(e.target.value)}
+                              className="mt-0.5 w-full px-2 py-1 text-xs rounded bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider">End</span>
+                            <input
+                              type="date"
+                              value={editEnd}
+                              onChange={(e) => setEditEnd(e.target.value)}
+                              className="mt-0.5 w-full px-2 py-1 text-xs rounded bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] text-[#242424] dark:text-[#FFFFFF] outline-none focus:border-[#0078D4]"
+                            />
+                          </label>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleSaveDates}
+                          disabled={isSavingDates}
+                          className="w-full py-1.5 rounded text-xs font-semibold bg-[#0078D4] hover:bg-[#106EBE] disabled:opacity-50 text-white transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>{isSavingDates ? "Saving Timeline..." : "Save Timeline Dates"}</span>
+                        </button>
+                        {datesFeedback && (
+                          <p className={`text-[11px] font-medium ${datesFeedback.startsWith("Timeline saved") ? "text-[#107C10]" : "text-[#D13438]"}`}>
+                            {datesFeedback}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-[#A19F9D] pt-1">Date editing is disabled in viewer mode.</p>
+                    )}
                     <div className="flex justify-between">
                       <span>Risk Level:</span>
                       <strong

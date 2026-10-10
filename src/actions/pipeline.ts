@@ -5,6 +5,7 @@ import { withAction, ActionResult } from "@/lib/action";
 import { Pipeline } from "@/models";
 import { invalidateEntity, CACHE_TAGS } from "@/lib/cache";
 import { revalidatePath } from "next/cache";
+import { recomputePipelineProgress } from "./index";
 
 const createPipelineSchema = z.object({
   name: z.string().min(1, "Pipeline name is required"),
@@ -61,6 +62,8 @@ export async function togglePipelineTodoAction(input: unknown): Promise<ActionRe
       pipeline.todos[data.todoIndex]!.completed = data.completed;
       await pipeline.save();
     }
+
+    await recomputePipelineProgress(data.pipelineId);
 
     if (pipeline.projectId) {
       invalidateEntity(CACHE_TAGS.pipelines(pipeline.projectId.toString()));

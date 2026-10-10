@@ -23,6 +23,7 @@ import {
   ChevronRight,
   MessageSquare,
   Trash2,
+  Pencil,
   X,
   FileText,
   BadgeDollarSign,
@@ -33,7 +34,7 @@ import {
   Link2,
   Copy,
 } from "lucide-react";
-import { addClientAccount, updateClientStage, addClientInteraction, deleteClientAccount } from "@/actions/crm";
+import { addClientAccount, updateClientAccount, updateClientStage, addClientInteraction, deleteClientAccount } from "@/actions/crm";
 import { createMeeting } from "@/actions/meetings";
 import Link from "next/link";
 
@@ -118,6 +119,25 @@ export default function CrmClient({
   const [cmSlackChannel, setCmSlackChannel] = useState("");
   const [cmAttendees, setCmAttendees] = useState("");
   const [isSubmittingMeeting, setIsSubmittingMeeting] = useState(false);
+
+  // Edit Client Account State
+  const [isEditAccountModalOpen, setIsEditAccountModalOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<CrmAccount | null>(null);
+  const [editAccountName, setEditAccountName] = useState("");
+  const [editTier, setEditTier] = useState<CrmAccount["tier"]>("Tier 1 Strategic");
+  const [editLifecycleStage, setEditLifecycleStage] = useState<CrmAccount["lifecycleStage"]>("Active Enterprise");
+  const [editIndustry, setEditIndustry] = useState("Technology");
+  const [editRegion, setEditRegion] = useState("North America");
+  const [editContractARR, setEditContractARR] = useState<number | string>(120000);
+  const [editHealthScore, setEditHealthScore] = useState<number | string>(90);
+  const [editContactName, setEditContactName] = useState("");
+  const [editContactTitle, setEditContactTitle] = useState("");
+  const [editContactEmail, setEditContactEmail] = useState("");
+  const [editContactPhone, setEditContactPhone] = useState("");
+  const [editProjectId, setEditProjectId] = useState("");
+  const [editAccountExecutive, setEditAccountExecutive] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
   // Derived Telemetry & Metrics
   const totalARR = useMemo(() => {
@@ -267,6 +287,86 @@ export default function CrmClient({
       alert(err.message || "Failed to schedule meeting.");
     } finally {
       setIsSubmittingMeeting(false);
+    }
+  };
+
+  const openEditAccountModal = (account: CrmAccount) => {
+    setEditingAccount(account);
+    setEditAccountName(account.accountName || "");
+    setEditTier(account.tier || "Tier 1 Strategic");
+    setEditLifecycleStage(account.lifecycleStage || "Active Enterprise");
+    setEditIndustry(account.industry || "Technology");
+    setEditRegion(account.region || "North America");
+    setEditContractARR(account.contractARR ?? 0);
+    setEditHealthScore(account.healthScore ?? 90);
+    setEditContactName(account.primaryContact?.name || "");
+    setEditContactTitle(account.primaryContact?.title || "");
+    setEditContactEmail(account.primaryContact?.email || "");
+    setEditContactPhone(account.primaryContact?.phone || "");
+    setEditProjectId(account.projectId?._id || (account.projectId as any) || "");
+    setEditAccountExecutive(account.accountExecutive || "");
+    setEditNotes(account.notes || "");
+    setIsEditAccountModalOpen(true);
+  };
+
+  const handleSaveEditAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isGuest || !editingAccount) return;
+
+    setIsSubmittingEdit(true);
+    try {
+      const formData = new FormData();
+      formData.set("accountId", editingAccount._id);
+      formData.set("accountName", editAccountName);
+      formData.set("tier", editTier);
+      formData.set("lifecycleStage", editLifecycleStage);
+      formData.set("industry", editIndustry);
+      formData.set("region", editRegion);
+      formData.set("contractARR", String(editContractARR));
+      formData.set("healthScore", String(editHealthScore));
+      formData.set("contactName", editContactName);
+      formData.set("contactTitle", editContactTitle);
+      formData.set("contactEmail", editContactEmail);
+      formData.set("contactPhone", editContactPhone);
+      formData.set("projectId", editProjectId);
+      formData.set("accountExecutive", editAccountExecutive);
+      formData.set("notes", editNotes);
+
+      await updateClientAccount(formData);
+
+      // Optimistically update selectedAccount if open
+      if (selectedAccount && selectedAccount._id === editingAccount._id) {
+        setSelectedAccount((prev) =>
+          prev
+            ? {
+                ...prev,
+                accountName: editAccountName,
+                tier: editTier,
+                lifecycleStage: editLifecycleStage,
+                industry: editIndustry,
+                region: editRegion,
+                contractARR: Number(editContractARR),
+                healthScore: Number(editHealthScore),
+                primaryContact: {
+                  ...prev.primaryContact,
+                  name: editContactName,
+                  title: editContactTitle,
+                  email: editContactEmail,
+                  phone: editContactPhone,
+                },
+                accountExecutive: editAccountExecutive,
+                notes: editNotes,
+              }
+            : null
+        );
+      }
+
+      setIsEditAccountModalOpen(false);
+      setEditingAccount(null);
+    } catch (err: any) {
+      alert(err.message || "Failed to update client account.");
+    } finally {
+      setIsSubmittingEdit(false);
     }
   };
 
@@ -450,15 +550,26 @@ export default function CrmClient({
                     </div>
                   </div>
 
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border shrink-0 ${
-                      account.tier === "Enterprise Key"
-                        ? "bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-300"
-                        : "bg-blue-50 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300 border-blue-300"
-                    }`}
-                  >
-                    {account.tier}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border shrink-0 ${
+                        account.tier === "Enterprise Key"
+                          ? "bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-300"
+                          : "bg-blue-50 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300 border-blue-300"
+                      }`}
+                    >
+                      {account.tier}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openEditAccountModal(account)}
+                      disabled={isGuest}
+                      title={isGuest ? "Sign in to edit account" : "Edit Account Details"}
+                      className="p-1 rounded text-gray-400 hover:text-[#0078D4] dark:hover:text-[#479EF5] hover:bg-gray-100 dark:hover:bg-[#323130] transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Contract ARR & Health Score Bar */}
@@ -557,30 +668,43 @@ export default function CrmClient({
               </div>
 
               {/* Card Footer Actions */}
-              <div className="pt-3 border-t border-[#EDEBE9] dark:border-[#292827] flex items-center justify-between text-xs">
+              <div className="w-full pt-3 border-t border-[#EDEBE9] dark:border-[#292827] flex flex-col gap-2 items-start justify-between text-xs">
                 <span className="text-[11px] text-[#8A8886]">
                   Exec: <strong className="text-[#242424] dark:text-white">{account.accountExecutive}</strong>
                 </span>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => openScheduleClientMeeting(account)}
-                    className="px-2 py-1 text-[11px] font-semibold rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-600 hover:text-white transition-colors cursor-pointer flex items-center gap-1"
-                    title="Schedule Meeting & Connectivity"
-                  >
-                    <Video className="w-3 h-3" />
-                    <span>+ Meet</span>
-                  </button>
+                <div className="flex items-center justify-between gap-2 w-full">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openEditAccountModal(account)}
+                      disabled={isGuest}
+                      className="px-2 py-1 text-[11px] font-semibold rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#292827] text-gray-700 dark:text-gray-200 hover:border-[#0078D4] hover:text-[#0078D4] dark:hover:text-[#479EF5] transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                      title={isGuest ? "Sign in to edit account" : "Edit Account Details"}
+                    >
+                      <Pencil className="w-3 h-3" />
+                      <span>Edit</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setSelectedAccount(account)}
-                    className="px-2.5 py-1 text-[11px] font-semibold rounded bg-[#EBF3FC] dark:bg-[#1C2B3D] text-[#0078D4] dark:text-[#479EF5] hover:bg-[#0078D4] hover:text-white transition-colors cursor-pointer flex items-center gap-1"
-                  >
-                    <MessageSquare className="w-3 h-3" />
-                    <span>Timeline ({account.interactions.length})</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => openScheduleClientMeeting(account)}
+                      className="px-2 py-1 text-[11px] font-semibold rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-600 hover:text-white transition-colors cursor-pointer flex items-center gap-1"
+                      title="Schedule Meeting & Connectivity"
+                    >
+                      <Video className="w-3 h-3" />
+                      <span>+ Meet</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAccount(account)}
+                      className="px-2.5 py-1 text-[11px] font-semibold rounded bg-[#EBF3FC] dark:bg-[#1C2B3D] text-[#0078D4] dark:text-[#479EF5] hover:bg-[#0078D4] hover:text-white transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <MessageSquare className="w-3 h-3" />
+                      <span>Timeline ({account.interactions.length})</span>
+                    </button>
+                  </div>
 
                   <form
                     action={deleteClientAccount}
@@ -638,13 +762,25 @@ export default function CrmClient({
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setSelectedAccount(null)}
-                className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openEditAccountModal(selectedAccount)}
+                  disabled={isGuest}
+                  className="px-2.5 py-1 text-xs font-semibold rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#292827] text-gray-700 dark:text-gray-200 hover:border-[#0078D4] hover:text-[#0078D4] dark:hover:text-[#479EF5] transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  title="Edit Account Details"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>Edit</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedAccount(null)}
+                  className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
@@ -1075,6 +1211,282 @@ export default function CrmClient({
                   }`}
                 >
                   {isGuest ? "Sign In to Establish Account" : "Establish Account"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Client Account Modal */}
+      {isEditAccountModalOpen && editingAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-[#E1DFDD] dark:border-[#3B3A39] shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-[#E1DFDD] dark:border-[#3B3A39] flex items-center justify-between bg-[#FAF9F8] dark:bg-[#252423]">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-[#0078D4]/10 text-[#0078D4]">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-[#242424] dark:text-white">
+                    Edit Client Account
+                  </h3>
+                  <p className="text-xs text-[#605E5C] dark:text-[#C8C6C4]">
+                    Update details for {editingAccount.accountName}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditAccountModalOpen(false);
+                  setEditingAccount(null);
+                }}
+                className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleSaveEditAccount}
+              className="p-6 overflow-y-auto space-y-4 text-xs"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Client Organization Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={editAccountName}
+                    onChange={(e) => setEditAccountName(e.target.value)}
+                    required
+                    className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#201F1E] text-gray-900 dark:text-white outline-none focus:border-[#0078D4]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Account Tier *
+                  </label>
+                  <select
+                    value={editTier}
+                    onChange={(e) => setEditTier(e.target.value as any)}
+                    className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#201F1E] text-gray-900 dark:text-white outline-none cursor-pointer"
+                  >
+                    <option value="Enterprise Key">Enterprise Key</option>
+                    <option value="Tier 1 Strategic">Tier 1 Strategic</option>
+                    <option value="Tier 2 Growth">Tier 2 Growth</option>
+                    <option value="Mid-Market">Mid-Market</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Lifecycle Stage
+                  </label>
+                  <select
+                    value={editLifecycleStage}
+                    onChange={(e) => setEditLifecycleStage(e.target.value as any)}
+                    className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#201F1E] text-gray-900 dark:text-white outline-none cursor-pointer"
+                  >
+                    <option value="Active Enterprise">Active Enterprise</option>
+                    <option value="Contract Expansion">Contract Expansion</option>
+                    <option value="Active Pilot">Active Pilot</option>
+                    <option value="Renewal Pending">Renewal Pending</option>
+                    <option value="Prospect">Prospect</option>
+                    <option value="At-Risk">At-Risk</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Contract ARR (USD) *
+                  </label>
+                  <input
+                    type="number"
+                    value={editContractARR}
+                    onChange={(e) => setEditContractARR(e.target.value)}
+                    required
+                    className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#201F1E] text-gray-900 dark:text-white outline-none focus:border-[#0078D4]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Health Score (0-100)
+                  </label>
+                  <input
+                    type="number"
+                    value={editHealthScore}
+                    onChange={(e) => setEditHealthScore(e.target.value)}
+                    min="0"
+                    max="100"
+                    className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#201F1E] text-gray-900 dark:text-white outline-none focus:border-[#0078D4]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Industry
+                  </label>
+                  <input
+                    type="text"
+                    value={editIndustry}
+                    onChange={(e) => setEditIndustry(e.target.value)}
+                    className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#201F1E] text-gray-900 dark:text-white outline-none focus:border-[#0078D4]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Region
+                  </label>
+                  <input
+                    type="text"
+                    value={editRegion}
+                    onChange={(e) => setEditRegion(e.target.value)}
+                    className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#201F1E] text-gray-900 dark:text-white outline-none focus:border-[#0078D4]"
+                  />
+                </div>
+              </div>
+
+              {/* Primary Contact Details */}
+              <div className="p-3.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-[#FAF9F8] dark:bg-[#252423] space-y-3">
+                <span className="font-bold text-gray-800 dark:text-white block">
+                  Primary Client Decision Maker
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={editContactName}
+                      onChange={(e) => setEditContactName(e.target.value)}
+                      required
+                      className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1B1A19] text-gray-900 dark:text-white outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">
+                      Title / Role
+                    </label>
+                    <input
+                      type="text"
+                      value={editContactTitle}
+                      onChange={(e) => setEditContactTitle(e.target.value)}
+                      className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1B1A19] text-gray-900 dark:text-white outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">
+                      Email Address *
+                    </label>
+                    <input
+                      type="email"
+                      value={editContactEmail}
+                      onChange={(e) => setEditContactEmail(e.target.value)}
+                      required
+                      className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1B1A19] text-gray-900 dark:text-white outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">
+                      Phone Number
+                    </label>
+                    <input
+                      type="text"
+                      value={editContactPhone}
+                      onChange={(e) => setEditContactPhone(e.target.value)}
+                      className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1B1A19] text-gray-900 dark:text-white outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Linked Project & Account Executive */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Associated Project / Product
+                  </label>
+                  <select
+                    value={editProjectId}
+                    onChange={(e) => setEditProjectId(e.target.value)}
+                    className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#201F1E] text-gray-900 dark:text-white outline-none cursor-pointer"
+                  >
+                    <option value="">No Associated Project (General Account)</option>
+                    {projects.map((p) => (
+                      <option key={p._id} value={p._id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Account Executive
+                  </label>
+                  <input
+                    type="text"
+                    value={editAccountExecutive}
+                    onChange={(e) => setEditAccountExecutive(e.target.value)}
+                    placeholder="Executive Name"
+                    className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#201F1E] text-gray-900 dark:text-white outline-none focus:border-[#0078D4]"
+                  />
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Account Notes & Context
+                </label>
+                <textarea
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Key strategic account notes, renewal terms, expansion targets..."
+                  className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#201F1E] text-gray-900 dark:text-white outline-none focus:border-[#0078D4] resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditAccountModalOpen(false);
+                    setEditingAccount(null);
+                  }}
+                  className="px-4 py-2 text-xs font-semibold rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isGuest || isSubmittingEdit}
+                  className={`px-5 py-2 rounded text-xs font-semibold transition-colors ${
+                    isGuest
+                      ? "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600"
+                      : "bg-[#0078D4] hover:bg-[#106EBE] text-white cursor-pointer shadow-sm"
+                  }`}
+                >
+                  {isGuest ? "Sign In to Save" : isSubmittingEdit ? "Saving Changes..." : "Save Changes"}
                 </button>
               </div>
             </form>

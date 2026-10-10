@@ -83,6 +83,7 @@ export default async function MeetingsPage() {
       : [],
     recordingUrl: m.recordingUrl || "",
     createdAt: m.createdAt ? new Date(m.createdAt).toISOString() : undefined,
+    updatedAt: m.updatedAt ? new Date(m.updatedAt).toISOString() : undefined,
   }));
 
   const projects = (rawProjects || []).map((p: any) => ({

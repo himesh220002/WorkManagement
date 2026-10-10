@@ -16,7 +16,14 @@ export interface IChatAttachment {
   name: string;
   url: string;
   size?: number;
-  type?: string;
+  originalSize?: number;
+  type?: string; // "image" | "pdf" | "file"
+  mimeType?: string;
+  s3Key?: string;
+  isHdOriginal?: boolean;
+  reductionPercent?: number;
+  expiresAt?: Date | string;
+  isExpired?: boolean;
 }
 
 export type ChatScopeType = "global" | "team" | "group" | "direct";
@@ -36,6 +43,7 @@ export interface IChatMessage {
   mentionedUsers: IChatMention[];
   reactions: IChatReaction[];
   attachments?: IChatAttachment[];
+  isEdited?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -76,14 +84,23 @@ const chatMessageSchema = new Schema<IChatMessage>(
         name: { type: String, required: true },
         url: { type: String, required: true },
         size: { type: Number, default: 0 },
+        originalSize: { type: Number },
         type: { type: String, default: "file" },
+        mimeType: { type: String, default: "" },
+        s3Key: { type: String, default: "" },
+        isHdOriginal: { type: Boolean, default: false },
+        reductionPercent: { type: Number, default: 0 },
+        expiresAt: { type: Date },
+        isExpired: { type: Boolean, default: false },
       },
     ],
+    isEdited: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
 
 chatMessageSchema.index({ companyId: 1, scope: 1, targetScopeId: 1, createdAt: -1 });
+chatMessageSchema.index({ "attachments.expiresAt": 1 });
 
 export const ChatMessage: Model<IChatMessage> =
   mongoose.models.ChatMessage || mongoose.model<IChatMessage>("ChatMessage", chatMessageSchema);

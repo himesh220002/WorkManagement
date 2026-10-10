@@ -6,6 +6,7 @@ import { revalidatePath as nextRevalidatePath } from "next/cache";
 import { getCurrentSession } from "@/server/auth/session";
 import { invalidateAllAppCaches } from "@/lib/cache";
 import { syncTenantWrite } from "@/lib/tenantDb";
+import { computePipelineProgress } from "@/utils/pipelineProgress";
 
 function revalidatePath(path: string) {
   invalidateAllAppCaches();
@@ -620,6 +621,45 @@ export async function updatePipelineDates(taskId: string, startDate: string, end
   }
 }
 
+function revalidatePipelineSurfaces() {
+  revalidatePath("/dev/timeline");
+  revalidatePath("/dev/dashboard");
+  revalidatePath("/dev");
+  revalidatePath("/exec/dashboard");
+  revalidatePath("/exec");
+  revalidatePath("/revenue/dashboard");
+  revalidatePath("/sales/dashboard");
+  revalidatePath("/projects");
+  revalidatePath("/diagrams");
+  revalidatePath("/my-work");
+}
+
+/**
+ * Single source of truth for pipeline progress.
+ * Major workstreams = pipeline checklist todos; granular deliverables =
+ * TaskNodes linked via pipelineId. Progress blends both (same formula as
+ * computePipelineProgress in @/utils/pipelineProgress), so completing
+ * dev-dashboard tasks moves every pipeline bar (timeline, cards, mesh,
+ * gantt, sales, revenue, projects) together with checklist ticks.
+ */
+export async function recomputePipelineProgress(pipelineId: string): Promise<number | null> {
+  if (!pipelineId) return null;
+  await connectToDatabase();
+  const session = await getCurrentSession();
+  const pipeline = await Pipeline.findById(pipelineId);
+  if (!pipeline) return null;
+  const todos = Array.isArray((pipeline as any).todos) ? (pipeline as any).todos : [];
+  const linked = await TaskNode.find({ pipelineId: (pipeline as any)._id }).select("status").lean();
+  const progress = computePipelineProgress(
+    { progress: Number((pipeline as any).progress || 0), todos },
+    Array.isArray(linked) ? linked : []
+  );
+  await Pipeline.findByIdAndUpdate(pipelineId, { progress });
+  await syncTenantWrite("Pipeline", "update", pipelineId, { progress }, session.companyCode);
+  revalidatePipelineSurfaces();
+  return progress;
+}
+
 export async function addPipelineTodo(pipelineId: string, formData: FormData) {
   const session = await getCurrentSession();
   assertNotGuest(session);
@@ -633,11 +673,9 @@ export async function addPipelineTodo(pipelineId: string, formData: FormData) {
   if (pipeline) {
     if (!Array.isArray(pipeline.todos)) pipeline.todos = [];
     pipeline.todos.push({ text, completed: false, assigneeType, assigneeName } as any);
-    const total = pipeline.todos.length;
-    const completed = pipeline.todos.filter((t: any) => t.completed).length;
-    pipeline.progress = total > 0 ? Math.round((completed / total) * 100) : 0;
     await pipeline.save();
-    await syncTenantWrite("Pipeline", "update", pipelineId, { todos: pipeline.todos, progress: pipeline.progress }, session.companyCode);
+    await syncTenantWrite("Pipeline", "update", pipelineId, { todos: pipeline.todos }, session.companyCode);
+    await recomputePipelineProgress(pipelineId);
     revalidatePath("/dev/timeline");
     revalidatePath("/dev/dashboard");
     revalidatePath("/dev");
@@ -662,11 +700,9 @@ export async function togglePipelineTodo(pipelineId: string, todoId: string, com
       const sub = (pipeline.todos as any).id(todoId);
       if (sub) sub.completed = completed;
     }
-    const total = pipeline.todos?.length || 0;
-    const completedCount = pipeline.todos?.filter((t: any) => t.completed).length || 0;
-    pipeline.progress = total > 0 ? Math.round((completedCount / total) * 100) : 0;
     await pipeline.save();
-    await syncTenantWrite("Pipeline", "update", pipelineId, { todos: pipeline.todos, progress: pipeline.progress }, session.companyCode);
+    await syncTenantWrite("Pipeline", "update", pipelineId, { todos: pipeline.todos }, session.companyCode);
+    await recomputePipelineProgress(pipelineId);
     revalidatePath("/dev/timeline");
     revalidatePath("/dev/dashboard");
     revalidatePath("/dev");
@@ -685,11 +721,9 @@ export async function deletePipelineTodo(pipelineId: string, todoId: string) {
     pipeline.todos = (pipeline.todos || []).filter(
       (t: any) => t._id?.toString() !== todoId?.toString()
     ) as any;
-    const total = pipeline.todos.length;
-    const completedCount = pipeline.todos.filter((t: any) => t.completed).length;
-    pipeline.progress = total > 0 ? Math.round((completedCount / total) * 100) : 0;
     await pipeline.save();
-    await syncTenantWrite("Pipeline", "update", pipelineId, { todos: pipeline.todos, progress: pipeline.progress }, session.companyCode);
+    await syncTenantWrite("Pipeline", "update", pipelineId, { todos: pipeline.todos }, session.companyCode);
+    await recomputePipelineProgress(pipelineId);
     revalidatePath("/dev/timeline");
     revalidatePath("/dev/dashboard");
     revalidatePath("/dev");
@@ -711,11 +745,9 @@ export async function reorderPipelineTodos(pipelineId: string, todos: any[]) {
     }
     return todo;
   });
-  const total = cleanTodos.length;
-  const completedCount = cleanTodos.filter((t: any) => t.completed).length;
-  const progress = total > 0 ? Math.round((completedCount / total) * 100) : 0;
-  await Pipeline.findByIdAndUpdate(pipelineId, { todos: cleanTodos, progress });
-  await syncTenantWrite("Pipeline", "update", pipelineId, { todos: cleanTodos, progress }, session.companyCode);
+  await Pipeline.findByIdAndUpdate(pipelineId, { todos: cleanTodos });
+  await syncTenantWrite("Pipeline", "update", pipelineId, { todos: cleanTodos }, session.companyCode);
+  await recomputePipelineProgress(pipelineId);
   revalidatePath("/dev/timeline");
   revalidatePath("/dev/dashboard");
   revalidatePath("/dev");
@@ -849,6 +881,7 @@ export async function addTaskNode(formData: FormData) {
     
     const newTask = await TaskNode.create(data);
     await syncTenantWrite("TaskNode", "create", newTask, undefined, session.companyCode);
+    if (data.pipelineId) await recomputePipelineProgress(String(data.pipelineId));
     revalidatePath("/dev/dashboard");
     revalidatePath("/dev/timeline");
     revalidatePath("/exec/dashboard");
@@ -878,8 +911,18 @@ export async function updateTaskNode(formData: FormData) {
     if (pipelineId) updateData.pipelineId = pipelineId === "none" ? null : pipelineId;
     if (cycleId) updateData.cycleId = cycleId === "none" ? null : cycleId;
 
+    const before = await TaskNode.findById(taskId).select("pipelineId").lean() as any;
+    const oldPipelineId = before?.pipelineId ? String(before.pipelineId) : null;
     await TaskNode.findByIdAndUpdate(taskId, updateData);
     await syncTenantWrite("TaskNode", "update", taskId, updateData, session.companyCode);
+    // Keep linked pipelines in sync: granular deliverable status moves pipeline bars.
+    const newPipelineId = updateData.pipelineId
+      ? String(updateData.pipelineId)
+      : oldPipelineId;
+    if (newPipelineId) await recomputePipelineProgress(newPipelineId);
+    if (oldPipelineId && oldPipelineId !== newPipelineId) {
+      await recomputePipelineProgress(oldPipelineId);
+    }
     revalidatePath("/dev/dashboard");
     revalidatePath("/dev/timeline");
     revalidatePath("/exec/dashboard");

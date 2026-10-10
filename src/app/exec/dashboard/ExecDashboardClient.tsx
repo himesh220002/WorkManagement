@@ -426,9 +426,11 @@ export default function ExecDashboardClient({
 
         {/* Project Filter Selector */}
         <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="flex items-center gap-2 bg-[#F3F2F1] dark:bg-[#292827] px-3 py-1.5 rounded-[6px] border border-[#E1DFDD] dark:border-[#3B3A39] text-xs font-medium text-[#242424] dark:text-[#FFFFFF] w-full md:w-auto">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 bg-[#F3F2F1] dark:bg-[#292827] px-3 py-1.5 rounded-[6px] border border-[#E1DFDD] dark:border-[#3B3A39] text-xs font-medium text-[#242424] dark:text-[#FFFFFF] w-full md:w-auto">
+            <div className="flex items-center gap-1">
             <Filter className="w-4 h-4 text-[#0078D4]" />
             <span className="text-[#605E5C] dark:text-[#C8C6C4]">Project Scope:</span>
+            </div>
             <select
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}

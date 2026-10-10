@@ -25,6 +25,7 @@ export { ClientAccount } from "./clientAccount";
 export { Meeting } from "./meeting";
 export { ContactMessage } from "./contactMessage";
 export { ChatMessage } from "./chatMessage";
+export { ChatAttachment } from "./chatAttachment";
 export { ChatChannel } from "./chatChannel";
 export { SavedPerson } from "./savedPerson";
 export { Whiteboard } from "./whiteboard";

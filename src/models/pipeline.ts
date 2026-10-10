@@ -42,6 +42,9 @@ const pipelineSchema = new Schema<IPipeline>(
     cashFlowProjectionUSD: { type: Number, default: 0 },
     expensesUSD: { type: Number, default: 0 },
     roiPercent: { type: Number, default: 0 },
+    dealStage: { type: String, default: "" },
+    dealValue: { type: Number, default: 0 },
+    winProbability: { type: Number, default: 0 },
     todos: [
       {
         text: { type: String, required: true },

@@ -184,11 +184,11 @@ export async function updateMeetingStatus(meetingId: string, status: string) {
   const session = await getCurrentSession();
   assertNotGuest(session);
 
-  const updated = await Meeting.findByIdAndUpdate(
+  await Meeting.findByIdAndUpdate(
     meetingId,
     { $set: { status } },
     { new: true }
-  );
+  ).lean();
 
   if (session.companyCode) {
     await syncTenantWrite("Meeting", "update", meetingId, { $set: { status } }, session.companyCode);
@@ -196,7 +196,8 @@ export async function updateMeetingStatus(meetingId: string, status: string) {
 
   invalidateAllAppCaches();
   revalidatePath("/teams/meetings");
-  return { success: true, meeting: updated };
+  revalidatePath("/growth/crm");
+  return { success: true, meetingId, status };
 }
 
 /**
@@ -219,11 +220,11 @@ export async function updateMeetingTranscript(
     status: "Completed",
   };
 
-  const meeting = await Meeting.findByIdAndUpdate(
+  await Meeting.findByIdAndUpdate(
     meetingId,
     { $set: updateData },
     { new: true }
-  );
+  ).lean();
 
   if (session.companyCode) {
     await syncTenantWrite("Meeting", "update", meetingId, { $set: updateData }, session.companyCode);
@@ -231,7 +232,8 @@ export async function updateMeetingTranscript(
 
   invalidateAllAppCaches();
   revalidatePath("/teams/meetings");
-  return { success: true, meeting };
+  revalidatePath("/growth/crm");
+  return { success: true, meetingId };
 }
 
 /**
@@ -441,6 +443,156 @@ export async function generateMeetingTranscriptPdf(meetingId: string) {
   }
 
   return { success: true, pdfDataUrl: dataUrl, title: (meeting as any).title || "Meeting" };
+}
+
+/**
+ * Updates an existing meeting's details, schedule, platform link, and recurrence settings.
+ */
+export async function updateMeeting(formData: FormData) {
+  await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
+
+  const meetingId = (formData.get("meetingId") as string)?.trim();
+  if (!meetingId) {
+    throw new Error("Meeting ID is required.");
+  }
+
+  const title = (formData.get("title") as string)?.trim();
+  const description = (formData.get("description") as string)?.trim() || "";
+  const scheduledAtStr = formData.get("scheduledAt") as string;
+  const durationMinutes = Number(formData.get("durationMinutes")) || 45;
+  const platform = (formData.get("platform") as any) || "google_meet";
+  let meetingLink = (formData.get("meetingLink") as string)?.trim();
+  const discordChannelUrl = (formData.get("discordChannelUrl") as string)?.trim() || "";
+  const discordChannelName = (formData.get("discordChannelName") as string)?.trim() || "";
+  const slackChannelName = (formData.get("slackChannelName") as string)?.trim() || "";
+  const slackWebhookUrl = (formData.get("slackWebhookUrl") as string)?.trim() || "";
+
+  const projectId = (formData.get("projectId") as string)?.trim() || undefined;
+  const clientAccountId = (formData.get("clientAccountId") as string)?.trim() || undefined;
+
+  const isRecurring = formData.get("isRecurring") === "true" || formData.get("isRecurring") === "on";
+  const recurrenceCadence = (formData.get("recurrenceCadence") as any) || (isRecurring ? "weekly" : "none");
+  const recurrenceDayOfWeek = (formData.get("recurrenceDayOfWeek") as string)?.trim() || "";
+
+  if (!title) {
+    throw new Error("Meeting title is required.");
+  }
+
+  // Resolve client account name if linked
+  let clientAccountName = "";
+  if (clientAccountId) {
+    const acc = await ClientAccount.findById(clientAccountId).select("accountName").lean();
+    if (acc) clientAccountName = (acc as any).accountName;
+  }
+
+  // Rebuild attendee roster when the edit form submits one.
+  // attendeeUserIds: JSON array of directory user ids; externalEmails: comma-separated list.
+  // Existing attendanceStatus is carried over for retained emails; organizer is always kept.
+  const hasRosterFields = formData.has("attendeeUserIds") || formData.has("externalEmails");
+  let rebuiltAttendees: any[] | null = null;
+  if (hasRosterFields) {
+    let userIds: string[] = [];
+    try {
+      const raw = (formData.get("attendeeUserIds") as string) || "[]";
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) userIds = parsed.map((v) => String(v)).filter(Boolean);
+    } catch {
+      userIds = [];
+    }
+    const externalRaw = (formData.get("externalEmails") as string) || "";
+    const externalEmails = externalRaw.split(",").map((s) => s.trim()).filter((s) => /.+@.+\..+/.test(s));
+
+    const current = await Meeting.findById(meetingId).select("attendees organizerName organizerEmail").lean() as any;
+    const prevStatus = new Map<string, string>();
+    for (const a of (current?.attendees || [])) {
+      if (a?.email) prevStatus.set(String(a.email).toLowerCase(), a.attendanceStatus || "invited");
+    }
+
+    const dirUsers = userIds.length > 0
+      ? await User.find({ _id: { $in: userIds } }).select("name email role").lean() as any[]
+      : [];
+    const seen = new Set<string>();
+    rebuiltAttendees = [];
+    for (const u of dirUsers) {
+      const email = String(u.email || "").toLowerCase();
+      if (!email || seen.has(email)) continue;
+      seen.add(email);
+      rebuiltAttendees.push({
+        userId: String(u._id),
+        name: u.name,
+        email: u.email,
+        role: u.role || "Attendee",
+        attendanceStatus: prevStatus.get(email) || "invited",
+      });
+    }
+    for (const email of externalEmails) {
+      const key = email.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rebuiltAttendees.push({
+        name: email.split("@")[0],
+        email,
+        role: "Attendee",
+        attendanceStatus: prevStatus.get(key) || "invited",
+      });
+    }
+    // Always keep the organizer on the roster.
+    const orgEmail = String(current?.organizerEmail || session.email || "").toLowerCase();
+    if (orgEmail && !seen.has(orgEmail)) {
+      rebuiltAttendees.unshift({
+        name: current?.organizerName || session.name || "Organizer",
+        email: current?.organizerEmail || session.email || "organizer@company.internal",
+        role: "Host",
+        attendanceStatus: "confirmed",
+      });
+    }
+  }
+
+  const updateData: any = {
+    title,
+    description,
+    durationMinutes,
+    platform,
+    discordChannelUrl,
+    discordChannelName,
+    slackChannelName,
+    slackWebhookUrl,
+    projectId: projectId || null,
+    clientAccountId: clientAccountId || null,
+    clientAccountName: clientAccountName || undefined,
+    isRecurring,
+    recurrenceCadence,
+    recurrenceDayOfWeek,
+  };
+
+  if (rebuiltAttendees !== null) {
+    updateData.attendees = rebuiltAttendees;
+  }
+
+  if (meetingLink) {
+    updateData.meetingLink = meetingLink;
+  }
+
+  if (scheduledAtStr) {
+    const scheduledDate = new Date(scheduledAtStr);
+    if (!isNaN(scheduledDate.getTime())) {
+      updateData.scheduledAt = scheduledDate;
+    }
+  }
+
+  const updatedMeeting = await Meeting.findByIdAndUpdate(meetingId, updateData, { new: true }).lean();
+
+  if (session.companyCode) {
+    await syncTenantWrite("Meeting", "update", meetingId, updateData, session.companyCode);
+  }
+
+  invalidateAllAppCaches();
+  revalidatePath("/teams/meetings");
+  revalidatePath("/growth/crm");
+
+  return { success: true, meetingId };
 }
 
 /**

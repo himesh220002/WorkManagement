@@ -2,7 +2,7 @@
     "meta": {
         "project": "WorkManagement (TaskPMS)",
         "stack": "Next.js 16 App Router, React 19, TypeScript, Tailwind v4, Mongoose 9 / MongoDB",
-        "planVersion": "1.1.7",
+        "planVersion": "1.2.4",
         "createdAt": "2026-10-05",
         "designReference": "https://developer.microsoft.com/en-us/ (Microsoft Fluent 2 design language)",
         "purpose": "Single source of truth for every upgrade, refactor and UX change. Every task lists WHAT, WHY and HOW. Update `status` and `remarks` on a task when work starts or finishes.",
@@ -948,6 +948,38 @@
                     "how": "Automated executive reporting (Executive Summary, Sprint Burndown, Risk Analysis, Financial Forecast) with visual chart datasets (Bar, Line, Pie), plus custom form builder.",
                     "status": "done",
                     "remarks": "Integrated Google Gemini multi-model AI reporting with structured data visualizers and dynamic form creation."
+                },
+                {
+                    "id": "P7-7",
+                    "title": "Interactive Meeting & CRM Card In-Place Edit Modals",
+                    "files": [
+                        "src/app/teams/meetings/MeetingsClient.tsx",
+                        "src/app/growth/crm/CrmClient.tsx",
+                        "src/actions/meetings.ts",
+                        "src/actions/crm.ts",
+                        "tests/unit/meetingsConnectivity.test.ts"
+                    ],
+                    "how": "Added in-place Edit action triggers on both meeting cards and CRM account cards (both card header icons and card footer buttons, plus account timeline drawer header). Implemented comprehensive modal dialogs supporting updates for title, description, schedule, duration, platform (Google Meet, Zoom, Slack, Discord, In-Person), links, channels, project/client associations, recurring cadences, and full CRM account metadata (name, tier, lifecycle stage, ARR, health score, contacts, project, executive, notes) with multi-tenant write sync and cache invalidation.",
+                    "status": "done",
+                    "remarks": "Fully delivered in-place card editing across /teams/meetings and /growth/crm with 225/225 passing Vitest tests and zero TypeScript errors."
+                },
+                {
+                    "id": "P7-8",
+                    "title": "Chat Attachments (Images, PDFs) with 1-Day S3 & Chat Auto-Deletion",
+                    "files": [
+                        "src/models/chatMessage.ts",
+                        "src/models/chatAttachment.ts",
+                        "src/lib/s3.ts",
+                        "src/lib/chatAttachmentCleanup.ts",
+                        "src/app/api/chat/upload/route.ts",
+                        "src/app/api/chat/cleanup/route.ts",
+                        "src/app/api/chat/messages/route.ts",
+                        "src/components/chat/ChatSpaceClient.tsx",
+                        "tests/unit/chatAndWhiteboard.test.ts"
+                    ],
+                    "how": "Enabled file attachments in /chat supporting images (PNG, JPG, WEBP, GIF, SVG) and PDF documents with direct multi-tenant S3 storage ({companyId}/chat/{channelId}/...). Implemented an automated 1-day (24-hour) auto-deletion lifecycle across both chatside and AWS S3 bucket storage: tracks expiresAt in ChatAttachment and ChatMessage, automatically cleans up expired objects on S3 via deleteS3Object and pulls expired attachments from chat messages in MongoDB, filters expired attachments immediately in GET queries, displays a countdown status pill on active attachments, and provides staged attachment management in the message composer.",
+                    "status": "done",
+                    "remarks": "Fully delivered 24-hour self-deleting chat attachments for images and PDFs with automated S3 storage freeing, passing 229/229 Vitest tests and 0 TypeScript errors."
                 }
             ]
         }
@@ -1127,6 +1159,48 @@
             "taskId": "P10-whiteboard-lcp-hydration-fix",
             "author": "Antigravity",
             "note": "Fixed SVG polygon floating-point hydration mismatch by rounding coordinates to integers with Math.round() and adding suppressHydrationWarning; created streaming SSR loading.tsx for instant paint (<0.2s LCP); optimized server queries to eliminate Mongoose CastError and unindexed regex table scans."
+        },
+        {
+            "date": "2026-10-10",
+            "taskId": "P11-sales-pipeline-metadata-and-capacity-attribution",
+            "author": "Antigravity",
+            "note": "Injected commercial sales metadata (Deal Stage, Deal Value, Win Probability) seamlessly into PipelineCard modal left-hand progress container and top header pills without adding table bloat; transformed Resource Dashboard (/exec/resources) capacity ledger to map 520h weekly capacity across Active Campaign Designs (Welcome Series, Cart Abandonment, Re-engagement generating $20.3k), Commercial Sales ($3.84M pipeline, 200 deals), Core Engineering, and Available Buffer; enhanced Member Roster table with domain pills, linked work, workload progress, and buffer headroom; verified with 223 passing unit tests and zero TypeScript errors."
+        },
+        {
+            "date": "2026-10-10",
+            "taskId": "P12-meetings-crm-card-edit-modals",
+            "author": "Antigravity",
+            "note": "Added complete in-place Edit options to cards on both /teams/meetings and /growth/crm (including card header quick-edit icons, card footer action buttons, and CRM timeline drawer header). Wired up server actions updateMeeting and updateClientAccount with multi-tenant synchronization, automated cache eviction, and responsive Microsoft Fluent 2 modal dialogs; verified with 225/225 passing tests."
+        },
+        {
+            "date": "2026-10-10",
+            "taskId": "P13-chat-attachments-s3-1day-self-deleting",
+            "author": "Antigravity",
+            "note": "Implemented chat file attachments supporting images and PDFs stored in AWS S3 ({companyId}/chat/{channelId}/...) with 1-day (24-hour) auto-deletion on both chat-side and S3 bucket storage to keep bucket storage completely free; built upload endpoint, automated purge runner, immediate GET filter, staged tray, and visual 24h countdown badges; verified with 229/229 tests passing."
+        },
+        {
+            "date": "2026-10-10",
+            "taskId": "P14-chat-file-size-reducer-hd-toggle",
+            "author": "Antigravity",
+            "note": "Configured image file size reducer to apply by default on chat uploads via client-side canvas compression (70% quality, 1600px max dimension), saving bandwidth and S3 storage; added prominent 'Send original HD' tick box in composer toolbar and individual staged cards to allow sending uncompressed full-resolution files; added visual quality badges ('⚡ Reduced -XX%' vs '💎 Original HD') and stored originalSize, isHdOriginal, and reductionPercent in ChatMessage and ChatAttachment schemas; preserved 1-day auto-deletion lifecycle; verified with 232/232 tests passing."
+        },
+        {
+            "date": "2026-10-10",
+            "taskId": "P15-meetings-status-call-stack-fix",
+            "author": "Antigravity",
+            "note": "Fixed RangeError: Maximum call stack size exceeded on /teams/meetings card status mutation. The root cause was updateMeetingStatus returning an un-lean, raw Mongoose Document model instance containing cyclical schemas/prototypes across the React 19 Flight Server Action boundary. Sanitized server actions (updateMeetingStatus, updateMeetingTranscript, updateMeeting) to return clean, serializable payloads ({ success: true, meetingId, status }); added client-side optimistic UI state (localStatusMap) for zero-latency card badge/background updates and rollback handling; verified with 234/234 passing tests."
+        },
+        {
+            "date": "2026-10-10",
+            "taskId": "P16-meetings-auto-sort-hierarchy",
+            "author": "Antigravity",
+            "note": "Implemented smart auto-sorting for /teams/meetings based on user priority: 1) In Progress (if multiple, sorted by which started first via earliest start time), 2) Scheduled (closer to current time to longer time to start), 3) Completed (recent completed to old completed via updatedAt/scheduledAt), 4) Cancelled (recent cancelled to old cancelled); added updatedAt tracking, interactive toolbar auto-sort badge, optimistic reactive re-ordering, and 5 unit tests in meetingsConnectivity.test.ts; verified with 239/239 passing tests."
+        },
+        {
+            "date": "2026-10-10",
+            "taskId": "P17-meetings-scheduled-sort-fix",
+            "author": "Antigravity",
+            "note": "Fixed Scheduled comparator bug where today's meetings (e.g. Sat, Oct 10) were erroneously sorted behind future meetings (e.g. Thu, Oct 15) when toggled between In Progress and Scheduled due to negative diffA from past hours. Replaced with pure chronological startA - startB so meetings with less time remaining to start are always strictly ahead; added localStatusTimestampMap for instantaneous completed/cancelled reactive sorting; verified with 240/240 passing tests."
         }
     ]
 }

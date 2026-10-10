@@ -19,21 +19,25 @@ import { triggerGuestRestriction } from "@/components/showcase/ShowcaseGuestCard
 export default function TimelineClient({
   tasks,
   options,
+  linkedTasks = [],
   projectMetrics = [],
   currentRole = "manager",
   isGuest = false,
 }: {
   tasks: any[];
   options?: Options;
+  linkedTasks?: Array<{ id: string; name: string; status?: string; pipelineId?: string | null }>;
   projectMetrics?: any[];
   currentRole?: string;
   isGuest?: boolean;
 }) {
   const ganttWrapperRef = useRef<HTMLDivElement>(null);
   const ganttInstance = useRef<any>(null);
+  const ganttSectionRef = useRef<HTMLElement>(null);
   const mermaidContainerRef = useRef<HTMLDivElement>(null);
   const [activeCategory, setActiveCategory] = useState("All");
   const [activeViewTab, setActiveViewTab] = useState<"roadmap" | "mesh" | "cards" | "classic">("roadmap");
+  const [highlightedPipelineId, setHighlightedPipelineId] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formCategory, setFormCategory] = useState("Development");
   const [dayZoom, setDayZoom] = useState("Week");
@@ -50,6 +54,18 @@ export default function TimelineClient({
   const filteredTasks = useMemo(() => {
     return tasks.filter((t: any) => activeCategory === "All" || t.category === activeCategory);
   }, [tasks, activeCategory]);
+
+  // Granular deliverables grouped by pipeline — one progress formula everywhere.
+  const linkedByPipeline = useMemo(() => {
+    const map: Record<string, Array<{ status?: string }>> = {};
+    for (const t of linkedTasks) {
+      if (!t.pipelineId) continue;
+      const key = String(t.pipelineId);
+      if (!map[key]) map[key] = [];
+      map[key].push({ status: t.status });
+    }
+    return map;
+  }, [linkedTasks]);
 
   useEffect(() => {
     if (!showExamplesModal || !mermaidContainerRef.current) return;
@@ -83,6 +99,10 @@ export default function TimelineClient({
     // Keep a map of initial values to prevent Frappe Gantt from firing Server Actions on load
     const initialValues: Record<string, { start: string, end: string, progress: number }> = {};
 
+    // Checklist-derived progress per pipeline: the single source of truth.
+    // Manual progress drags snap back to this value.
+    const derivedProgress: Record<string, number> = {};
+
     let sourceTasks = activeCategory === "Company Pipeline" ? projectMetrics : filteredTasks;
 
     const validIdMap = new Map<string, string>();
@@ -107,6 +127,27 @@ export default function TimelineClient({
       const progress = t.progress || 0;
       initialValues[t._id] = { start, end, progress };
 
+      // Derive progress from execution checklist + linked deliverables
+      // (same formula as the server). Falls back to stored progress.
+      const todos = Array.isArray((t as any).todos) ? (t as any).todos : [];
+      const linked = linkedByPipeline[String(t._id)] || [];
+      const doneLinked = linked.filter((lt) =>
+        ["done", "completed"].includes(String(lt?.status || "").toLowerCase())
+      ).length;
+      let derived: number;
+      if (todos.length > 0 && linked.length > 0) {
+        derived = Math.round(
+          ((todos.filter((td: any) => td.completed).length + doneLinked) / (todos.length + linked.length)) * 100
+        );
+      } else if (todos.length > 0) {
+        derived = Math.round((todos.filter((td: any) => td.completed).length / todos.length) * 100);
+      } else if (linked.length > 0) {
+        derived = Math.round((doneLinked / linked.length) * 100);
+      } else {
+        derived = progress;
+      }
+      derivedProgress[String(t._id)] = derived;
+
       let rawDeps: string[] = [];
       if (Array.isArray(t.dependencies)) {
         rawDeps = t.dependencies.filter(Boolean).map(String);
@@ -128,7 +169,10 @@ export default function TimelineClient({
         end: end,
         progress: progress,
         dependencies: dependenciesStr,
-        custom_class: "custom-gantt-bar",
+        custom_class:
+          highlightedPipelineId && String(t._id) === highlightedPipelineId
+            ? "custom-gantt-bar gantt-inspect-flash"
+            : "custom-gantt-bar",
       } as any;
     });
 
@@ -165,7 +209,12 @@ export default function TimelineClient({
         `;
       },
       on_progress_change: function (task: any, progress: number) {
-        if (initialValues[task.id] && initialValues[task.id].progress !== progress) {
+        // Progress is owned by the execution checklist — manual bar drags
+        // snap back to the checklist-derived value instead of persisting.
+        const truth = derivedProgress[task.id];
+        if (truth !== undefined && truth !== progress) {
+          updatePipelineProgress(task.id, truth);
+        } else if (initialValues[task.id] && initialValues[task.id].progress !== progress) {
           updatePipelineProgress(task.id, progress);
         }
       },
@@ -239,7 +288,16 @@ export default function TimelineClient({
         ganttWrapperRef.current.innerHTML = "";
       }
     };
-  }, [filteredTasks, activeCategory, projectMetrics]);
+  }, [filteredTasks, activeCategory, projectMetrics, highlightedPipelineId, linkedByPipeline]);
+
+  const inspectPipelineInGantt = (pipelineId: string) => {
+    setHighlightedPipelineId(String(pipelineId));
+    setActiveViewTab("classic");
+    // Let the tab + rebuilt gantt paint before scrolling to it
+    setTimeout(() => {
+      ganttSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
+  };
 
   const changeViewMode = (mode: string) => {
     if (ganttInstance.current) {
@@ -550,6 +608,8 @@ export default function TimelineClient({
           <ParallelPipelineTrackViewer
             pipelines={filteredTasks}
             projectName="Enterprise Active Pipelines"
+            onInspectGantt={inspectPipelineInGantt}
+            linkedTasksByPipeline={linkedByPipeline}
           />
         </section>
       )}
@@ -563,6 +623,7 @@ export default function TimelineClient({
                 key={pipeline._id}
                 pipeline={pipeline}
                 currentRole={isGuest ? "viewer" : currentRole}
+                linkedTasks={linkedByPipeline[String(pipeline._id)] || []}
               />
             ))}
             {filteredTasks.length === 0 && (
@@ -576,10 +637,16 @@ export default function TimelineClient({
 
       {/* Tab 4: Classic Frappe Gantt Chart (Preserved in DOM to prevent ref remounting bugs) */}
       <section
-        className={`bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 md:p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)] overflow-hidden ${
+        ref={ganttSectionRef}
+        className={`bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 md:p-6 mb-8 shadow-[0_1px_2px_rgba(0,0,0,0.14)] overflow-hidden scroll-mt-4 ${
           activeViewTab === "classic" ? "block" : "hidden"
         }`}
       >
+        <style>{`.gantt-inspect-flash .bar { stroke: #0078D4 !important; stroke-width: 3px !important; }`}</style>
+        <p className="text-[11px] text-[#8A8886] dark:text-[#A19F9D] mb-3 flex items-center gap-1.5">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#0078D4]" />
+          <span>Drag bar ends to reschedule a pipeline. Progress follows its execution checklist — manual progress drags snap back to checklist truth.</span>
+        </p>
         <div className="w-full overflow-x-auto">
           <div ref={ganttWrapperRef} className="min-w-[800px]"></div>
         </div>

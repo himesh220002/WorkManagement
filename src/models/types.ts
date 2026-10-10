@@ -313,6 +313,9 @@ export interface IPipeline {
   cashFlowProjectionUSD: number;
   expensesUSD: number;
   roiPercent: number;
+  dealStage?: string;
+  dealValue?: number;
+  winProbability?: number;
   todos: {
     text: string;
     completed: boolean;

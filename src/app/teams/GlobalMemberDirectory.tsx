@@ -55,6 +55,11 @@ export default function GlobalMemberDirectory({
   const [isOpenWorking, setIsOpenWorking] = useState(true);
   const [isOpenQuit, setIsOpenQuit] = useState(false);
   const [isOpenDropped, setIsOpenDropped] = useState(false);
+  // Merit cards start collapsed (compact identity header); click to expand telemetry.
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+
+  const toggleCard = (id: string) =>
+    setExpandedCards((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const canMutateTags = ["owner", "manager", "superuser"].includes(
     (currentRole || "manager").toLowerCase()
@@ -146,28 +151,46 @@ export default function GlobalMemberDirectory({
     badge: PromotionBadgeInfo;
   }) => {
     const avgRating = ((merit.supervisorRating + merit.teamLeadRating) / 2).toFixed(1);
+    const expanded = !!expandedCards[u._id];
 
     return (
       <div
         key={u._id}
-        onClick={() => setSelectedUser(u)}
-        className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] hover:border-[#0078D4] dark:hover:border-[#0078D4] p-4 rounded-[8px] shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group relative overflow-hidden"
+        className={`bg-white dark:bg-[#201F1E] border rounded-[10px] shadow-sm hover:shadow-md transition-all flex flex-col justify-between group relative overflow-hidden ${
+          expanded
+            ? "border-[#0078D4]/60 dark:border-[#0078D4]/60"
+            : "border-[#E1DFDD] dark:border-[#3B3A39] hover:border-[#0078D4] dark:hover:border-[#0078D4]"
+        }`}
       >
         {/* Glowing Top accent when promotion ready */}
         {merit.isPromotionReady && (
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600" />
         )}
 
-        <div>
+        {/* Collapsible header: identity row — always visible */}
+        <div
+          onClick={() => toggleCard(u._id)}
+          title={expanded ? "Collapse merit telemetry" : "Expand merit telemetry"}
+          aria-expanded={expanded}
+          className="p-4 cursor-pointer select-none"
+        >
           {/* Header: Avatar, Name, Role, and Promotion Badge */}
-          <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-full bg-[#EBF3FC] dark:bg-[#1C2B3D] text-[#0078D4] dark:text-[#479EF5] flex items-center justify-center font-bold text-xs uppercase shrink-0 ring-2 ring-white dark:ring-[#201F1E] shadow-sm">
-                {u.name.substring(0, 2)}
+              <div className="relative shrink-0">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#EBF3FC] to-[#D6E9FA] dark:from-[#1C2B3D] dark:to-[#243B55] text-[#0078D4] dark:text-[#479EF5] flex items-center justify-center font-bold text-xs uppercase ring-2 ring-white dark:ring-[#201F1E] shadow-sm">
+                  {u.name.substring(0, 2)}
+                </div>
+                <span
+                  className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-[#201F1E] ${
+                    merit.isPromotionReady ? "bg-emerald-500" : "bg-[#0078D4]"
+                  }`}
+                  title={merit.readinessStatus}
+                />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <h4 className="font-bold text-xs sm:text-sm text-[#242424] dark:text-[#FFFFFF] truncate group-hover:text-[#0078D4] transition-colors">
+                  <h4 className="font-bold text-xs sm:text-sm text-[#0078D4] dark:text-[#479EF5] truncate">
                     {u.name}
                   </h4>
                   {u._id === currentUserId && (
@@ -176,7 +199,7 @@ export default function GlobalMemberDirectory({
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
                   {/* Corporate Role Tag */}
                   <span
                     className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${
@@ -227,8 +250,8 @@ export default function GlobalMemberDirectory({
               </div>
             </div>
 
-            {/* Promotion Badge */}
-            <div className="shrink-0">
+            {/* Promotion Badge + expand chevron */}
+            <div className="shrink-0 flex flex-col items-end gap-1.5">
               <span
                 className={`text-[10px] sm:text-[11px] px-2.5 py-0.5 rounded-full font-semibold border inline-flex items-center gap-1 shadow-sm ${badge.badgeStyle}`}
                 title={`Status: ${merit.readinessStatus}`}
@@ -244,17 +267,30 @@ export default function GlobalMemberDirectory({
                 )}
                 <span>{badge.shortLabel}</span>
               </span>
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#8A8886]">
+                {expanded ? (
+                  <ChevronUp className="w-4 h-4 text-[#0078D4]" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </span>
             </div>
           </div>
+        </div>
 
+        {/* Expanded telemetry area */}
+        {expanded && (
+          <div className="px-4 pb-4 animate-in fade-in slide-in-from-top-1 duration-200">
           {/* Rank & Composite Merit Score Bar */}
-          <div className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded-[4px] bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#EDEBE9] dark:border-[#292827] mb-3">
-            <span className="font-semibold text-[#242424] dark:text-[#FFFFFF] flex items-center gap-1.5">
-              <Award className="w-3.5 h-3.5 text-[#0078D4]" />
+          <div className="flex items-center justify-between text-xs py-2 px-3 rounded-[6px] bg-gradient-to-r from-[#EBF3FC] to-[#F7FBFF] dark:from-[#1C2B3D] dark:to-[#1A2333] border border-[#0078D4]/20 dark:border-[#0078D4]/30 mb-3">
+            <span className="font-bold text-[#242424] dark:text-[#FFFFFF] flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-[#0078D4] text-white flex items-center justify-center shrink-0">
+                <Award className="w-3.5 h-3.5" />
+              </span>
               <span>Rank {merit.currentRank} Seniority</span>
             </span>
             <span
-              className={`font-bold ${merit.isPromotionReady
+              className={`font-extrabold ${merit.isPromotionReady
                 ? "text-emerald-600 dark:text-emerald-400"
                 : "text-[#0078D4]"
                 }`}
@@ -265,12 +301,14 @@ export default function GlobalMemberDirectory({
 
           {/* 4-Metric Objective Telemetry Grid */}
           <div className="grid grid-cols-2 gap-2 text-[11px] mb-3">
-            <div className="p-2 rounded-[4px] bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#F3F2F1] dark:border-[#292827]">
-              <div className="flex items-center gap-1 text-[#8A8886] mb-0.5">
-                <Clock className="w-3 h-3 text-[#0078D4]" />
+            <div className="p-2.5 rounded-[6px] bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] shadow-sm hover:border-[#0078D4]/40 transition-colors">
+              <div className="flex items-center gap-1.5 text-[#605E5C] dark:text-[#C8C6C4] mb-1 font-semibold">
+                <span className="w-5 h-5 rounded-[4px] bg-[#EBF3FC] dark:bg-[#1C2B3D] flex items-center justify-center shrink-0">
+                  <Clock className="w-3 h-3 text-[#0078D4]" />
+                </span>
                 <span>Working Days</span>
               </div>
-              <div className="font-bold text-[#242424] dark:text-[#FFFFFF]">
+              <div className="font-extrabold text-[13px] text-[#242424] dark:text-[#FFFFFF]">
                 {merit.workingDays}d{" "}
                 <span className="text-[10px] font-normal text-[#8A8886]">
                   / {merit.minTenureRequired}d min
@@ -278,12 +316,14 @@ export default function GlobalMemberDirectory({
               </div>
             </div>
 
-            <div className="p-2 rounded-[4px] bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#F3F2F1] dark:border-[#292827]">
-              <div className="flex items-center gap-1 text-[#8A8886] mb-0.5">
-                <CheckSquare className="w-3 h-3 text-[#107C10]" />
+            <div className="p-2.5 rounded-[6px] bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] shadow-sm hover:border-[#107C10]/40 transition-colors">
+              <div className="flex items-center gap-1.5 text-[#605E5C] dark:text-[#C8C6C4] mb-1 font-semibold">
+                <span className="w-5 h-5 rounded-[4px] bg-[#DFF6DD] dark:bg-[#0F3818] flex items-center justify-center shrink-0">
+                  <CheckSquare className="w-3 h-3 text-[#107C10]" />
+                </span>
                 <span>Deliverables</span>
               </div>
-              <div className="font-bold text-[#242424] dark:text-[#FFFFFF]">
+              <div className="font-extrabold text-[13px] text-[#242424] dark:text-[#FFFFFF]">
                 {merit.completedProjects} done{" "}
                 <span className="text-[10px] font-normal text-[#8A8886]">
                   ({merit.currentProjects} active)
@@ -291,12 +331,14 @@ export default function GlobalMemberDirectory({
               </div>
             </div>
 
-            <div className="p-2 rounded-[4px] bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#F3F2F1] dark:border-[#292827]">
-              <div className="flex items-center gap-1 text-[#8A8886] mb-0.5">
-                <Star className="w-3 h-3 text-[#F59E0B] fill-[#F59E0B]" />
+            <div className="p-2.5 rounded-[6px] bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] shadow-sm hover:border-[#F59E0B]/50 transition-colors">
+              <div className="flex items-center gap-1.5 text-[#605E5C] dark:text-[#C8C6C4] mb-1 font-semibold">
+                <span className="w-5 h-5 rounded-[4px] bg-[#FFF4CE] dark:bg-[#4A3E09] flex items-center justify-center shrink-0">
+                  <Star className="w-3 h-3 text-[#B7791F] fill-[#F59E0B]" />
+                </span>
                 <span>Ratings (TL + Sup)</span>
               </div>
-              <div className="font-bold text-[#242424] dark:text-[#FFFFFF]">
+              <div className="font-extrabold text-[13px] text-[#242424] dark:text-[#FFFFFF]">
                 {avgRating} ★{" "}
                 <span className="text-[10px] font-normal text-[#8A8886]">
                   ({merit.teamLeadRating} / {merit.supervisorRating})
@@ -304,12 +346,14 @@ export default function GlobalMemberDirectory({
               </div>
             </div>
 
-            <div className="p-2 rounded-[4px] bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#F3F2F1] dark:border-[#292827]">
-              <div className="flex items-center gap-1 text-[#8A8886] mb-0.5">
-                <TrendingUp className="w-3 h-3 text-[#0078D4]" />
+            <div className="p-2.5 rounded-[6px] bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] shadow-sm hover:border-[#0078D4]/40 transition-colors">
+              <div className="flex items-center gap-1.5 text-[#605E5C] dark:text-[#C8C6C4] mb-1 font-semibold">
+                <span className="w-5 h-5 rounded-[4px] bg-[#EBF3FC] dark:bg-[#1C2B3D] flex items-center justify-center shrink-0">
+                  <TrendingUp className="w-3 h-3 text-[#0078D4]" />
+                </span>
                 <span>Performance</span>
               </div>
-              <div className="font-bold text-[#242424] dark:text-[#FFFFFF]">
+              <div className="font-extrabold text-[13px] text-[#242424] dark:text-[#FFFFFF]">
                 {merit.performanceScore}%{" "}
                 <span className="text-[10px] font-normal text-[#8A8886]">
                   ({merit.relevancyScore}% rel)
@@ -320,20 +364,20 @@ export default function GlobalMemberDirectory({
 
           {/* Progress towards Next Rank Bar */}
           {merit.currentRank < 5 && (
-            <div className="mb-3">
-              <div className="flex items-center justify-between text-[11px] text-[#605E5C] dark:text-[#C8C6C4] mb-1">
-                <span>Target: Rank {merit.nextRank}</span>
-                <span className="font-semibold text-[#0078D4]">
+            <div className="mb-3 p-2.5 rounded-[6px] bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#EDEBE9] dark:border-[#292827]">
+              <div className="flex items-center justify-between text-[11px] text-[#605E5C] dark:text-[#C8C6C4] mb-1.5">
+                <span className="font-semibold">Target: Rank {merit.nextRank}</span>
+                <span className="font-bold text-[#0078D4] px-1.5 py-0.5 rounded bg-[#EBF3FC] dark:bg-[#1C2B3D]">
                   {merit.progressPercent}% ({merit.promotionThreshold}% req)
                 </span>
               </div>
               <div className="w-full bg-[#EDEBE9] dark:bg-[#3B3A39] h-2 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${merit.isPromotionReady
-                    ? "bg-emerald-500 shadow-sm"
+                    ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-sm"
                     : merit.progressPercent >= 80
-                      ? "bg-amber-500"
-                      : "bg-[#0078D4]"
+                      ? "bg-gradient-to-r from-amber-500 to-orange-400"
+                      : "bg-gradient-to-r from-[#0078D4] to-[#479EF5]"
                     }`}
                   style={{ width: `${merit.progressPercent}%` }}
                 />
@@ -342,7 +386,13 @@ export default function GlobalMemberDirectory({
           )}
 
           {/* Sense of Achievement & Improvement Chance Highlight */}
-          <div className="p-2.5 rounded-[4px] bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#EDEBE9] dark:border-[#292827] text-[11px] mb-3">
+          <div className={`p-2.5 rounded-[6px] border text-[11px] mb-1 ${
+            merit.isPromotionReady
+              ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
+              : merit.currentRank === 5
+              ? "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800"
+              : "bg-[#EBF3FC]/60 dark:bg-[#1C2B3D]/50 border-[#0078D4]/20 dark:border-[#0078D4]/30"
+          }`}>
             {merit.isPromotionReady ? (
               <div className="flex items-start gap-1.5 text-emerald-700 dark:text-emerald-400 font-medium">
                 <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-600 animate-pulse" />
@@ -363,16 +413,26 @@ export default function GlobalMemberDirectory({
               </div>
             )}
           </div>
-        </div>
+          </div>
+        )}
 
-        {/* Card Footer */}
-        <div className="flex items-center justify-between text-[11px] pt-2 border-t border-[#F3F2F1] dark:border-[#292827] text-[#8A8886]">
-          <span>Audit trail verified</span>
-          <span className="text-[#0078D4] font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+        {/* Card Footer — visible when expanded */}
+        {expanded && (
+        <div className="flex items-center justify-between text-[11px] mx-4 mb-4 pt-2 border-t border-[#F3F2F1] dark:border-[#292827] text-[#8A8886]">
+          <span className="inline-flex items-center gap-1">
+            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+            <span>Audit trail verified</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedUser(u)}
+            className="text-white bg-[#0078D4] hover:bg-[#106EBE] font-semibold flex items-center gap-1 px-2.5 py-1 rounded-[4px] shadow-sm transition-all cursor-pointer"
+          >
             <span>Inspect Profile</span>
             <ArrowUpRight className="w-3.5 h-3.5" />
-          </span>
+          </button>
         </div>
+        )}
       </div>
     );
   };

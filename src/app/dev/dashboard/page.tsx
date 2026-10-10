@@ -3,6 +3,7 @@ import { Project, TaskNode, Pipeline, Cycle } from "@/models";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import DevDashboardClient from "@/app/dev/dashboard/DevDashboardClient";
 import { fetchWithCache } from "@/lib/cache";
+import { computePipelineProgress } from "@/utils/pipelineProgress";
 
 export default async function DevDashboardPage(
   props: { searchParams: Promise<{ projectId?: string }> }
@@ -27,9 +28,18 @@ export default async function DevDashboardPage(
     
     if (projects.length > 0) {
       const projectIds = projects.map(p => p._id);
-      
+
+      // All tenant pipelines (any category — not just Development), including
+      // unassigned ones, so every track is linkable from tasks and profiled.
       pipelines = await fetchWithCache(`dev_pipelines:${cId}`, 25, () =>
-        Pipeline.find({ ...tenantFilter, projectId: { $in: projectIds } }).sort({ progress: -1 }).lean()
+        Pipeline.find({
+          ...tenantFilter,
+          $or: [
+            { projectId: { $in: projectIds } },
+            { projectId: null },
+            { projectId: { $exists: false } },
+          ],
+        }).sort({ progress: -1 }).lean()
       );
       
       if (selectedProjectId && selectedProjectId !== "all") {
@@ -77,19 +87,31 @@ export default async function DevDashboardPage(
     console.error(err);
   }
 
+  // Scope pipelines to the selected project context (all projects = every track).
+  // Progress blends execution checklists with linked granular deliverables —
+  // the same formula used on timeline, cards, mesh, gantt, sales and revenue.
+  const scopedPipelines = pipelines.filter((p: any) => {
+    if (!selectedProjectId || selectedProjectId === "all") return true;
+    return p.projectId ? p.projectId.toString() === selectedProjectId : true;
+  });
+
+  const linkedByPipeline = new Map<string, any[]>();
+  tasks.forEach((t: any) => {
+    if (!t.pipelineId) return;
+    const key = t.pipelineId.toString();
+    if (!linkedByPipeline.has(key)) linkedByPipeline.set(key, []);
+    linkedByPipeline.get(key)!.push(t);
+  });
+
   // Calculate dynamic metrics
   let totalPipelineProgress = 0;
-  pipelines.forEach((p: any) => {
-    let prog = Number(p.progress || 0);
-    if (Array.isArray(p.todos) && p.todos.length > 0) {
-      const completed = p.todos.filter((t: any) => t.completed).length;
-      prog = Math.round((completed / p.todos.length) * 100);
-      p.progress = prog;
-    }
+  scopedPipelines.forEach((p: any) => {
+    const prog = computePipelineProgress(p, linkedByPipeline.get(p._id.toString()) || []);
+    p.progress = prog;
     totalPipelineProgress += prog;
   });
-  const avgPipelineProgress = pipelines.length > 0
-    ? (totalPipelineProgress / pipelines.length).toFixed(1)
+  const avgPipelineProgress = scopedPipelines.length > 0
+    ? (totalPipelineProgress / scopedPipelines.length).toFixed(1)
     : 0;
 
   // Calculate average cycle time
@@ -180,17 +202,9 @@ export default async function DevDashboardPage(
     endDate: t.endDate ? new Date(t.endDate).toISOString() : null,
   }));
 
-  const cleanPipelines = pipelines
-    .filter((p: any) => p.category === "Development")
+  const cleanPipelines = scopedPipelines
     .map((p: any) => {
-      const totalTodos = Array.isArray(p.todos) ? p.todos.length : 0;
-      const completedTodos = Array.isArray(p.todos)
-        ? p.todos.filter((t: any) => t.completed).length
-        : 0;
-      const prog =
-        totalTodos > 0
-          ? Math.round((completedTodos / totalTodos) * 100)
-          : Number(p.progress || 0);
+      const prog = computePipelineProgress(p, linkedByPipeline.get(p._id.toString()) || []);
 
       return {
         _id: p._id.toString(),
@@ -200,6 +214,7 @@ export default async function DevDashboardPage(
         owner: p.owner,
       priority: p.priority,
       status: p.status,
+      projectId: p.projectId ? p.projectId.toString() : null,
       startDate: p.startDate ? new Date(p.startDate).toISOString() : null,
       endDate: p.endDate ? new Date(p.endDate).toISOString() : null,
       riskLevel: p.riskLevel,

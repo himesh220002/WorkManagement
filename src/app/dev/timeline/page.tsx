@@ -28,7 +28,7 @@ export default async function TimelinePage() {
         Team.find(tenantFilter, { name: 1 }).lean()
       ),
       fetchWithCache(`timeline_tasknodes:${cId}`, 30, () =>
-        TaskNode.find(tenantFilter, { name: 1 }).lean()
+        TaskNode.find(tenantFilter, { name: 1, status: 1, pipelineId: 1 }).lean()
       ),
       fetchWithCache(`timeline_users:${cId}`, 30, () =>
         User.find(tenantFilter, { name: 1, role: 1, position: 1, rank: 1 }).lean()
@@ -75,11 +75,19 @@ export default async function TimelinePage() {
     projects: projects.map(p => ({ id: p._id.toString(), name: p.name })),
     teams: teams.map(t => ({ id: t._id.toString(), name: t.name })),
     tasks: taskNodes.map(t => ({ id: t._id.toString(), name: t.name })),
-    users: users.map(u => ({ 
-      id: u._id.toString(), 
-      name: `${u.name} - ${u.role} ${u.position ? `(${u.position})` : ''} - Rank ${u.rank || 1}` 
+    users: users.map(u => ({
+      id: u._id.toString(),
+      name: `${u.name} - ${u.role} ${u.position ? `(${u.position})` : ''} - Rank ${u.rank || 1}`
     })),
   };
+
+  // Granular deliverables linked to pipelines (status + pipelineId drive progress bars)
+  const linkedTasks = taskNodes.map((t: any) => ({
+    id: t._id.toString(),
+    name: t.name,
+    status: t.status || "Todo",
+    pipelineId: t.pipelineId ? t.pipelineId.toString() : null,
+  }));
 
   const projectMetrics = projects.map((p: any) => {
     const pIdStr = p._id.toString();
@@ -122,6 +130,7 @@ export default async function TimelinePage() {
     <TimelineClient
       tasks={cleanTasks}
       options={options}
+      linkedTasks={linkedTasks}
       projectMetrics={projectMetrics}
       currentRole={session.role}
       isGuest={Boolean(session.isGuest)}

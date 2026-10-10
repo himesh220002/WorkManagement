@@ -28,6 +28,10 @@ export interface ParallelPipelineTrackViewerProps {
   projectName?: string;
   projectId?: string;
   compact?: boolean;
+  /** When provided, the Gantt link jumps to the Classic Gantt view instead of navigating. */
+  onInspectGantt?: (pipelineId: string) => void;
+  /** Granular tasks keyed by pipeline id — blended into live progress. */
+  linkedTasksByPipeline?: Record<string, Array<{ status?: string }>>;
 }
 
 export default function ParallelPipelineTrackViewer({
@@ -35,6 +39,8 @@ export default function ParallelPipelineTrackViewer({
   projectName = "Active Project",
   projectId,
   compact = false,
+  onInspectGantt,
+  linkedTasksByPipeline = {},
 }: ParallelPipelineTrackViewerProps) {
   const [expandedPipelineId, setExpandedPipelineId] = useState<string | null>(null);
   const [selectedTrackFilter, setSelectedTrackFilter] = useState<string>("All");
@@ -47,9 +53,12 @@ export default function ParallelPipelineTrackViewer({
     );
   }
 
-  // Calculate live dynamic progress for each pipeline
+  // Calculate live dynamic progress for each pipeline (checklist + linked deliverables)
   const enrichedPipelines = pipelines.map((pipe) => {
-    const liveProgress = computePipelineProgress(pipe);
+    const liveProgress = computePipelineProgress(
+      pipe,
+      linkedTasksByPipeline[String(pipe._id)] || []
+    );
     const todos = Array.isArray(pipe.todos) ? pipe.todos : [];
     const completedTodos = todos.filter((t: any) => t.completed).length;
 
@@ -279,14 +288,26 @@ export default function ParallelPipelineTrackViewer({
                   {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                 </button>
 
-                <Link
-                  href={`/dev/timeline`}
-                  className="text-gray-500 hover:text-[#0078D4] flex items-center gap-1"
-                  title="Inspect in Interactive Frappe Gantt Timeline"
-                >
-                  <span>Gantt</span>
-                  <ExternalLink className="w-3 h-3" />
-                </Link>
+                {onInspectGantt ? (
+                  <button
+                    type="button"
+                    onClick={() => onInspectGantt(String(pipe._id))}
+                    className="text-gray-500 hover:text-[#0078D4] flex items-center gap-1 cursor-pointer font-medium"
+                    title="Inspect in Interactive Frappe Gantt Timeline"
+                  >
+                    <span>Gantt</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
+                ) : (
+                  <Link
+                    href={`/dev/timeline`}
+                    className="text-gray-500 hover:text-[#0078D4] flex items-center gap-1"
+                    title="Inspect in Interactive Frappe Gantt Timeline"
+                  >
+                    <span>Gantt</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </Link>
+                )}
               </div>
 
               {/* Expanded Todo / Checkpoint List */}

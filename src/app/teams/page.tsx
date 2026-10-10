@@ -163,7 +163,7 @@ export default async function TeamsPage() {
       </header>
 
       {/* Anti-Bias Meritocracy Architecture Ribbon */}
-      <div className="bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+      {/* <div className="bg-[#FAF9F8] dark:bg-[#1B1A19] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px] p-4 mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
         <div className="flex items-start sm:items-center gap-3">
           <div className="hidden md:block p-2 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shrink-0">
             <ShieldCheck className="w-5 h-5" />
@@ -191,7 +191,7 @@ export default async function TeamsPage() {
             <div className="text-sm font-bold text-emerald-600">{promotionReadyCount} staff</div>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Forms Ribbon: Register Global Member + Create Team (Restricted to Management) */}
       {["owner", "manager", "superuser"].includes((session.role || "").toLowerCase()) ? (

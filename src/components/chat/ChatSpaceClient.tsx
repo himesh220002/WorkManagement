@@ -28,7 +28,15 @@ import {
   Check,
   CheckSquare,
   Square,
+  Pencil,
+  FileText,
+  ExternalLink,
+  AlertCircle,
+  Loader2,
+  Sliders,
+  CornerDownLeft,
 } from "lucide-react";
+import { compressImageFile } from "@/utils/imageCompressor";
 
 interface ChatMember {
   _id: string;
@@ -86,7 +94,19 @@ interface ChatMessageItem {
   targetScopeName: string;
   mentionedUsers?: { userId: string; name: string }[];
   reactions?: { emoji: string; userId: string; userName: string }[];
-  attachments?: { name: string; url: string; size?: number; type?: string }[];
+  attachments?: {
+    name: string;
+    url: string;
+    size?: number;
+    originalSize?: number;
+    type?: "image" | "pdf" | string;
+    mimeType?: string;
+    s3Key?: string;
+    isHdOriginal?: boolean;
+    reductionPercent?: number;
+    expiresAt?: string | Date;
+  }[];
+  isEdited?: boolean;
   createdAt: string | Date;
 }
 
@@ -99,6 +119,21 @@ interface ChatSpaceClientProps {
 }
 
 const COMMON_EMOJIS = ["👍", "❤️", "🚀", "🎉", "👀", "🔥", "💯"];
+
+const COMPOSER_EMOJI_GROUPS: { label: string; emojis: string[] }[] = [
+  {
+    label: "Smileys & People",
+    emojis: ["😀", "😁", "😂", "🤣", "😊", "😍", "😎", "🤔", "😅", "😉", "🙂", "🤝"],
+  },
+  {
+    label: "Gestures",
+    emojis: ["👍", "👎", "👏", "🙌", "🙏", "💪", "👀", "✌️", "🤞", "👋", "🫡", "👌"],
+  },
+  {
+    label: "Work & Wins",
+    emojis: ["🚀", "🎉", "🔥", "💯", "✅", "📌", "📝", "📊", "💡", "🎯", "⭐", "🏆", "🐛", "🔧", "☕", "❤️"],
+  },
+];
 
 const PREDEFINED_CHANNELS = [
   { id: "global", name: "Global All-Hands", scope: "global" as const, icon: Globe2, description: "Company-wide broadcasts & announcements" },
@@ -182,6 +217,36 @@ export default function ChatSpaceClient({
 
   // Emoji picker helper
   const [activeEmojiMessageId, setActiveEmojiMessageId] = useState<string | null>(null);
+
+  // Composer emoji palette popover
+  const [showComposerEmoji, setShowComposerEmoji] = useState<boolean>(false);
+
+  // Inline edit / delete own messages
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editMessageText, setEditMessageText] = useState<string>("");
+  const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
+
+  // File Attachments State (Images & PDFs with 1-day S3 auto-deletion & size reducer)
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [stagedAttachments, setStagedAttachments] = useState<
+    Array<{
+      name: string;
+      url: string;
+      s3Key: string;
+      size: number;
+      originalSize?: number;
+      type: "image" | "pdf";
+      mimeType: string;
+      isHdOriginal?: boolean;
+      reductionPercent?: number;
+      expiresAt: string;
+      rawFile?: File;
+    }>
+  >([]);
+  // Default: Apply file size reducer (sendOriginalHd = false)
+  const [sendOriginalHd, setSendOriginalHd] = useState<boolean>(false);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState<boolean>(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -717,9 +782,171 @@ export default function ChatSpaceClient({
     }
   };
 
+  // File Selection & Upload (Images & PDFs to S3 with Size Reducer by default)
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset input so same file can be selected again if needed
+    e.target.value = "";
+    setAttachmentError(null);
+
+    const ext = file.name.split(".").pop()?.toLowerCase() || "";
+    const isImage = file.type.startsWith("image/") || ["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(ext);
+    const isPdf = file.type === "application/pdf" || ext === "pdf";
+
+    if (!isImage && !isPdf) {
+      setAttachmentError("Only image files (.png, .jpg, .webp, .gif, .svg) and PDF documents (.pdf) are allowed.");
+      setTimeout(() => setAttachmentError(null), 5000);
+      return;
+    }
+
+    if (file.size > 25 * 1024 * 1024) {
+      setAttachmentError("File size exceeds 25 MB limit.");
+      setTimeout(() => setAttachmentError(null), 5000);
+      return;
+    }
+
+    try {
+      setIsUploadingAttachment(true);
+
+      let uploadFile: File = file;
+      let isHdOriginal = sendOriginalHd;
+      let reductionPercent = 0;
+      let originalSize = file.size;
+
+      // By default: apply file size reducer on images unless user ticked sendOriginalHd
+      if (isImage && !sendOriginalHd) {
+        try {
+          const compression = await compressImageFile(file, 0.70, 1600);
+          if (compression.applied) {
+            uploadFile = compression.file;
+            reductionPercent = compression.reductionPercent;
+            originalSize = compression.originalSize;
+            isHdOriginal = false;
+          }
+        } catch (compErr) {
+          console.warn("Could not compress image, proceeding with original:", compErr);
+        }
+      } else if (isImage && sendOriginalHd) {
+        isHdOriginal = true;
+      }
+
+      const formData = new FormData();
+      formData.set("file", uploadFile);
+      formData.set("channelId", activeChannelId);
+      formData.set("isHdOriginal", String(isHdOriginal));
+      formData.set("originalSize", String(originalSize));
+      formData.set("reductionPercent", String(reductionPercent));
+
+      const res = await fetch("/api/chat/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data.success && data.attachment) {
+        setStagedAttachments((prev) => [
+          ...prev,
+          {
+            ...data.attachment,
+            rawFile: file,
+          },
+        ]);
+      } else {
+        setAttachmentError(data.error || "Failed to upload file to S3");
+        setTimeout(() => setAttachmentError(null), 5000);
+      }
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      setAttachmentError(err.message || "Network error while uploading file");
+      setTimeout(() => setAttachmentError(null), 5000);
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  };
+
+  // Toggle HD quality for a specific staged image
+  const handleToggleStagedHd = async (index: number) => {
+    const item = stagedAttachments[index];
+    if (!item || !item.rawFile || item.type !== "image") return;
+
+    try {
+      setIsUploadingAttachment(true);
+      const newIsHd = !item.isHdOriginal;
+      let uploadFile: File = item.rawFile;
+      let reductionPercent = 0;
+      let originalSize = item.rawFile.size;
+
+      if (!newIsHd) {
+        const compression = await compressImageFile(item.rawFile, 0.70, 1600);
+        if (compression.applied) {
+          uploadFile = compression.file;
+          reductionPercent = compression.reductionPercent;
+          originalSize = compression.originalSize;
+        }
+      }
+
+      // Cleanup prior S3 upload
+      if (item.s3Key) {
+        fetch("/api/chat/upload", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ s3Key: item.s3Key }),
+        }).catch(() => { });
+      }
+
+      const formData = new FormData();
+      formData.set("file", uploadFile);
+      formData.set("channelId", activeChannelId);
+      formData.set("isHdOriginal", String(newIsHd));
+      formData.set("originalSize", String(originalSize));
+      formData.set("reductionPercent", String(reductionPercent));
+
+      const res = await fetch("/api/chat/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data.success && data.attachment) {
+        setStagedAttachments((prev) =>
+          prev.map((att, i) =>
+            i === index ? { ...data.attachment, rawFile: item.rawFile } : att
+          )
+        );
+      }
+    } catch (err: any) {
+      console.error("Failed to toggle HD:", err);
+      setAttachmentError(err.message || "Failed to switch quality mode");
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  };
+
+  const handleRemoveStagedAttachment = async (index: number) => {
+    const target = stagedAttachments[index];
+    if (!target) return;
+
+    setStagedAttachments((prev) => prev.filter((_, i) => i !== index));
+
+    // Cleanup S3 immediately if user unstages before sending
+    if (target.s3Key) {
+      try {
+        await fetch("/api/chat/upload", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ s3Key: target.s3Key }),
+        });
+      } catch (err) {
+        console.warn("Could not delete unstaged attachment from S3:", err);
+      }
+    }
+  };
+
   // Send Message
   const handleSendMessage = async () => {
-    if (!inputText.trim() || isSending) return;
+    if ((!inputText.trim() && stagedAttachments.length === 0) || isSending || isUploadingAttachment) return;
 
     try {
       setIsSending(true);
@@ -741,11 +968,12 @@ export default function ChatSpaceClient({
       }
 
       const payload = {
-        content: inputText,
+        content: inputText.trim() || (stagedAttachments.length > 0 ? (stagedAttachments[0].type === "pdf" ? `Shared PDF document: ${stagedAttachments[0].name}` : `Shared image: ${stagedAttachments[0].name}`) : ""),
         scope: composerScope,
         targetScopeId: activeChannelId,
         targetScopeName: composerTargetName,
         mentionedUsers: allMentioned,
+        attachments: stagedAttachments,
       };
 
       const res = await fetch("/api/chat/messages", {
@@ -759,6 +987,8 @@ export default function ChatSpaceClient({
         setMessages((prev) => [...prev, data.message]);
         setInputText("");
         setStagedMentions([]);
+        setStagedAttachments([]);
+        setShowComposerEmoji(false);
         fetchSavedPersons(); // Refresh saved persons in case new ones were auto-pinned
       }
     } catch (err) {
@@ -785,6 +1015,83 @@ export default function ChatSpaceClient({
       }
     } catch (err) {
       console.error("Failed to react to message:", err);
+    }
+  };
+
+  // Insert emoji at the composer cursor position
+  const insertEmojiAtCursor = (emoji: string) => {
+    const ta = textareaRef.current;
+    if (!ta) {
+      setInputText((prev) => prev + emoji);
+      return;
+    }
+    const start = ta.selectionStart ?? inputText.length;
+    const end = ta.selectionEnd ?? inputText.length;
+    setInputText(inputText.slice(0, start) + emoji + inputText.slice(end));
+    requestAnimationFrame(() => {
+      ta.focus();
+      const pos = start + emoji.length;
+      try {
+        ta.setSelectionRange(pos, pos);
+      } catch {
+        // ignore
+      }
+    });
+  };
+
+  // Begin inline editing of own message
+  const handleStartEdit = (msg: ChatMessageItem) => {
+    setEditingMessageId(msg._id);
+    setEditMessageText(msg.content);
+    setActiveEmojiMessageId(null);
+  };
+
+  // Save edited message content
+  const handleSaveEdit = async (messageId: string) => {
+    if (!editMessageText.trim() || isSavingEdit) return;
+    try {
+      setIsSavingEdit(true);
+      const res = await fetch("/api/chat/messages", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId, content: editMessageText }),
+      });
+      const data = await res.json();
+      if (data.success && data.message) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === messageId
+              ? { ...m, content: data.message.content, isEdited: true }
+              : m
+          )
+        );
+        setEditingMessageId(null);
+        setEditMessageText("");
+      }
+    } catch (err) {
+      console.error("Failed to edit message:", err);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Delete own message
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!window.confirm("Delete this message? This cannot be undone.")) return;
+    try {
+      const res = await fetch(`/api/chat/messages?messageId=${encodeURIComponent(messageId)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessages((prev) => prev.filter((m) => m._id !== messageId));
+        if (editingMessageId === messageId) {
+          setEditingMessageId(null);
+          setEditMessageText("");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to delete message:", err);
     }
   };
 
@@ -1287,6 +1594,31 @@ export default function ChatSpaceClient({
                       <span className="text-[10px] text-gray-400">
                         {formatTime(msg.createdAt)}
                       </span>
+                      {msg.isEdited && (
+                        <span className="text-[10px] text-gray-400 italic">
+                          (edited)
+                        </span>
+                      )}
+
+                      {/* Own-message actions: edit / delete */}
+                      {isMe && editingMessageId !== msg._id && (
+                        <span className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => handleStartEdit(msg)}
+                            title="Edit message"
+                            className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded transition-colors cursor-pointer"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMessage(msg._id)}
+                            title="Delete message"
+                            className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </span>
+                      )}
 
                       {/* Scope Badge */}
                       <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded text-gray-400 bg-gray-100 dark:bg-[#23252B]">
@@ -1294,23 +1626,162 @@ export default function ChatSpaceClient({
                       </span>
                     </div>
 
-                    {/* Content with highlighted @mentions */}
-                    <div className="text-xs text-gray-800 dark:text-gray-200 leading-relaxed break-words">
-                      {msg.content.split(/(@[A-Za-z0-9\s]+?)(?=\s@|\s|$)/).map((segment, i) => {
-                        if (segment.startsWith("@")) {
+                    {/* Inline editor for own message */}
+                    {editingMessageId === msg._id ? (
+                      <div className="mt-1 rounded-lg border border-blue-300 dark:border-blue-700 bg-white dark:bg-[#1C1E24] p-2">
+                        <textarea
+                          rows={2}
+                          autoFocus
+                          value={editMessageText}
+                          onChange={(e) => setEditMessageText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              handleSaveEdit(msg._id);
+                            } else if (e.key === "Escape") {
+                              setEditingMessageId(null);
+                              setEditMessageText("");
+                            }
+                          }}
+                          className="w-full bg-transparent text-xs text-gray-900 dark:text-white focus:outline-none resize-none"
+                        />
+                        <div className="flex items-center justify-end gap-1.5 mt-1">
+                          <button
+                            onClick={() => {
+                              setEditingMessageId(null);
+                              setEditMessageText("");
+                            }}
+                            className="px-2 py-1 text-[11px] font-semibold text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleSaveEdit(msg._id)}
+                            disabled={!editMessageText.trim() || isSavingEdit}
+                            className="flex items-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-md text-[11px] font-semibold cursor-pointer"
+                          >
+                            <CornerDownLeft className="w-3 h-3" />
+                            <span>{isSavingEdit ? "Saving..." : "Save"}</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Content with highlighted @mentions */
+                      <div className="text-xs text-gray-800 dark:text-gray-200 leading-relaxed break-words">
+                        {msg.content.split(/(@[A-Za-z0-9\s]+?)(?=\s@|\s|$)/).map((segment, i) => {
+                          if (segment.startsWith("@")) {
+                            return (
+                              <span
+                                key={i}
+                                className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold cursor-pointer hover:bg-blue-200 transition-colors mx-0.5"
+                              >
+                                <AtSign className="w-3 h-3 mr-0.5" />
+                                {segment.slice(1)}
+                              </span>
+                            );
+                          }
+                          return <span key={i}>{segment}</span>;
+                        })}
+                      </div>
+                    )}
+
+                    {/* Rendered File Attachments (Images & PDFs with 1-Day Auto-Deletion Banner) */}
+                    {msg.attachments && msg.attachments.length > 0 && (
+                      <div className="mt-2 space-y-2">
+                        {msg.attachments.map((att, attIdx) => {
+                          const isExpired = att.expiresAt && new Date(att.expiresAt) <= new Date();
+                          if (isExpired) return null;
+
+                          const isPdf = att.type === "pdf" || att.name.toLowerCase().endsWith(".pdf");
+
                           return (
-                            <span
-                              key={i}
-                              className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold cursor-pointer hover:bg-blue-200 transition-colors mx-0.5"
+                            <div
+                              key={attIdx}
+                              className="rounded-lg border border-gray-200 dark:border-gray-800 bg-[#FBFBFA] dark:bg-[#1C1E24] p-2.5 max-w-md shadow-xs overflow-hidden"
                             >
-                              <AtSign className="w-3 h-3 mr-0.5" />
-                              {segment.slice(1)}
-                            </span>
+                              {/* 1-Day Auto-Deletion & Quality Status Banner */}
+                              <div className="flex items-center justify-between text-[10px] text-amber-600 dark:text-amber-400 font-medium mb-2 pb-1.5 border-b border-gray-100 dark:border-gray-800/80">
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3 text-amber-500 shrink-0" />
+                                  <span>Auto-deleting in 1 day (Chat & S3)</span>
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  {!isPdf && (
+                                    att.isHdOriginal ? (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                        💎 HD ORIGINAL
+                                      </span>
+                                    ) : (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                        ⚡ REDUCED {att.reductionPercent ? `-${att.reductionPercent}%` : ""}
+                                      </span>
+                                    )
+                                  )}
+                                  <span className="text-gray-400 font-normal">
+                                    {att.size
+                                      ? att.size >= 1024 * 1024
+                                        ? `${(att.size / (1024 * 1024)).toFixed(1)} MB`
+                                        : `${Math.round(att.size / 1024)} KB`
+                                      : "S3 Storage"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {isPdf ? (
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="w-9 h-9 rounded-lg bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+                                      <FileText className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-bold text-gray-900 dark:text-white truncate" title={att.name}>
+                                        {att.name}
+                                      </p>
+                                      <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                                        Adobe Acrobat PDF Document
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <a
+                                    href={att.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-2.5 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold flex items-center gap-1 transition-colors shrink-0 cursor-pointer"
+                                  >
+                                    <span>View PDF</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                </div>
+                              ) : (
+                                <div>
+                                  <div className="relative group/img overflow-hidden rounded-md border border-gray-200 dark:border-gray-700 bg-black/5 dark:bg-black/30 mb-1.5">
+                                    <img
+                                      src={att.url}
+                                      alt={att.name}
+                                      className="max-h-64 w-full object-contain cursor-pointer hover:opacity-95 transition-opacity"
+                                      onClick={() => window.open(att.url, "_blank")}
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-between text-[11px] text-gray-600 dark:text-gray-400">
+                                    <span className="truncate max-w-[200px]" title={att.name}>{att.name}</span>
+                                    <a
+                                      href={att.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-0.5 cursor-pointer"
+                                    >
+                                      <span>Full size</span>
+                                      <ExternalLink className="w-2.5 h-2.5" />
+                                    </a>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           );
-                        }
-                        return <span key={i}>{segment}</span>;
-                      })}
-                    </div>
+                        })}
+                      </div>
+                    )}
 
                     {/* Message Reactions */}
                     <div className="flex items-center gap-1.5 mt-2 flex-wrap">
@@ -1447,10 +1918,112 @@ export default function ChatSpaceClient({
 
           {/* Composer Input Area */}
           <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg bg-[#FAF9F8] dark:bg-[#1C1E24] focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
+            {/* Hidden File Input for Images and PDFs */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/png,image/jpeg,image/jpg,image/webp,image/gif,image/svg+xml,application/pdf"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+
+            {/* Error Notification Banner */}
+            {attachmentError && (
+              <div className="px-3 py-1.5 bg-red-50 dark:bg-red-950/40 border-b border-red-200 dark:border-red-900/50 flex items-center justify-between text-xs text-red-600 dark:text-red-300">
+                <div className="flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{attachmentError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAttachmentError(null)}
+                  className="p-0.5 hover:text-red-800 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+
+            {/* Staged Attachments Preview Tray with HD / Size Reducer controls */}
+            {stagedAttachments.length > 0 && (
+              <div className="p-2 border-b border-gray-200 dark:border-gray-800 flex flex-wrap gap-2 bg-white/70 dark:bg-[#181A20]">
+                {stagedAttachments.map((att, idx) => {
+                  const isPdf = att.type === "pdf";
+                  return (
+                    <div
+                      key={idx}
+                      className="flex items-start gap-2.5 p-2 rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50/70 dark:bg-blue-950/40 text-xs shadow-xs"
+                    >
+                      {isPdf ? (
+                        <div className="w-8 h-8 rounded bg-red-100 dark:bg-red-950/70 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+                          <FileText className="w-4 h-4" />
+                        </div>
+                      ) : (
+                        <div className="w-8 h-8 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 flex items-center justify-center overflow-hidden shrink-0 mt-0.5">
+                          <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
+                        </div>
+                      )}
+
+                      <div className="min-w-0 max-w-[210px]">
+                        <p className="font-semibold text-gray-900 dark:text-white truncate text-[11px]" title={att.name}>
+                          {att.name}
+                        </p>
+
+                        {/* Size Reduction / HD status badge */}
+                        {!isPdf && (
+                          <div className="flex items-center gap-1 my-0.5">
+                            {att.isHdOriginal ? (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 border border-amber-300/60">
+                                💎 Original HD ({att.size >= 1024 * 1024 ? `${(att.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(att.size / 1024)} KB`})
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-300/60">
+                                ⚡ Reduced {att.reductionPercent ? `-${att.reductionPercent}%` : ""} ({att.size >= 1024 * 1024 ? `${(att.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(att.size / 1024)} KB`})
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-1 text-[9px] text-amber-600 dark:text-amber-400 font-medium">
+                            <Clock className="w-2.5 h-2.5 shrink-0" />
+                            <span>1-day expire</span>
+                          </div>
+
+                          {/* Quick Tick box: Send original HD */}
+                          {!isPdf && att.rawFile && (
+                            <label className="flex items-center gap-1 text-[9px] font-semibold text-gray-700 dark:text-gray-300 cursor-pointer hover:text-blue-600 transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={att.isHdOriginal || false}
+                                onChange={() => handleToggleStagedHd(idx)}
+                                disabled={isUploadingAttachment}
+                                className="w-3 h-3 rounded border-gray-300 text-blue-600 cursor-pointer"
+                              />
+                              <span>Send original HD</span>
+                            </label>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveStagedAttachment(idx)}
+                        className="p-1 rounded text-gray-400 hover:text-red-500 transition-colors cursor-pointer shrink-0"
+                        title="Remove attachment"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             <textarea
               ref={textareaRef}
               rows={2}
-              placeholder={`Message ${activeScopeName}... Type @ to auto-suggest persons and save for easy delivery`}
+              placeholder={`Message ${activeScopeName}... Type @ to mention, or attach Images/PDFs`}
               value={inputText}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -1466,33 +2039,108 @@ export default function ChatSpaceClient({
                     setInputText((prev) => prev + "@");
                     textareaRef.current?.focus();
                   }}
-                  className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                  className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
                   title="Mention person (@)"
                 >
                   <AtSign className="w-4 h-4" />
                 </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowComposerEmoji((v) => !v)}
+                    className={`p-1 transition-colors rounded cursor-pointer ${showComposerEmoji ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40" : "text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"}`}
+                    title="Insert emoji"
+                  >
+                    <Smile className="w-4 h-4" />
+                  </button>
+
+                  {/* Multi-emoji palette: click inserts into message text */}
+                  {showComposerEmoji && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-30 cursor-default"
+                        onClick={() => setShowComposerEmoji(false)}
+                      />
+                      <div className="absolute left-0 bottom-full mb-2 z-40 w-72 max-h-64 overflow-y-auto bg-white dark:bg-[#202228] border border-gray-200 dark:border-gray-700 shadow-2xl rounded-xl p-2 animate-in fade-in-50 slide-in-from-bottom-2">
+                        <div className="px-1.5 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                          Click to add to message
+                        </div>
+                        {COMPOSER_EMOJI_GROUPS.map((group) => (
+                          <div key={group.label} className="mb-1.5">
+                            <div className="px-1.5 py-1 text-[10px] font-semibold text-gray-500 dark:text-gray-400">
+                              {group.label}
+                            </div>
+                            <div className="grid grid-cols-8 gap-0.5">
+                              {group.emojis.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => insertEmojiAtCursor(emoji)}
+                                  className="p-1.5 text-base leading-none hover:bg-gray-100 dark:hover:bg-[#2C2F38] rounded-lg transition-transform hover:scale-125 cursor-pointer"
+                                  title={emoji}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Attach File Button (Images & PDFs) */}
                 <button
                   type="button"
-                  onClick={() => setInputText((prev) => prev + " 👍 ")}
-                  className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                  title="Insert emoji"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingAttachment}
+                  className={`p-1 transition-colors rounded cursor-pointer ${isUploadingAttachment
+                      ? "text-blue-500 animate-pulse"
+                      : stagedAttachments.length > 0
+                        ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40"
+                        : "text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                    }`}
+                  title="Attach Image or PDF (Stores in S3, self-deletes in 1 day)"
                 >
-                  <Smile className="w-4 h-4" />
+                  {isUploadingAttachment ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Paperclip className="w-4 h-4" />
+                  )}
                 </button>
-                <button
-                  type="button"
-                  className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                  title="Attach file"
+
+                {/* Send Original HD Checkbox Toggle (Default: Size Reducer Applied) */}
+                {/* <label
+                  className="flex items-center gap-1.5 text-[11px] font-medium text-gray-600 dark:text-gray-300 cursor-pointer select-none px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-[#252830] transition-colors border border-gray-200/80 dark:border-gray-800"
+                  title="File size reducer is applied by default to save storage. Check this tick box to send original uncompressed HD files."
                 >
-                  <Paperclip className="w-4 h-4" />
-                </button>
+                  <input
+                    type="checkbox"
+                    checked={sendOriginalHd}
+                    onChange={(e) => setSendOriginalHd(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span className="flex items-center gap-1">
+                    <span>Send original HD</span>
+                    {sendOriginalHd ? (
+                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300/60">
+                        HD ON
+                      </span>
+                    ) : (
+                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300/60">
+                        Size Reducer ON (Default)
+                      </span>
+                    )}
+                  </span>
+                </label> */}
               </div>
 
               <button
                 type="button"
                 onClick={handleSendMessage}
-                disabled={!inputText.trim() || isSending}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-md text-xs font-semibold shadow-sm transition-all"
+                disabled={(!inputText.trim() && stagedAttachments.length === 0) || isSending || isUploadingAttachment}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-md text-xs font-semibold shadow-sm transition-all cursor-pointer"
               >
                 <span>Send</span>
                 <Send className="w-3.5 h-3.5" />

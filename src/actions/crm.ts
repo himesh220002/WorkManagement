@@ -112,6 +112,67 @@ export async function addClientInteraction(accountId: string, type: string, summ
   revalidatePath("/growth/crm");
 }
 
+export async function updateClientAccount(formData: FormData) {
+  await connectToDatabase();
+  const session = await getCurrentSession();
+  assertNotGuest(session);
+
+  const accountId = (formData.get("accountId") as string)?.trim();
+  if (!accountId) {
+    throw new Error("Client Account ID is required.");
+  }
+
+  const accountName = (formData.get("accountName") as string)?.trim();
+  const tier = (formData.get("tier") as any) || "Tier 1 Strategic";
+  const lifecycleStage = (formData.get("lifecycleStage") as any) || "Active Enterprise";
+  const industry = (formData.get("industry") as string)?.trim() || "Technology";
+  const region = (formData.get("region") as string)?.trim() || "North America";
+  const contractARR = Number(formData.get("contractARR")) || 0;
+  const healthScore = Math.min(100, Math.max(0, Number(formData.get("healthScore")) || 90));
+  const contactName = (formData.get("contactName") as string)?.trim();
+  const contactTitle = (formData.get("contactTitle") as string)?.trim() || "Decision Maker";
+  const contactEmail = (formData.get("contactEmail") as string)?.trim();
+  const contactPhone = (formData.get("contactPhone") as string)?.trim() || "";
+  const projectId = (formData.get("projectId") as string)?.trim() || undefined;
+  const accountExecutive = (formData.get("accountExecutive") as string)?.trim() || session.name || "Owner";
+  const notes = (formData.get("notes") as string)?.trim() || "";
+
+  if (!accountName || !contactName || !contactEmail) {
+    throw new Error("Account name, primary contact name, and contact email are required.");
+  }
+
+  const updateData: any = {
+    accountName,
+    tier,
+    lifecycleStage,
+    industry,
+    region,
+    contractARR,
+    healthScore,
+    primaryContact: {
+      name: contactName,
+      title: contactTitle,
+      email: contactEmail,
+      phone: contactPhone,
+    },
+    accountExecutive,
+    projectId: projectId || null,
+    notes,
+  };
+
+  const updatedAccount = await ClientAccount.findByIdAndUpdate(accountId, updateData, { new: true }).lean();
+
+  if (session.companyCode) {
+    await syncTenantWrite("ClientAccount", "update", accountId, updateData, session.companyCode);
+  }
+
+  revalidatePath("/growth/crm");
+  revalidatePath("/sales/dashboard");
+  revalidatePath("/revenue/dashboard");
+
+  return { success: true, accountId };
+}
+
 export async function deleteClientAccount(formData: FormData) {
   await connectToDatabase();
   const session = await getCurrentSession();

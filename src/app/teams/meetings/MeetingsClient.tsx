@@ -22,6 +22,7 @@ import {
   Repeat,
   Trash2,
   Edit3,
+  Pencil,
   X,
   Sparkles,
   Send,
@@ -31,9 +32,11 @@ import {
   Layers,
   ChevronRight,
   Info,
+  ArrowUpDown,
 } from "lucide-react";
 import {
   createMeeting,
+  updateMeeting,
   updateMeetingStatus,
   updateMeetingTranscript,
   generateMeetingTranscriptPdf,
@@ -54,8 +57,46 @@ interface ActionItem {
   completed: boolean;
 }
 
-export interface MeetingItem {
-  _id: string;
+export type MeetingPlatform = "google_meet" | "zoom" | "slack" | "discord" | "in_person";
+
+/** Normalizes legacy/variant stored platform values to a canonical id. */
+export function normalizeMeetingPlatform(p: unknown): MeetingPlatform {
+  const v = String(p || "").toLowerCase();
+  if (v.includes("slack") || v.includes("huddle")) return "slack";
+  if (v.includes("discord")) return "discord";
+  if (v.includes("zoom")) return "zoom";
+  if (v.includes("person") || v.includes("office") || v.includes("room") || v === "hq") return "in_person";
+  if (v.includes("meet") || v.includes("google")) return "google_meet";
+  return "google_meet";
+}
+
+/** Provider launcher for the "create link on platform, paste it here" flow. */
+export function platformLauncher(p: MeetingPlatform): { url: string; label: string; color: string } | null {
+  switch (p) {
+    case "google_meet":
+      return { url: "https://meet.google.com/new", label: "Create Google Meet Room ↗", color: "bg-emerald-600 hover:bg-emerald-700 text-white" };
+    case "zoom":
+      return { url: "https://zoom.us/meeting/schedule", label: "Schedule on Zoom ↗", color: "bg-sky-600 hover:bg-sky-700 text-white" };
+    case "slack":
+      return { url: "https://app.slack.com/", label: "Open Slack App ↗", color: "bg-purple-600 hover:bg-purple-700 text-white" };
+    case "discord":
+      return { url: "https://discord.com/app", label: "Open Discord & Copy Channel Link ↗", color: "bg-[#5865F2] hover:bg-[#4752C4] text-white" };
+    default:
+      return null;
+  }
+}
+
+export function platformDisplayName(p: MeetingPlatform): string {
+  switch (p) {
+    case "google_meet": return "Google Meet";
+    case "zoom": return "Zoom";
+    case "slack": return "Slack";
+    case "discord": return "Discord";
+    default: return "In-Person";
+  }
+}
+
+export interface MeetingItem {  _id: string;
   title: string;
   description?: string;
   projectId?: string | null;
@@ -82,6 +123,7 @@ export interface MeetingItem {
   actionItems: ActionItem[];
   recordingUrl?: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 interface MeetingsClientProps {
@@ -110,6 +152,8 @@ export default function MeetingsClient({
   const [selectedPlatform, setSelectedPlatform] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [localStatusMap, setLocalStatusMap] = useState<Record<string, string>>({});
+  const [localStatusTimestampMap, setLocalStatusTimestampMap] = useState<Record<string, number>>({});
 
   // Modals & Drawers state
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -141,6 +185,31 @@ export default function MeetingsClient({
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [externalAttendeeEmails, setExternalAttendeeEmails] = useState("");
 
+  // Edit Meeting State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingMeeting, setEditingMeeting] = useState<MeetingItem | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editScheduledAt, setEditScheduledAt] = useState("");
+  const [editDuration, setEditDuration] = useState("45");
+  const [editPlatform, setEditPlatform] = useState<
+    "google_meet" | "zoom" | "slack" | "discord" | "in_person"
+  >("google_meet");
+  const [editMeetingLink, setEditMeetingLink] = useState("");
+  const [editDiscordChannelName, setEditDiscordChannelName] = useState("");
+  const [editDiscordChannelUrl, setEditDiscordChannelUrl] = useState("");
+  const [editSlackChannelName, setEditSlackChannelName] = useState("");
+  const [editProjectId, setEditProjectId] = useState("");
+  const [editClientId, setEditClientId] = useState("");
+  const [editIsRecurring, setEditIsRecurring] = useState(false);
+  const [editRecurrenceCadence, setEditRecurrenceCadence] = useState<
+    "daily" | "weekly" | "biweekly" | "monthly"
+  >("weekly");
+  const [editRecurrenceDay, setEditRecurrenceDay] = useState("Monday");
+  const [editSelectedUserIds, setEditSelectedUserIds] = useState<string[]>([]);
+  const [editExternalEmails, setEditExternalEmails] = useState("");
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
   // Transcript Record Drawer State
   const [drawerTranscript, setDrawerTranscript] = useState("");
   const [drawerTakeaways, setDrawerTakeaways] = useState<string[]>([]);
@@ -153,10 +222,10 @@ export default function MeetingsClient({
   const stats = useMemo(() => {
     const total = meetings.length;
     const cadences = meetings.filter((m) => m.isRecurring).length;
-    const completed = meetings.filter((m) => m.status === "Completed").length;
+    const completed = meetings.filter((m) => (localStatusMap[m._id] || m.status) === "Completed").length;
     const withTranscripts = meetings.filter((m) => m.transcript && m.transcript.trim().length > 0).length;
     return { total, cadences, completed, withTranscripts };
-  }, [meetings]);
+  }, [meetings, localStatusMap]);
 
   // Project map for quick name resolution
   const projectMap = useMemo(() => {
@@ -165,18 +234,24 @@ export default function MeetingsClient({
     return map;
   }, [projects]);
 
-  // Filtered meetings
+  // Filtered and Auto-Sorted meetings
+  // Hierarchy:
+  // 1. In Progress (if 2 or more: compare which started first)
+  // 2. Scheduled (which are closer to current time to longer time to start this schedule)
+  // 3. Completed (recent completed to old completed)
+  // 4. Cancelled (recent to old)
   const filteredMeetings = useMemo(() => {
-    return meetings.filter((m) => {
+    const list = meetings.filter((m) => {
       // Tab filter
       if (activeTab === "cadences" && !m.isRecurring) return false;
       if (activeTab === "transcripts" && (!m.transcript || m.transcript.trim().length === 0)) return false;
 
-      // Platform filter
-      if (selectedPlatform !== "all" && m.platform !== selectedPlatform) return false;
+      // Platform filter (normalized: legacy stored values map to canonical ids)
+      if (selectedPlatform !== "all" && normalizeMeetingPlatform(m.platform) !== selectedPlatform) return false;
 
       // Status filter
-      if (selectedStatus !== "all" && m.status !== selectedStatus) return false;
+      const effectiveStatus = localStatusMap[m._id] || m.status;
+      if (selectedStatus !== "all" && effectiveStatus !== selectedStatus) return false;
 
       // Search query
       if (searchQuery.trim()) {
@@ -194,7 +269,79 @@ export default function MeetingsClient({
 
       return true;
     });
-  }, [meetings, activeTab, selectedPlatform, selectedStatus, searchQuery]);
+
+    const now = Date.now();
+    const getStatusPriority = (status: string): number => {
+      switch (status) {
+        case "In Progress":
+          return 1;
+        case "Scheduled":
+          return 2;
+        case "Completed":
+          return 3;
+        case "Cancelled":
+          return 4;
+        default:
+          return 5;
+      }
+    };
+
+    return list.sort((a, b) => {
+      const statusA = localStatusMap[a._id] || a.status;
+      const statusB = localStatusMap[b._id] || b.status;
+
+      const priorityA = getStatusPriority(statusA);
+      const priorityB = getStatusPriority(statusB);
+
+      // 1. Primary order: Status category priority (In Progress -> Scheduled -> Completed -> Cancelled)
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+
+      const startA = new Date(a.scheduledAt).getTime();
+      const startB = new Date(b.scheduledAt).getTime();
+
+      // 2. In Progress: compare which started first (earliest start time first)
+      if (statusA === "In Progress") {
+        if (startA !== startB) {
+          return startA - startB;
+        }
+        const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return createdA - createdB;
+      }
+
+      // 3. Scheduled: always sort to less time remaining for scheduled meeting (earliest start time first)
+      if (statusA === "Scheduled") {
+        if (startA !== startB) {
+          return startA - startB;
+        }
+        const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return createdA - createdB;
+      }
+
+      // 4. Completed: recent completed to old completed
+      if (statusA === "Completed") {
+        const compTimeA = localStatusTimestampMap[a._id]
+          || (a.updatedAt ? new Date(a.updatedAt).getTime() : a.createdAt ? new Date(a.createdAt).getTime() : startA);
+        const compTimeB = localStatusTimestampMap[b._id]
+          || (b.updatedAt ? new Date(b.updatedAt).getTime() : b.createdAt ? new Date(b.createdAt).getTime() : startB);
+        return compTimeB - compTimeA;
+      }
+
+      // 5. Cancelled: recent to old
+      if (statusA === "Cancelled") {
+        const cancelTimeA = localStatusTimestampMap[a._id]
+          || (a.updatedAt ? new Date(a.updatedAt).getTime() : a.createdAt ? new Date(a.createdAt).getTime() : startA);
+        const cancelTimeB = localStatusTimestampMap[b._id]
+          || (b.updatedAt ? new Date(b.updatedAt).getTime() : b.createdAt ? new Date(b.createdAt).getTime() : startB);
+        return cancelTimeB - cancelTimeA;
+      }
+
+      return 0;
+    });
+  }, [meetings, activeTab, selectedPlatform, selectedStatus, searchQuery, localStatusMap, localStatusTimestampMap]);
 
   // Reset form helper
   const openScheduleModal = (mode: "standard" | "recurring" = "standard") => {
@@ -233,6 +380,91 @@ export default function MeetingsClient({
     setDrawerActionItems(meeting.actionItems ? JSON.parse(JSON.stringify(meeting.actionItems)) : []);
     setDrawerNewActionText("");
     setDrawerNewActionAssignee("");
+  };
+
+  // Open edit modal
+  const openEditModal = (meeting: MeetingItem) => {
+    setEditingMeeting(meeting);
+    setEditTitle(meeting.title || "");
+    setEditDescription(meeting.description || "");
+
+    try {
+      const d = new Date(meeting.scheduledAt);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const localIso = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      setEditScheduledAt(localIso);
+    } catch {
+      setEditScheduledAt("");
+    }
+
+    setEditDuration(String(meeting.durationMinutes || 45));
+    setEditPlatform(normalizeMeetingPlatform(meeting.platform));
+    setEditMeetingLink(meeting.meetingLink || "");
+    setEditDiscordChannelName(meeting.discordChannelName || "");
+    setEditDiscordChannelUrl(meeting.discordChannelUrl || "");
+    setEditSlackChannelName(meeting.slackChannelName || "");
+    setEditProjectId(meeting.projectId || "");
+    setEditClientId(meeting.clientAccountId || "");
+    // Pre-fill roster: match attendees back to directory users, leftovers become external emails.
+    {
+      const ids: string[] = [];
+      const externals: string[] = [];
+      const byId = new Set(users.map((u) => u._id));
+      const byEmail = new Map(users.map((u) => [u.email.toLowerCase(), u._id]));
+      for (const att of meeting.attendees || []) {
+        if (att.userId && byId.has(att.userId)) {
+          if (!ids.includes(att.userId)) ids.push(att.userId);
+        } else if (att.email && byEmail.has(att.email.toLowerCase())) {
+          const id = byEmail.get(att.email.toLowerCase())!;
+          if (!ids.includes(id)) ids.push(id);
+        } else if (att.email) {
+          if (!externals.includes(att.email)) externals.push(att.email);
+        }
+      }
+      setEditSelectedUserIds(ids);
+      setEditExternalEmails(externals.join(", "));
+    }
+    setEditIsRecurring(Boolean(meeting.isRecurring));
+    setEditRecurrenceCadence((meeting.recurrenceCadence as any) || "weekly");
+    setEditRecurrenceDay(meeting.recurrenceDayOfWeek || "Monday");
+    setIsEditModalOpen(true);
+  };
+
+  // Submit edit meeting
+  const handleUpdateMeeting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMeeting || isGuest) return;
+
+    setIsSubmittingEdit(true);
+    try {
+      const formData = new FormData();
+      formData.set("meetingId", editingMeeting._id);
+      formData.set("title", editTitle);
+      formData.set("description", editDescription);
+      formData.set("scheduledAt", editScheduledAt);
+      formData.set("durationMinutes", editDuration);
+      formData.set("platform", editPlatform);
+      formData.set("meetingLink", editMeetingLink);
+      formData.set("discordChannelName", editDiscordChannelName);
+      formData.set("discordChannelUrl", editDiscordChannelUrl);
+      formData.set("slackChannelName", editSlackChannelName);
+      formData.set("projectId", editProjectId);
+      formData.set("clientAccountId", editClientId);
+      formData.set("isRecurring", String(editIsRecurring));
+      formData.set("recurrenceCadence", editRecurrenceCadence);
+      formData.set("recurrenceDayOfWeek", editRecurrenceDay);
+      formData.set("attendeeUserIds", JSON.stringify(editSelectedUserIds));
+      formData.set("externalEmails", editExternalEmails);
+
+      await updateMeeting(formData);
+      setActionFeedback("Meeting details updated successfully!");
+      setIsEditModalOpen(false);
+      setEditingMeeting(null);
+    } catch (err: any) {
+      alert(err.message || "Failed to update meeting.");
+    } finally {
+      setIsSubmittingEdit(false);
+    }
   };
 
   // Copy link helper
@@ -351,12 +583,25 @@ export default function MeetingsClient({
   };
 
   // Change meeting status
-  const handleStatusChange = async (meetingId: string, newStatus: string) => {
+  const handleStatusChange = (meetingId: string, newStatus: string) => {
     if (isGuest) return;
+    const changeTimestamp = Date.now();
+    setLocalStatusMap((prev) => ({ ...prev, [meetingId]: newStatus }));
+    setLocalStatusTimestampMap((prev) => ({ ...prev, [meetingId]: changeTimestamp }));
     startTransition(async () => {
       try {
         await updateMeetingStatus(meetingId, newStatus);
       } catch (err: any) {
+        setLocalStatusMap((prev) => {
+          const next = { ...prev };
+          delete next[meetingId];
+          return next;
+        });
+        setLocalStatusTimestampMap((prev) => {
+          const next = { ...prev };
+          delete next[meetingId];
+          return next;
+        });
         alert(err.message || "Failed to update status.");
       }
     });
@@ -579,12 +824,21 @@ export default function MeetingsClient({
             onChange={(e) => setSelectedStatus(e.target.value)}
             className="px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1E1E1E] text-gray-800 dark:text-gray-200 outline-none cursor-pointer"
           >
-            <option value="all">All Statuses</option>
+            <option value="all">All Statuses (Auto-Sorted)</option>
             <option value="Scheduled">Scheduled</option>
             <option value="In Progress">In Progress</option>
             <option value="Completed">Completed</option>
             <option value="Cancelled">Cancelled</option>
           </select>
+
+          {/* Auto-sort hierarchy indicator badge */}
+          <div
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50/80 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-900/60 text-[11px] font-semibold select-none shadow-xs"
+            title="Auto-Sorted: 1) In Progress (earliest started first) → 2) Scheduled (closest to current time first) → 3) Completed (recent to old) → 4) Cancelled (recent to old)"
+          >
+            <ArrowUpDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span>Auto-Sorted</span>
+          </div>
         </div>
       </div>
 
@@ -613,45 +867,55 @@ export default function MeetingsClient({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredMeetings.map((meeting) => {
-            const platformConfig = getPlatformBadge(meeting.platform);
+            const platformConfig = getPlatformBadge(normalizeMeetingPlatform(meeting.platform));
             const PlatformIcon = platformConfig.icon;
             const scheduledDate = new Date(meeting.scheduledAt);
+
+            const effectiveStatus = localStatusMap[meeting._id] || meeting.status;
 
             return (
               <div
                 key={meeting._id}
-                className="flex flex-col justify-between rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#252423] p-5 shadow-xs hover:border-[#0078D4]/50 transition-all duration-200 space-y-4"
+                className={`flex flex-col justify-between rounded-2xl border p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 space-y-4 ${
+                  effectiveStatus === "Completed"
+                    ? "border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20 hover:border-emerald-300"
+                    : effectiveStatus === "In Progress"
+                      ? "border-amber-200 dark:border-amber-900 bg-amber-50/60 dark:bg-amber-950/20 hover:border-amber-300"
+                      : effectiveStatus === "Cancelled"
+                        ? "border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20 hover:border-red-300"
+                        : "border-gray-200 dark:border-gray-800 bg-blue-50/40 dark:bg-blue-950/20 hover:border-[#0078D4]/40"
+                }`}
               >
                 <div>
                   {/* Top Badges */}
-                  <div className="flex items-center justify-between gap-2 mb-2.5">
+                  <div className="flex items-center justify-between gap-2 mb-3">
                     <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border ${platformConfig.color}`}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border shadow-sm ${platformConfig.color}`}
                     >
                       <PlatformIcon className="w-3.5 h-3.5" />
                       <span>{platformConfig.label}</span>
                     </span>
 
-                    {/* Status Dropdown */}
-                    <div className="flex flex-col items-center gap-1.5">
+                    {/* Status & recurrence */}
+                    <div className="flex items-center gap-1.5">
                       {meeting.isRecurring && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/25">
                           <Repeat className="w-3 h-3" />
                           <span>Auto ({meeting.recurrenceCadence})</span>
                         </span>
                       )}
 
                       <select
-                        value={meeting.status}
+                        value={effectiveStatus}
                         onChange={(e) => handleStatusChange(meeting._id, e.target.value)}
-                        disabled={isGuest || isPending}
-                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border outline-none ${meeting.status === "Completed"
+                        disabled={isGuest}
+                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border outline-none ${effectiveStatus === "Completed"
                           ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
-                          : meeting.status === "In Progress"
+                          : effectiveStatus === "In Progress"
                             ? "bg-amber-500/10 text-amber-600 border-amber-500/30 animate-pulse"
-                            : meeting.status === "Cancelled"
+                            : effectiveStatus === "Cancelled"
                               ? "bg-red-500/10 text-red-600 border-red-500/30"
                               : "bg-blue-500/10 text-blue-600 border-blue-500/30"
                           } ${isGuest ? "cursor-not-allowed opacity-80" : "cursor-pointer"}`}
@@ -665,7 +929,7 @@ export default function MeetingsClient({
                   </div>
 
                   {/* Meeting Title */}
-                  <h3 className="font-bold text-base text-gray-900 dark:text-white leading-snug line-clamp-1">
+                  <h3 className="font-extrabold text-[15px] text-gray-900 dark:text-white leading-snug line-clamp-1 tracking-tight">
                     {meeting.title}
                   </h3>
 
@@ -678,17 +942,21 @@ export default function MeetingsClient({
 
                   {/* Linkages: Project & Client */}
                   {(meeting.projectId || meeting.clientAccountName) && (
-                    <div className="flex flex-wrap items-center gap-2 mt-3 pt-2 border-t border-gray-100 dark:border-gray-800 text-[11px]">
+                    <div className="flex flex-wrap items-center gap-2 mt-3 p-2 rounded-lg bg-white/70 dark:bg-black/30 border border-gray-100 dark:border-gray-800 text-[11px] shadow-sm">
                       {meeting.projectId && (
-                        <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
-                          <Layers className="w-3 h-3 text-[#0078D4]" />
+                        <span className="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300 font-medium">
+                          <span className="w-5 h-5 rounded-md bg-[#0078D4]/10 flex items-center justify-center shrink-0">
+                            <Layers className="w-3 h-3 text-[#0078D4]" />
+                          </span>
                           <span>{projectMap.get(meeting.projectId) || "Project"}</span>
                         </span>
                       )}
                       {meeting.clientAccountName && (
-                        <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
-                          <Briefcase className="w-3 h-3 text-emerald-600" />
-                          <span className="font-medium text-gray-700 dark:text-gray-300">
+                        <span className="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300 font-medium">
+                          <span className="w-5 h-5 rounded-md bg-emerald-500/10 flex items-center justify-center shrink-0">
+                            <Briefcase className="w-3 h-3 text-emerald-600" />
+                          </span>
+                          <span>
                             {meeting.clientAccountName}
                           </span>
                         </span>
@@ -697,10 +965,12 @@ export default function MeetingsClient({
                   )}
 
                   {/* Schedule Telemetry */}
-                  <div className="mt-3 space-y-1.5 text-xs text-gray-600 dark:text-gray-300">
+                  <div className="mt-3 space-y-2 text-xs text-gray-600 dark:text-gray-300">
                     <div className="flex items-center gap-2">
-                      <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                      <span>
+                      <span className="w-5 h-5 rounded-md bg-gray-100 dark:bg-white/10 flex items-center justify-center shrink-0">
+                        <Calendar className="w-3 h-3 text-gray-500" />
+                      </span>
+                      <span className="font-medium">
                         {scheduledDate.toLocaleDateString("en-US", {
                           weekday: "short",
                           month: "short",
@@ -710,8 +980,10 @@ export default function MeetingsClient({
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Clock className="w-3.5 h-3.5 text-gray-400" />
-                      <span>
+                      <span className="w-5 h-5 rounded-md bg-gray-100 dark:bg-white/10 flex items-center justify-center shrink-0">
+                        <Clock className="w-3 h-3 text-gray-500" />
+                      </span>
+                      <span className="font-medium">
                         {scheduledDate.toLocaleTimeString("en-US", {
                           hour: "2-digit",
                           minute: "2-digit",
@@ -722,13 +994,13 @@ export default function MeetingsClient({
 
                     {/* Discord or Slack Specific Connectivity Info */}
                     {meeting.discordChannelName && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-[#5865F2] font-medium pt-1">
+                      <div className="flex items-center gap-1.5 text-[11px] text-[#5865F2] font-semibold pt-0.5">
                         <Hash className="w-3 h-3" />
                         <span>Discord: #{meeting.discordChannelName}</span>
                       </div>
                     )}
                     {meeting.slackChannelName && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-purple-600 dark:text-purple-400 font-medium">
+                      <div className="flex items-center gap-1.5 text-[11px] text-purple-600 dark:text-purple-400 font-semibold pt-0.5">
                         <MessageSquare className="w-3 h-3" />
                         <span>Slack: #{meeting.slackChannelName}</span>
                       </div>
@@ -736,27 +1008,29 @@ export default function MeetingsClient({
                   </div>
 
                   {/* Attendees Roster */}
-                  <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <div className="mt-4 pt-3 border-t border-dashed border-gray-200 dark:border-gray-700">
                     <div className="flex items-center justify-between text-[11px] text-gray-500 mb-2">
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1 font-semibold">
                         <Users className="w-3 h-3" />
                         <span>Invitees ({meeting.attendees.length})</span>
                       </span>
                       <span>Organizer: {meeting.organizerName.split(" ")[0]}</span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex items-center flex-wrap">
+                      <div className="flex -space-x-1.5">
                       {meeting.attendees.slice(0, 4).map((att, idx) => (
                         <div
                           key={idx}
                           title={`${att.name} (${att.email}) - ${att.attendanceStatus}`}
-                          className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-[10px] font-bold flex items-center justify-center border border-white dark:border-gray-800"
+                          className="w-6 h-6 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 text-gray-700 dark:text-gray-200 text-[10px] font-bold flex items-center justify-center ring-2 ring-white dark:ring-[#252423]"
                         >
                           {att.name.charAt(0).toUpperCase()}
                         </div>
                       ))}
+                      </div>
                       {meeting.attendees.length > 4 && (
-                        <span className="text-[10px] text-gray-400 font-medium">
+                        <span className="text-[10px] text-gray-400 font-semibold ml-2">
                           +{meeting.attendees.length - 4} more
                         </span>
                       )}
@@ -765,14 +1039,14 @@ export default function MeetingsClient({
                 </div>
 
                 {/* Bottom Action Footer */}
-                <div className="pt-3 border-t border-gray-100 dark:border-gray-800 space-y-2">
+                <div className="pt-3 border-t border-gray-100 dark:border-gray-800 space-y-2.5">
                   {/* Platform Launch & Copy Link */}
                   <div className="flex items-center gap-2">
                     <a
                       href={meeting.meetingLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#0078D4] hover:bg-[#106EBE] text-white text-xs font-semibold shadow-xs transition-colors"
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-gradient-to-r from-[#0078D4] to-[#106EBE] hover:from-[#106EBE] hover:to-[#005A9E] text-white text-xs font-bold shadow-md shadow-blue-500/20 transition-all"
                     >
                       <PlatformIcon className="w-3.5 h-3.5" />
                       <span>
@@ -790,7 +1064,7 @@ export default function MeetingsClient({
                     <button
                       onClick={() => handleCopyLink(meeting._id, meeting.meetingLink)}
                       title="Copy invite URL"
-                      className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2A2928] cursor-pointer"
+                      className="p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2A2928] hover:border-gray-300 transition-colors cursor-pointer"
                     >
                       {copiedId === meeting._id ? (
                         <Check className="w-4 h-4 text-emerald-600" />
@@ -800,11 +1074,11 @@ export default function MeetingsClient({
                     </button>
                   </div>
 
-                  {/* Transcript & PDF Minutes actions */}
-                  <div className="flex items-center justify-between gap-2 pt-1 text-[11px]">
+                  {/* Transcript & Minutes & Card actions — single Edit lives here */}
+                  <div className="flex items-center justify-between gap-2 pt-0.5 text-[11px]">
                     <button
                       onClick={() => openTranscriptDrawer(meeting)}
-                      className="flex items-center gap-1 text-[#0078D4] hover:underline font-semibold cursor-pointer"
+                      className="flex items-center gap-1.5 text-[#0078D4] hover:text-[#106EBE] font-bold cursor-pointer px-1 py-0.5 rounded transition-colors"
                     >
                       <FileText className="w-3.5 h-3.5" />
                       <span>
@@ -812,22 +1086,41 @@ export default function MeetingsClient({
                       </span>
                     </button>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(meeting)}
+                        disabled={isGuest}
+                        title="Edit Meeting Details"
+                        className={`flex items-center gap-1 font-bold px-2 py-1 rounded-lg transition-colors ${
+                          isGuest
+                            ? "cursor-not-allowed opacity-50 text-gray-400"
+                            : "text-[#0078D4] dark:text-[#479EF5] hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer"
+                        }`}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span>Edit</span>
+                      </button>
+
+                      <span className="w-px h-3.5 bg-gray-200 dark:bg-gray-700" />
+
                       <button
                         onClick={() => handleDownloadPdf(meeting._id)}
                         disabled={downloadingPdfId === meeting._id}
                         title="Download Official PDF Transcript"
-                        className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:underline font-semibold cursor-pointer disabled:opacity-50"
+                        className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-bold px-2 py-1 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>{downloadingPdfId === meeting._id ? "Compiling..." : "PDF"}</span>
                       </button>
 
+                      <span className="w-px h-3.5 bg-gray-200 dark:bg-gray-700" />
+
                       <button
                         onClick={() => handleDeleteMeeting(meeting._id)}
                         disabled={isGuest}
                         title="Delete Meeting"
-                        className={`p-1 text-gray-400 hover:text-red-500 transition-colors ${isGuest ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                        className={`p-1.5 rounded-lg transition-colors ${isGuest ? "cursor-not-allowed opacity-50 text-gray-400" : "text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer"
                           }`}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1003,33 +1296,7 @@ export default function MeetingsClient({
 
                   {/* Provider Direct Scheduler Launcher Button */}
                   {(() => {
-                    const launcher =
-                      formPlatform === "google_meet"
-                        ? {
-                          url: "https://meet.google.com/new",
-                          label: "Create Google Meet Room ↗",
-                          color: "bg-emerald-600 hover:bg-emerald-700 text-white",
-                        }
-                        : formPlatform === "zoom"
-                          ? {
-                            url: "https://zoom.us/meeting/schedule",
-                            label: "Schedule on Zoom ↗",
-                            color: "bg-sky-600 hover:bg-sky-700 text-white",
-                          }
-                          : formPlatform === "slack"
-                            ? {
-                              url: "https://app.slack.com/",
-                              label: "Open Slack App ↗",
-                              color: "bg-purple-600 hover:bg-purple-700 text-white",
-                            }
-                            : formPlatform === "discord"
-                              ? {
-                                url: "https://discord.com/app",
-                                label: "Open Discord & Copy Channel Link ↗",
-                                color: "bg-[#5865F2] hover:bg-[#4752C4] text-white",
-                              }
-                              : null;
-
+                    const launcher = platformLauncher(formPlatform);
                     if (!launcher) return null;
                     return (
                       <a
@@ -1084,7 +1351,7 @@ export default function MeetingsClient({
                 </div>
 
                 <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                  Tip: Click the button above to launch <strong>{formPlatform === "google_meet" ? "Google Meet" : formPlatform === "zoom" ? "Zoom" : formPlatform === "slack" ? "Slack" : "Discord"}</strong>, copy your generated URL, and paste it here so the meeting link always works for invitees.
+                  Tip: Click the button above to launch <strong>{platformDisplayName(formPlatform)}</strong>, copy your generated URL, and paste it here so the meeting link always works for invitees.
                 </p>
               </div>
 
@@ -1291,6 +1558,420 @@ export default function MeetingsClient({
                       : modalMode === "recurring"
                         ? "Establish Auto-Scheduler"
                         : "Create & Broadcast Meeting"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT MEETING MODAL */}
+      {isEditModalOpen && editingMeeting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-gray-800 shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-[#FAF9F8] dark:bg-[#252423]">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-[#0078D4]/10 text-[#0078D4]">
+                  <Pencil className="w-5 h-5 text-[#0078D4]" />
+                </span>
+                <div>
+                  <h3 className="font-bold text-base text-gray-900 dark:text-white">
+                    Edit Meeting Details
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Update meeting title, schedule, connectivity link, and cadences.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingMeeting(null);
+                }}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2E2D2B] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={handleUpdateMeeting} className="flex-1 overflow-y-auto p-6 space-y-5">
+              {/* Meeting Title */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Meeting Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="e.g. Weekly Architecture Sync"
+                  className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-xs text-gray-900 dark:text-white outline-none focus:border-[#0078D4]"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Agenda &amp; Description
+                </label>
+                <textarea
+                  rows={2}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Goals, agenda items, discussion topics..."
+                  className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-xs text-gray-900 dark:text-white outline-none focus:border-[#0078D4]"
+                />
+              </div>
+
+              {/* Platform Selector */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Connectivity &amp; Meeting Platform *
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                  {[
+                    { id: "google_meet", label: "Google Meet", icon: Video },
+                    { id: "zoom", label: "Zoom Video", icon: Video },
+                    { id: "slack", label: "Slack Huddle", icon: MessageSquare },
+                    { id: "discord", label: "Discord Voice", icon: Mic },
+                  ].map((p) => {
+                    const isSel = editPlatform === p.id;
+                    const Icon = p.icon;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setEditPlatform(p.id as any)}
+                        className={`flex flex-col items-center justify-center p-3 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
+                          isSel
+                            ? "border-[#0078D4] bg-[#0078D4]/10 text-[#0078D4] shadow-xs"
+                            : "border-gray-200 dark:border-gray-800 bg-white dark:bg-[#252423] text-gray-600 dark:text-gray-400 hover:border-gray-400"
+                        }`}
+                      >
+                        <Icon className="w-5 h-5 mb-1.5" />
+                        <span>{p.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Meeting Link with provider launcher + Paste (same flow as Schedule) */}
+              <div className="space-y-2 p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-[#FAF9F8] dark:bg-[#222120]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <label className="block text-xs font-semibold text-gray-800 dark:text-gray-200">
+                    Meeting URL / Platform Link
+                  </label>
+                  {(() => {
+                    const launcher = platformLauncher(editPlatform);
+                    if (!launcher) return null;
+                    return (
+                      <a
+                        href={launcher.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-semibold transition-colors shrink-0 ${launcher.color}`}
+                        title="Open official provider in a new tab to create and copy a real, permanent room URL"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>{launcher.label}</span>
+                      </a>
+                    );
+                  })()}
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={editMeetingLink}
+                    onChange={(e) => setEditMeetingLink(e.target.value)}
+                    placeholder={
+                      editPlatform === "google_meet"
+                        ? "https://meet.google.com/xxx-yyyy-zzz"
+                        : editPlatform === "zoom"
+                          ? "https://zoom.us/j/94827103819"
+                          : editPlatform === "slack"
+                            ? "https://app.slack.com/client/T000/C000"
+                            : editPlatform === "discord"
+                              ? "https://discord.gg/your-channel or https://discord.com/channels/..."
+                              : "Enter room or location link"
+                    }
+                    className="flex-1 p-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1E1E1E] text-xs text-gray-900 dark:text-white outline-none focus:border-[#0078D4]"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const clip = await navigator.clipboard.readText();
+                        if (clip) setEditMeetingLink(clip.trim());
+                      } catch {
+                        // ignore permission denial
+                      }
+                    }}
+                    className="px-3.5 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] hover:bg-gray-100 dark:hover:bg-[#2E2D2B] text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5 cursor-pointer shrink-0"
+                    title="Paste copied URL from your clipboard"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-gray-400" />
+                    <span>Paste</span>
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  Tip: Click the button above to launch <strong>{platformDisplayName(editPlatform)}</strong>, copy your generated URL, and paste it here so the meeting link always works for invitees.
+                </p>
+              </div>
+
+              {/* Discord or Slack Specific Fields */}
+              {editPlatform === "discord" && (
+                <div className="p-3.5 rounded-lg border border-[#5865F2]/30 bg-[#5865F2]/5 space-y-3">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#5865F2]">
+                    <Mic className="w-4 h-4" />
+                    <span>Discord Channel &amp; Voice Settings</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                        Discord Channel Name
+                      </label>
+                      <input
+                        type="text"
+                        value={editDiscordChannelName}
+                        onChange={(e) => setEditDiscordChannelName(e.target.value)}
+                        placeholder="e.g. general-voice, esports-sync"
+                        className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-xs text-gray-900 dark:text-white outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                        Discord Invite / Channel URL
+                      </label>
+                      <input
+                        type="text"
+                        value={editDiscordChannelUrl}
+                        onChange={(e) => setEditDiscordChannelUrl(e.target.value)}
+                        placeholder="https://discord.gg/..."
+                        className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-xs text-gray-900 dark:text-white outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {editPlatform === "slack" && (
+                <div className="p-3.5 rounded-lg border border-purple-500/30 bg-purple-500/5 space-y-2">
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    Slack Channel Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editSlackChannelName}
+                    onChange={(e) => setEditSlackChannelName(e.target.value)}
+                    placeholder="#proj-architecture-huddle"
+                    className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-xs text-gray-900 dark:text-white outline-none"
+                  />
+                </div>
+              )}
+
+              {/* Schedule Date & Duration */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                    Date &amp; Time *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={editScheduledAt}
+                    onChange={(e) => setEditScheduledAt(e.target.value)}
+                    className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-xs text-gray-900 dark:text-white outline-none focus:border-[#0078D4]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                    Duration (Minutes) *
+                  </label>
+                  <select
+                    value={editDuration}
+                    onChange={(e) => setEditDuration(e.target.value)}
+                    className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-xs text-gray-900 dark:text-white outline-none"
+                  >
+                    <option value="15">15 Minutes (Quick Sync)</option>
+                    <option value="30">30 Minutes (Standard Standup)</option>
+                    <option value="45">45 Minutes (Architecture Sync)</option>
+                    <option value="60">60 Minutes (Deep Dive / Client Review)</option>
+                    <option value="90">90 Minutes (Executive Workshop)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Link Project & CRM Client */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                    Linked Project
+                  </label>
+                  <select
+                    value={editProjectId}
+                    onChange={(e) => setEditProjectId(e.target.value)}
+                    className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-xs text-gray-900 dark:text-white outline-none"
+                  >
+                    <option value="">None (Company General)</option>
+                    {projects.map((p) => (
+                      <option key={p._id} value={p._id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                    Linked Client Account (CRM)
+                  </label>
+                  <select
+                    value={editClientId}
+                    onChange={(e) => setEditClientId(e.target.value)}
+                    className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-xs text-gray-900 dark:text-white outline-none"
+                  >
+                    <option value="">None (Internal Team)</option>
+                    {clientAccounts.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.accountName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Attendee Roster (pre-filled from current invitees) */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Team Member Invitees
+                </label>
+                <div className="max-h-36 overflow-y-auto p-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] space-y-1">
+                  {users.map((u) => {
+                    const isChecked = editSelectedUserIds.includes(u._id);
+                    return (
+                      <label
+                        key={u._id}
+                        className="flex items-center justify-between p-1.5 rounded hover:bg-gray-50 dark:hover:bg-[#2E2D2B] cursor-pointer text-xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setEditSelectedUserIds([...editSelectedUserIds, u._id]);
+                              } else {
+                                setEditSelectedUserIds(editSelectedUserIds.filter((id) => id !== u._id));
+                              }
+                            }}
+                            className="rounded accent-[#0078D4]"
+                          />
+                          <span className="font-medium text-gray-800 dark:text-gray-200">
+                            {u.name}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-gray-400">{u.role}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* External Attendees */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  External Invitee Emails (Comma separated)
+                </label>
+                <input
+                  type="text"
+                  value={editExternalEmails}
+                  onChange={(e) => setEditExternalEmails(e.target.value)}
+                  placeholder="partner@external.com, investor@capital.com"
+                  className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#252423] text-xs text-gray-900 dark:text-white outline-none"
+                />
+              </div>
+
+              {/* Recurring Cadence Options */}
+              <div className="p-3.5 rounded-lg border border-gray-200 dark:border-gray-800 bg-[#FAF9F8] dark:bg-[#252423] space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-800 dark:text-gray-200">
+                  <input
+                    type="checkbox"
+                    checked={editIsRecurring}
+                    onChange={(e) => setEditIsRecurring(e.target.checked)}
+                    className="rounded accent-[#0078D4]"
+                  />
+                  <span>Configure as Recurring Cadence</span>
+                </label>
+
+                {editIsRecurring && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 mb-1">
+                        Cadence Frequency
+                      </label>
+                      <select
+                        value={editRecurrenceCadence}
+                        onChange={(e) => setEditRecurrenceCadence(e.target.value as any)}
+                        className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1E1E1E] text-xs text-gray-900 dark:text-white outline-none"
+                      >
+                        <option value="daily">Daily Standup (Mon - Fri)</option>
+                        <option value="weekly">Weekly Meeting</option>
+                        <option value="biweekly">Bi-Weekly Sync</option>
+                        <option value="monthly">Monthly Executive Council</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 mb-1">
+                        Cadence Day of Week
+                      </label>
+                      <select
+                        value={editRecurrenceDay}
+                        onChange={(e) => setEditRecurrenceDay(e.target.value)}
+                        className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1E1E1E] text-xs text-gray-900 dark:text-white outline-none"
+                      >
+                        <option value="Monday">Every Monday</option>
+                        <option value="Tuesday">Every Tuesday</option>
+                        <option value="Wednesday">Every Wednesday</option>
+                        <option value="Thursday">Every Thursday</option>
+                        <option value="Friday">Every Friday</option>
+                        <option value="Weekdays">Every Weekday</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer Buttons */}
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-800 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setEditingMeeting(null);
+                  }}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#2E2D2B] cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isGuest || isSubmittingEdit}
+                  className={`px-5 py-2.5 rounded-lg text-xs font-semibold shadow-xs transition-colors ${
+                    isGuest
+                      ? "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-600"
+                      : "bg-[#0078D4] hover:bg-[#106EBE] text-white cursor-pointer"
+                  }`}
+                >
+                  {isSubmittingEdit ? "Saving Changes..." : "Save Meeting Changes"}
                 </button>
               </div>
             </form>

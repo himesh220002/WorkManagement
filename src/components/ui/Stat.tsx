@@ -37,7 +37,7 @@ export function Stat({
         {icon && <span className="text-[#0078D4] dark:text-[#479EF5]">{icon}</span>}
       </div>
 
-      <div className="flex items-baseline gap-2 mb-1">
+      <div className="flex flex-wrap items-baseline gap-2 mb-1">
         <span className="text-lg lg:text-lg lg:text-2xl font-bold text-[#242424] dark:text-[#FFFFFF]">
           {value}
         </span>

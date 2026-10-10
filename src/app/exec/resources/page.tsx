@@ -1,5 +1,5 @@
 import connectToDatabase from "@/lib/mongodb";
-import { ResourceAllocation, Project, Team, User, Deal } from "@/models";
+import { ResourceAllocation, Project, Team, User, Deal, Campaign, Pipeline } from "@/models";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import ResourceDashboardClient from "./ResourceDashboardClient";
 import { fetchWithCache } from "@/lib/cache";
@@ -21,9 +21,11 @@ export default async function ResourceDashboardPage() {
   let teams: any[] = [];
   let users: any[] = [];
   let deals: any[] = [];
+  let campaigns: any[] = [];
+  let pipelines: any[] = [];
 
   try {
-    [resources, projects, teams, users, deals] = await Promise.all([
+    [resources, projects, teams, users, deals, campaigns, pipelines] = await Promise.all([
       fetchWithCache(`resource_allocations:${cId}`, 30, () =>
         ResourceAllocation.find(tenantFilter)
           .populate("assignedToProjectId", "name status")
@@ -42,6 +44,12 @@ export default async function ResourceDashboardPage() {
       ),
       fetchWithCache(`resource_deals:${cId}`, 30, () =>
         Deal.find(tenantFilter).lean()
+      ),
+      fetchWithCache(`resource_campaigns:${cId}`, 30, () =>
+        Campaign.find(tenantFilter).lean()
+      ),
+      fetchWithCache(`resource_pipelines:${cId}`, 30, () =>
+        Pipeline.find(tenantFilter).lean()
       ),
     ]);
   } catch (err) {
@@ -105,6 +113,25 @@ export default async function ResourceDashboardPage() {
     stage: d.stage || "Prospect",
   }));
 
+  const cleanCampaigns = campaigns.map((c: any) => ({
+    _id: c._id.toString(),
+    name: c.name,
+    type: c.type || "Marketing",
+    leadsGenerated: Number(c.leadsGenerated || 0),
+    expectedRevenue: Number(c.expectedRevenue || 0),
+  }));
+
+  const cleanPipelines = pipelines.map((p: any) => ({
+    _id: p._id.toString(),
+    name: p.name,
+    category: p.category || "General",
+    status: p.status || "Active",
+    progress: Number(p.progress || 0),
+    dealValue: Number(p.dealValue || 0),
+    dealStage: p.dealStage || "",
+    winProbability: Number(p.winProbability || 0),
+  }));
+
   return (
     <ResourceDashboardClient
       resources={cleanResources}
@@ -112,6 +139,8 @@ export default async function ResourceDashboardPage() {
       teams={cleanTeams}
       users={cleanUsers}
       deals={cleanDeals}
+      campaigns={cleanCampaigns}
+      pipelines={cleanPipelines}
       companyCode={session.companyCode || ""}
       userRole={session.role}
     />

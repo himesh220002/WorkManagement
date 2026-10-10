@@ -329,13 +329,11 @@ export default function DevDashboardClient({
                 className="flex-1 p-2 rounded border border-[#E1DFDD] dark:border-[#3B3A39] bg-[#FAF9F8] dark:bg-[#292827] text-xs text-[#242424] dark:text-[#FFFFFF] cursor-pointer"
               >
                 <option value="none">No Pipeline</option>
-                {pipelines
-                  .filter((p) => !taskProjectId || !p.projectId || p.projectId._id === taskProjectId || p.projectId === taskProjectId)
-                  .map((p) => (
-                    <option key={p._id} value={p._id}>
-                      {p.name}
-                    </option>
-                  ))}
+                {pipelines.map((p) => (
+                  <option key={p._id} value={p._id}>
+                    {p.name}
+                  </option>
+                ))}
               </select>
               <select
                 name="predefinedTask"
