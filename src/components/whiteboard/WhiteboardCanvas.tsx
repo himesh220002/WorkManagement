@@ -93,6 +93,237 @@ const COLOR_PALETTE = [
   { name: "White", value: "#FFFFFF" },
 ];
 
+export function parseFontSizePx(fontSize?: string | number, defaultPx: number = 13): number {
+  if (typeof fontSize === "number" && !isNaN(fontSize) && fontSize > 0) return Math.round(fontSize);
+  if (!fontSize) return defaultPx;
+  const str = String(fontSize).trim().toLowerCase();
+  const parsed = parseInt(str, 10);
+  if (!isNaN(parsed) && parsed > 0) return parsed;
+  switch (str) {
+    case "huge":
+      return 28;
+    case "large":
+      return 20;
+    case "medium":
+      return 14;
+    case "small":
+      return 11;
+    default:
+      return defaultPx;
+  }
+}
+
+function FontSizeControl({
+  fontSize,
+  onChange,
+  defaultPx = 13,
+}: {
+  fontSize?: string;
+  onChange: (newSize: string) => void;
+  defaultPx?: number;
+}) {
+  const currentPx = parseFontSizePx(fontSize, defaultPx);
+  const [localVal, setLocalVal] = useState<string>(String(currentPx));
+
+  useEffect(() => {
+    setLocalVal(String(currentPx));
+  }, [currentPx]);
+
+  const commitVal = (valStr: string) => {
+    const parsed = parseInt(valStr, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      const clamped = Math.max(6, Math.min(150, parsed));
+      setLocalVal(String(clamped));
+      onChange(`${clamped}px`);
+    } else {
+      setLocalVal(String(currentPx));
+    }
+  };
+
+  return (
+    <div
+      className="flex items-center bg-[#121316] rounded border border-[#282B33] px-1 py-0.5 gap-0.5 focus-within:border-blue-500 hover:border-gray-600 transition-colors"
+      title="Text font size in pixels (type or use +/- or arrow keys)"
+    >
+      <button
+        type="button"
+        onClick={() => {
+          const next = Math.max(6, currentPx - 1);
+          setLocalVal(String(next));
+          onChange(`${next}px`);
+        }}
+        className="w-3.5 h-4 flex items-center justify-center text-gray-400 hover:text-white hover:bg-[#202228] rounded text-[10px] font-bold cursor-pointer select-none transition-colors"
+        title="Decrease font size (-1px)"
+      >
+        -
+      </button>
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        value={localVal}
+        onChange={(e) => {
+          const raw = e.target.value.replace(/[^0-9]/g, "");
+          setLocalVal(raw);
+          const parsed = parseInt(raw, 10);
+          if (!isNaN(parsed) && parsed >= 6 && parsed <= 150) {
+            onChange(`${parsed}px`);
+          }
+        }}
+        onBlur={() => commitVal(localVal)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            commitVal(localVal);
+            (e.target as HTMLInputElement).blur();
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            const next = Math.min(150, currentPx + 1);
+            setLocalVal(String(next));
+            onChange(`${next}px`);
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            const next = Math.max(6, currentPx - 1);
+            setLocalVal(String(next));
+            onChange(`${next}px`);
+          }
+        }}
+        className="w-7 bg-transparent text-[11px] font-mono text-center text-white focus:outline-none"
+        aria-label="Text size in pixels"
+      />
+      <span className="text-[10px] text-gray-400 font-mono select-none pr-0.5">px</span>
+      <button
+        type="button"
+        onClick={() => {
+          const next = Math.min(150, currentPx + 1);
+          setLocalVal(String(next));
+          onChange(`${next}px`);
+        }}
+        className="w-3.5 h-4 flex items-center justify-center text-gray-400 hover:text-white hover:bg-[#202228] rounded text-[10px] font-bold cursor-pointer select-none transition-colors"
+        title="Increase font size (+1px)"
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
+const TEXT_COLOR_PALETTE = [
+  { name: "White", value: "#FFFFFF" },
+  { name: "Light Gray", value: "#E2E8F0" },
+  { name: "Slate", value: "#94A3B8" },
+  { name: "Dark", value: "#1E293B" },
+  { name: "Red", value: "#EF4444" },
+  { name: "Orange", value: "#F97316" },
+  { name: "Amber", value: "#F59E0B" },
+  { name: "Yellow", value: "#FACC15" },
+  { name: "Emerald", value: "#10B981" },
+  { name: "Cyan", value: "#06B6D4" },
+  { name: "Blue", value: "#3B82F6" },
+  { name: "Indigo", value: "#6366F1" },
+  { name: "Purple", value: "#8B5CF6" },
+  { name: "Pink", value: "#EC4899" },
+];
+
+function TextColorPicker({
+  value,
+  onChange,
+  defaultColor = "#FFFFFF",
+}: {
+  value?: string;
+  onChange: (color: string) => void;
+  defaultColor?: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const currentColor = value || defaultColor;
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [isOpen]);
+
+  return (
+    <div className="relative" ref={popoverRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`flex flex-col items-center justify-center w-6 h-6 rounded hover:bg-[#282A33] px-1 py-0.5 cursor-pointer transition-colors group ${
+          isOpen ? "bg-[#282A33]" : ""
+        }`}
+        title={`Text Color (${currentColor})`}
+        aria-label="Text Color"
+      >
+        <span className="text-[11px] font-bold text-gray-200 group-hover:text-white leading-none font-serif">
+          A
+        </span>
+        <span
+          className="w-3.5 h-[3px] rounded-full mt-0.5 shadow-xs border border-black/40"
+          style={{ backgroundColor: currentColor }}
+        />
+      </button>
+
+      {isOpen && (
+        <div
+          className="absolute top-full left-0 mt-2 p-2.5 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl z-50 flex flex-col gap-2 min-w-[190px]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-0.5">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+              Text Color
+            </span>
+            <span className="text-[10px] font-mono text-gray-300 uppercase">
+              {currentColor}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1.5">
+            {TEXT_COLOR_PALETTE.map((c) => (
+              <button
+                key={c.name}
+                type="button"
+                onClick={() => {
+                  onChange(c.value);
+                  setIsOpen(false);
+                }}
+                className={`w-5 h-5 rounded-full hover:scale-110 transition-transform border ${
+                  currentColor.toLowerCase() === c.value.toLowerCase()
+                    ? "ring-2 ring-blue-500 border-white scale-105"
+                    : "border-white/20"
+                }`}
+                style={{ backgroundColor: c.value }}
+                title={c.name}
+              />
+            ))}
+          </div>
+
+          <div className="pt-2 border-t border-[#2E313B] flex items-center justify-between gap-2 px-0.5">
+            <span className="text-[11px] text-gray-400">Custom</span>
+            <div className="flex items-center gap-1.5 bg-[#121316] px-1.5 py-0.5 rounded border border-[#282B33]">
+              <input
+                type="color"
+                value={currentColor.startsWith("#") ? currentColor : "#FFFFFF"}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-4 h-4 rounded cursor-pointer border-0 bg-transparent p-0"
+                title="Choose custom hex color"
+              />
+              <span className="text-[10px] font-mono text-gray-300 uppercase select-all">
+                {currentColor}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function WhiteboardCanvas({
   initialBoard,
   currentUserName,
@@ -2021,7 +2252,7 @@ export default function WhiteboardCanvas({
                 )}
               </div>
 
-              {/* Bold & Aa */}
+              {/* Bold & Aa & Text Size [ ]px */}
               <button
                 onClick={() =>
                   updateSelectedNode({
@@ -2037,16 +2268,28 @@ export default function WhiteboardCanvas({
               </button>
 
               <button
-                onClick={() =>
-                  updateSelectedNode({
-                    fontSize: selectedNode.fontSize === "Large" ? "Medium" : "Large",
-                  })
-                }
-                className="px-1.5 py-0.5 rounded hover:bg-[#282A33] text-[11px] font-semibold"
-                title="Font Size"
+                onClick={() => {
+                  const cur = parseFontSizePx(selectedNode.fontSize, 13);
+                  const next = cur < 15 ? 16 : cur < 20 ? 22 : cur < 26 ? 28 : 12;
+                  updateSelectedNode({ fontSize: `${next}px` });
+                }}
+                className="px-1.5 py-0.5 rounded hover:bg-[#282A33] text-[11px] font-semibold text-gray-300 hover:text-white"
+                title="Cycle Preset Font Sizes (Aa)"
               >
                 Aa
               </button>
+
+              <FontSizeControl
+                fontSize={selectedNode.fontSize}
+                onChange={(sz) => updateSelectedNode({ fontSize: sz })}
+                defaultPx={13}
+              />
+
+              <TextColorPicker
+                value={selectedNode.textColor}
+                onChange={(color) => updateSelectedNode({ textColor: color })}
+                defaultColor="#FFFFFF"
+              />
 
               {/* Fill Type */}
               <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33]">
@@ -2126,6 +2369,18 @@ export default function WhiteboardCanvas({
                   </button>
                 ))}
               </div>
+
+              <FontSizeControl
+                fontSize={selectedNode.fontSize}
+                onChange={(sz) => updateSelectedNode({ fontSize: sz })}
+                defaultPx={11}
+              />
+
+              <TextColorPicker
+                value={selectedNode.textColor}
+                onChange={(color) => updateSelectedNode({ textColor: color })}
+                defaultColor="#FDE68A"
+              />
 
               {/* Color Swatch */}
               <div className="relative">
@@ -2220,13 +2475,25 @@ export default function WhiteboardCanvas({
               >
                 <AlignRight className="w-3.5 h-3.5" />
               </button>
+
+              <FontSizeControl
+                fontSize={selectedNode.fontSize}
+                onChange={(sz) => updateSelectedNode({ fontSize: sz })}
+                defaultPx={12}
+              />
+
+              <TextColorPicker
+                value={selectedNode.textColor}
+                onChange={(color) => updateSelectedNode({ textColor: color })}
+                defaultColor="#FBCFE8"
+              />
             </>
           )}
 
           {/* D. TEXT BLOCK CONTROLS */}
           {selectedNode.type === "text" && (
             <>
-              {/* Font Size */}
+              {/* Font Size Preset & Exact [ ]px Field */}
               <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33]">
                 {(["Small", "Medium", "Large", "Huge"] as const).map((sz) => (
                   <button
@@ -2242,6 +2509,12 @@ export default function WhiteboardCanvas({
                   </button>
                 ))}
               </div>
+
+              <FontSizeControl
+                fontSize={selectedNode.fontSize}
+                onChange={(sz) => updateSelectedNode({ fontSize: sz })}
+                defaultPx={15}
+              />
 
               <button
                 onClick={() =>
@@ -2285,32 +2558,11 @@ export default function WhiteboardCanvas({
                 <AlignRight className="w-3.5 h-3.5" />
               </button>
 
-              {/* Color Swatch */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowStylePalette(!showStylePalette)}
-                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs"
-                  style={{ backgroundColor: selectedNode.color || "#FFFFFF" }}
-                  title="Change Text Color"
-                />
-
-                {showStylePalette && (
-                  <div className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50">
-                    {COLOR_PALETTE.map((c) => (
-                      <button
-                        key={c.name}
-                        onClick={() => {
-                          updateSelectedNode({ color: c.value });
-                          setShowStylePalette(false);
-                        }}
-                        className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20"
-                        style={{ backgroundColor: c.value }}
-                        title={c.name}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
+              <TextColorPicker
+                value={selectedNode.textColor || selectedNode.color}
+                onChange={(color) => updateSelectedNode({ color, textColor: color })}
+                defaultColor="#FFFFFF"
+              />
             </>
           )}
 
@@ -3101,13 +3353,21 @@ export default function WhiteboardCanvas({
                         updateSelectedNode({ body: e.target.value });
                         setEditingNodeId(null);
                       }}
-                      className="w-full h-full bg-transparent text-xs text-pink-200 focus:outline-none resize-none leading-relaxed"
-                      style={{ textAlign: node.textAlign || "left" }}
+                      className="w-full h-full bg-transparent focus:outline-none resize-none leading-relaxed"
+                      style={{
+                        textAlign: node.textAlign || "left",
+                        fontSize: `${parseFontSizePx(node.fontSize, 12)}px`,
+                        color: node.textColor || "#FBCFE8",
+                      }}
                     />
                   ) : (
                     <p
-                      className="text-[11px] text-pink-200 leading-relaxed font-sans"
-                      style={{ textAlign: node.textAlign || "left" }}
+                      className="leading-relaxed font-sans"
+                      style={{
+                        textAlign: node.textAlign || "left",
+                        fontSize: `${parseFontSizePx(node.fontSize, 12)}px`,
+                        color: node.textColor || "#FBCFE8",
+                      }}
                     >
                       {node.body || "Click to add text..."}
                     </p>
@@ -3143,10 +3403,20 @@ export default function WhiteboardCanvas({
                           type="text"
                           defaultValue={node.title}
                           onBlur={(e) => updateSelectedNode({ title: e.target.value })}
-                          className="bg-transparent text-[10px] text-amber-200 text-center w-full focus:outline-none font-medium"
+                          className="bg-transparent text-center w-full focus:outline-none font-medium"
+                          style={{
+                            fontSize: `${parseFontSizePx(node.fontSize, 10)}px`,
+                            color: node.textColor || "#FDE68A",
+                          }}
                         />
                       ) : (
-                        <span className="text-[10px] text-amber-200/90 font-medium leading-tight line-clamp-2">
+                        <span
+                          className="font-medium leading-tight line-clamp-2"
+                          style={{
+                            fontSize: `${parseFontSizePx(node.fontSize, 10)}px`,
+                            color: node.textColor || "#FDE68A",
+                          }}
+                        >
                           {node.title || "Add a task here to represent this team member!"}
                         </span>
                       )}
@@ -3706,14 +3976,7 @@ export default function WhiteboardCanvas({
 
             // 6. TEXT BLOCK NODE
             if (node.type === "text") {
-              const fontSizePx =
-                node.fontSize === "Huge"
-                  ? "28px"
-                  : node.fontSize === "Large"
-                  ? "20px"
-                  : node.fontSize === "Small"
-                  ? "12px"
-                  : "15px";
+              const fontSizePx = `${parseFontSizePx(node.fontSize, 15)}px`;
 
               return (
                 <div
@@ -3739,12 +4002,12 @@ export default function WhiteboardCanvas({
                         updateSelectedNode({ title: e.target.value });
                         setEditingNodeId(null);
                       }}
-                      className="w-full h-full bg-transparent text-white focus:outline-none resize-none"
+                      className="w-full h-full bg-transparent focus:outline-none resize-none"
                       style={{
                         fontSize: fontSizePx,
                         fontWeight: node.fontWeight || "normal",
                         textAlign: node.textAlign || "left",
-                        color: node.color || "#FFFFFF",
+                        color: node.textColor || node.color || "#FFFFFF",
                       }}
                     />
                   ) : (
@@ -3765,7 +4028,7 @@ export default function WhiteboardCanvas({
                           fontSize: fontSizePx,
                           fontWeight: node.fontWeight || "normal",
                           textAlign: node.textAlign || "left",
-                          color: node.color || "#FFFFFF",
+                          color: node.textColor || node.color || "#FFFFFF",
                         }}
                       >
                         {node.title || "Text block"}
@@ -3811,14 +4074,20 @@ export default function WhiteboardCanvas({
                         updateSelectedNode({ title: e.target.value });
                         setEditingNodeId(null);
                       }}
-                      className="bg-transparent text-xs text-white text-center w-full focus:outline-none font-bold pointer-events-auto"
+                      className="bg-transparent text-center w-full focus:outline-none font-bold pointer-events-auto"
+                      style={{
+                        fontWeight: node.fontWeight || "bold",
+                        fontSize: `${parseFontSizePx(node.fontSize, 13)}px`,
+                        color: node.textColor || "#FFFFFF",
+                      }}
                     />
                   ) : (
                     <span
-                      className="text-xs font-bold text-white select-none leading-snug break-words px-1"
+                      className="font-bold select-none leading-snug break-words px-1"
                       style={{
                         fontWeight: node.fontWeight || "bold",
-                        fontSize: node.fontSize === "Large" ? "14px" : "12px",
+                        fontSize: `${parseFontSizePx(node.fontSize, 13)}px`,
+                        color: node.textColor || "#FFFFFF",
                       }}
                     >
                       {node.title || ""}

@@ -1,5 +1,5 @@
 import connectToDatabase from "@/lib/mongodb";
-import { ResourceAllocation, Project, Team, User, Deal, Campaign, Pipeline } from "@/models";
+import { ResourceAllocation, Project, Team, User, Deal, Campaign, Pipeline, TaskNode } from "@/models";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
 import ResourceDashboardClient from "./ResourceDashboardClient";
 import { fetchWithCache } from "@/lib/cache";
@@ -23,9 +23,10 @@ export default async function ResourceDashboardPage() {
   let deals: any[] = [];
   let campaigns: any[] = [];
   let pipelines: any[] = [];
+  let tasks: any[] = [];
 
   try {
-    [resources, projects, teams, users, deals, campaigns, pipelines] = await Promise.all([
+    [resources, projects, teams, users, deals, campaigns, pipelines, tasks] = await Promise.all([
       fetchWithCache(`resource_allocations:${cId}`, 30, () =>
         ResourceAllocation.find(tenantFilter)
           .populate("assignedToProjectId", "name status")
@@ -50,6 +51,9 @@ export default async function ResourceDashboardPage() {
       ),
       fetchWithCache(`resource_pipelines:${cId}`, 30, () =>
         Pipeline.find(tenantFilter).lean()
+      ),
+      fetchWithCache(`resource_tasks:${cId}`, 30, () =>
+        TaskNode.find(tenantFilter).lean()
       ),
     ]);
   } catch (err) {
@@ -132,6 +136,18 @@ export default async function ResourceDashboardPage() {
     winProbability: Number(p.winProbability || 0),
   }));
 
+  const cleanTasks = tasks.map((t: any) => ({
+    _id: t._id.toString(),
+    name: t.name,
+    status: t.status || "Todo",
+    assignee: t.assignee || "",
+    assigneeIds: Array.isArray(t.assigneeIds)
+      ? t.assigneeIds.map((id: any) => id.toString())
+      : [],
+    estimatedHours: Number(t.estimatedHours || 0),
+    actualHours: Number(t.actualHours || 0),
+  }));
+
   return (
     <ResourceDashboardClient
       resources={cleanResources}
@@ -141,6 +157,7 @@ export default async function ResourceDashboardPage() {
       deals={cleanDeals}
       campaigns={cleanCampaigns}
       pipelines={cleanPipelines}
+      tasks={cleanTasks}
       companyCode={session.companyCode || ""}
       userRole={session.role}
     />

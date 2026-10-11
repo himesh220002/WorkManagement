@@ -1,5 +1,5 @@
 import connectToDatabase from "@/lib/mongodb";
-import { Project, Team, Pipeline, Task, User, Cycle, PipelineProgressSnapshot } from "@/models";
+import { Project, Team, Pipeline, Task, User, Cycle, PipelineProgressSnapshot, ResourceAllocation } from "@/models";
 import ProjectHierarchyDiagram from "@/app/projects/ProjectHierarchyDiagram";
 import ProjectRbacController from "@/app/projects/ProjectRbacController";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
@@ -41,24 +41,33 @@ async function deleteProjectAction(formData: FormData) {
   const id = String(formData.get("projectId") || "");
   // Explicit opt-in (option 2): the discard checkbox must be ticked so a
   // project is only ever removed together with ALL of its work.
-  const confirmed = String(formData.get("confirmDiscard") || "").toLowerCase();
+  const confirmed = String(formData.get("confirmDiscard") || formData.get("confirmed") || "").toLowerCase();
   const ok = ["yes", "true", "on", "discard", "cascade"].includes(confirmed);
   if (!id || !ok) {
     return;
   }
 
-  // Cascade: pipelines -> tasks (branches die with their task doc) ->
-  // sprints/cycles -> snapshots. Then detach teams and drop the project.
-  const [pipeDocs, taskDocs] = await Promise.all([
-    Pipeline.find({ projectId: id }).select("_id").lean() as Promise<any[]>,
-    Task.find({ projectId: id }).select("_id").lean() as Promise<any[]>,
-  ]);
+  // Cascade: pipelines -> tasks (both direct projectId and pipe-linked tasks) ->
+  // sprints/cycles -> snapshots -> allocations. Then detach teams and drop project.
+  const pipeDocs = (await Pipeline.find({ projectId: id }).select("_id").lean()) as any[];
   const pipeIds = pipeDocs.map((p) => String(p._id));
+
+  const taskFilter = {
+    $or: [
+      { projectId: id },
+      ...(pipeIds.length > 0 ? [{ pipelineId: { $in: pipeIds } }] : []),
+    ],
+  };
+
+  const taskDocs = (await Task.find(taskFilter).select("_id").lean()) as any[];
   const taskIds = taskDocs.map((t) => String(t._id));
 
-  await Task.deleteMany({ projectId: id });
+  await Task.deleteMany(taskFilter);
   await Pipeline.deleteMany({ projectId: id });
   await Cycle.deleteMany({ project: id });
+  try {
+    await ResourceAllocation.deleteMany({ assignedToProjectId: id });
+  } catch {}
   try {
     await PipelineProgressSnapshot.deleteMany({
       $or: [{ projectId: id }, ...(pipeIds.length > 0 ? [{ pipelineId: { $in: pipeIds } }] : [])],

@@ -127,6 +127,16 @@ interface PipelineItem {
   winProbability?: number;
 }
 
+interface TaskItem {
+  _id: string;
+  name: string;
+  status: string;
+  assignee: string;
+  assigneeIds: string[];
+  estimatedHours: number;
+  actualHours: number;
+}
+
 interface ResourceDashboardClientProps {
   resources: ResourceItem[];
   projects: ProjectItem[];
@@ -135,6 +145,7 @@ interface ResourceDashboardClientProps {
   deals: DealItem[];
   campaigns?: CampaignItem[];
   pipelines?: PipelineItem[];
+  tasks?: TaskItem[];
   companyCode: string;
   userRole: string;
 }
@@ -147,6 +158,7 @@ export default function ResourceDashboardClient({
   deals,
   campaigns = [],
   pipelines = [],
+  tasks = [],
   companyCode,
   userRole,
 }: ResourceDashboardClientProps) {
@@ -260,62 +272,32 @@ export default function ResourceDashboardClient({
     0
   );
 
-  // Active Campaign Designs Telemetry (matching user automation cards in Image 2)
+  // Active Campaign Designs Telemetry
   const activeCampaigns = useMemo(() => {
-    const defaultCampaigns = [
-      {
-        id: "camp-welcome",
-        name: "Welcome Series",
-        subtitle: "Subscriber Joined",
-        status: "active",
-        enrolled: 1850,
-        completed: 1240,
-        revenue: 2345.0,
-        allocatedHours: 16,
-        owner: "Sarah Jenkins",
-        iconType: "user-check",
-      },
-      {
-        id: "camp-cart",
-        name: "Cart Abandonment",
-        subtitle: "Cart Abandoned",
-        status: "active",
-        enrolled: 8420,
-        completed: 5680,
-        revenue: 14562.0,
-        allocatedHours: 28,
-        owner: "Sarah Jenkins",
-        iconType: "shopping-cart",
-      },
-      {
-        id: "camp-reengage",
-        name: "Re-engagement Campaign",
-        subtitle: "Inactive 90 Days",
-        status: "active",
-        enrolled: 3220,
-        completed: 1840,
-        revenue: 3456.0,
-        allocatedHours: 18,
-        owner: "Chloe Zhao",
-        iconType: "zap",
-      },
-    ];
-
-    if (campaigns && campaigns.length > 0) {
-      return defaultCampaigns.map((dc, i) => {
-        const found = campaigns[i];
-        if (found) {
-          return {
-            ...dc,
-            name: found.name || dc.name,
-            enrolled: found.leadsGenerated || dc.enrolled,
-            revenue: found.expectedRevenue || dc.revenue,
-          };
-        }
-        return dc;
-      });
+    if (!campaigns || campaigns.length === 0) {
+      return [];
     }
-    return defaultCampaigns;
+    return campaigns.map((c, i) => {
+      const typeStr = (c.type || "").toLowerCase();
+      const iconType =
+        typeStr.includes("cart") || typeStr.includes("shop")
+          ? "shopping-cart"
+          : typeStr.includes("engage") || typeStr.includes("lead")
+          ? "zap"
+          : "user-check";
+      return {
+        id: c._id || `camp-${i}`,
+        name: c.name,
+        subtitle: c.type || "Marketing Automation",
+        status: "active",
+        enrolled: c.leadsGenerated || 0,
+        completed: Math.round((c.leadsGenerated || 0) * 0.6),
+        revenue: c.expectedRevenue || 0,
+        allocatedHours: Math.min(20, Math.max(8, Math.round((c.leadsGenerated || 0) / 100))),
+        owner: "Marketing",
+        iconType,
+      };
+    });
   }, [campaigns]);
 
   const totalCampaignRevenue = useMemo(
@@ -331,16 +313,23 @@ export default function ResourceDashboardClient({
     [activeCampaigns]
   );
 
-  // Commercial Sales Pipeline Telemetry (matching Image 3 & database)
+  // Commercial Sales Pipeline Telemetry
   const salesTelemetry = useMemo(() => {
-    const totalDeals = deals.length > 0 ? deals.length : 200;
-    const totalDealValue =
-      deals.reduce((sum, d) => sum + (d.amount || 0), 0) || 3840000;
-    const wonDeals =
-      deals.filter((d) => (d.stage || "").toLowerCase().includes("won")).length || 64;
-    const lostDeals =
-      deals.filter((d) => (d.stage || "").toLowerCase().includes("lost")).length || 36;
-    const openDeals = Math.max(0, totalDeals - wonDeals - lostDeals) || 100;
+    const totalDeals = deals.length;
+    const totalDealValue = deals.reduce((sum, d) => sum + (d.amount || 0), 0);
+    const wonDeals = deals.filter((d) => (d.stage || "").toLowerCase().includes("won")).length;
+    const lostDeals = deals.filter((d) => (d.stage || "").toLowerCase().includes("lost")).length;
+    const openDeals = Math.max(0, totalDeals - wonDeals - lostDeals);
+    const winLossRatio =
+      lostDeals > 0
+        ? Number((wonDeals / lostDeals).toFixed(1))
+        : wonDeals > 0
+        ? wonDeals
+        : 0;
+    const avgSalesCycleDays = totalDeals > 0 ? 45 : 0;
+    const conversionRate = totalDeals > 0 ? Math.round((wonDeals / totalDeals) * 100) : 0;
+    const avgDealValue = totalDeals > 0 ? Math.round(totalDealValue / totalDeals) : 0;
+    const dedicatedSalesHours = totalDeals > 0 ? Math.min(80, totalDeals * 10) : 0;
 
     return {
       totalDeals,
@@ -348,103 +337,88 @@ export default function ResourceDashboardClient({
       wonDeals,
       lostDeals,
       openDeals,
-      winLossRatio: 1.8,
-      avgSalesCycleDays: 112,
-      conversionRate: 32,
-      avgDealValue: 19180,
-      dedicatedSalesHours: 110,
+      winLossRatio,
+      avgSalesCycleDays,
+      conversionRate,
+      avgDealValue,
+      dedicatedSalesHours,
     };
   }, [deals]);
 
-  // Member Domain & Capacity Allocation Ledger
+  const topDeal = useMemo(() => {
+    if (!deals || deals.length === 0) return null;
+    return [...deals].sort((a, b) => (b.amount || 0) - (a.amount || 0))[0];
+  }, [deals]);
+
+  // Member Domain & Capacity Allocation Ledger (Strictly dynamic from actual workload)
   const userAllocations = useMemo(() => {
     return users.map((u) => {
       const pos = (u.position || "").toLowerCase();
       const role = (u.role || "").toLowerCase();
       const name = u.name;
 
+      // Find real assigned tasks for this user
+      const userTasks = tasks.filter((t) => {
+        const byIds = Array.isArray(t.assigneeIds) && t.assigneeIds.includes(u._id);
+        const byName =
+          t.assignee &&
+          (t.assignee === u.name || t.assignee.toLowerCase() === name.toLowerCase());
+        return byIds || byName;
+      });
+
+      // Find real deals owned by this user
+      const userDeals = deals.filter(
+        (d: any) => d.owner === u.name || d.userId === u._id
+      );
+
+      // Determine domain based on role/position or real work
       let domain: "Campaigns" | "Sales" | "Engineering" | "Hardware";
       let focus: string;
-      let allocatedHours: number;
       let linkedWork: string;
+      let allocatedHours = 0;
 
-      if (
-        name === "Sarah Jenkins" ||
-        pos.includes("marketing") ||
-        pos.includes("growth")
-      ) {
+      if (pos.includes("marketing") || pos.includes("growth")) {
         domain = "Campaigns";
-        focus = "Active Campaign Designs & Marketing Automations";
-        linkedWork = "Welcome Series, Cart Abandonment (+$14.5k)";
-        allocatedHours = 38;
-      } else if (
-        name === "Chloe Zhao" ||
-        pos.includes("travel operations") ||
-        pos.includes("concierge")
-      ) {
-        domain = "Campaigns";
-        focus = "Guest Journey & Lifecycle Automations";
-        linkedWork = "Re-engagement Campaign (3.2k leads)";
-        allocatedHours = 33;
-      } else if (
-        name === "Alex Rivera" ||
-        pos.includes("sponsorship") ||
-        pos.includes("retail")
-      ) {
+        focus = u.position || "Marketing & Campaign Automations";
+      } else if (pos.includes("sales") || pos.includes("deal") || userDeals.length > 0) {
         domain = "Sales";
-        focus = "Global Esports Sponsorship & Retail Channel";
-        linkedWork = "ApexVision 2K Deal ($250,000 USD, Contract Negotiation)";
-        allocatedHours = 36;
+        focus = u.position || "Commercial Sales & Accounts";
       } else if (
-        name === "Elena Vance" ||
-        pos.includes("partnerships") ||
-        pos.includes("commercialization")
-      ) {
-        domain = "Sales";
-        focus = "Hotel Enterprise Partnerships & Commercial Contracts";
-        linkedWork = "Hospitality Portfolio Contracts ($1.2M USD)";
-        allocatedHours = 38;
-      } else if (
-        name.toLowerCase().includes("himesh") ||
-        role === "owner"
-      ) {
-        domain = "Sales";
-        focus = "Commercial Strategy & Enterprise Deal Pipeline";
-        linkedWork = "Macro Pipeline ($3.84M USD, 200 Deals)";
-        allocatedHours = 36;
-      } else if (
+        pos.includes("hardware") ||
         pos.includes("optical") ||
-        pos.includes("display") ||
-        pos.includes("tooling") ||
-        pos.includes("supply chain")
+        pos.includes("tooling")
       ) {
         domain = "Hardware";
-        focus = pos.includes("optical")
-          ? "Optical & Hardware Systems Architecture"
-          : pos.includes("supply")
-          ? "Industrial Supply Chain & Mold Tooling"
-          : "Display Calibration & QA Certification";
-        linkedWork = "ApexVision 2K Hardware Verification";
-        allocatedHours = pos.includes("optical") ? 36 : pos.includes("supply") ? 34 : 35;
+        focus = u.position || "Hardware & Equipment Engineering";
       } else {
         domain = "Engineering";
         focus =
-          name === "Dev Patel"
-            ? "PMS Booking Architect & Full-Stack Platform"
-            : pos.includes("platform") || role === "superuser"
-            ? "Platform Security, Multi-Tenant DBs & S3 Sync"
-            : pos.includes("teamlead") || role === "teamlead"
-            ? "Realtime Sockets & Microservices Gateway"
-            : "Core TaskPMS Workflow Engine";
-        linkedWork =
-          name === "Dev Patel"
-            ? "Hotel PMS Booking Engine"
-            : "Platform Architecture & API Pipelines";
-        allocatedHours =
-          name === "Dev Patel" ? 38 : role === "teamlead" ? 37 : 34;
+          u.position ||
+          (role === "owner"
+            ? "Executive & Strategic Leadership"
+            : role === "manager"
+            ? "Project & Team Operations"
+            : "Core Development & Delivery");
+      }
+
+      if (userTasks.length > 0) {
+        const taskNames = userTasks.slice(0, 2).map((t) => t.name).join(", ");
+        linkedWork = `${taskNames}${userTasks.length > 2 ? ` (+${userTasks.length - 2} more)` : ""}`;
+        allocatedHours = userTasks.reduce(
+          (sum, t) => sum + (t.estimatedHours || t.actualHours || 8),
+          0
+        );
+      } else if (userDeals.length > 0) {
+        const dealVal = userDeals.reduce((sum, d) => sum + (d.amount || 0), 0);
+        linkedWork = `${userDeals.length} Deal(s) ($${(dealVal / 1000).toFixed(1)}k)`;
+        allocatedHours = Math.min(30, userDeals.length * 10);
+      } else {
+        linkedWork = "Available for assignment (0 active tasks)";
+        allocatedHours = 0;
       }
 
       const totalCapacity = u.capacityHoursPerWeek || 40;
+      allocatedHours = Math.min(totalCapacity, allocatedHours);
       const bufferHours = Math.max(0, totalCapacity - allocatedHours);
       const utilizationPercent = Math.round((allocatedHours / totalCapacity) * 100);
 
@@ -459,7 +433,7 @@ export default function ResourceDashboardClient({
         utilizationPercent,
       };
     });
-  }, [users]);
+  }, [users, tasks, deals]);
 
   // Aggregated domain hours
   const domainAggregates = useMemo(() => {
@@ -1239,72 +1213,84 @@ export default function ResourceDashboardClient({
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {activeCampaigns.map((camp) => (
-                      <div
-                        key={camp.id}
-                        className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] p-3 shadow-xs flex flex-col justify-between hover:border-purple-400 transition-colors"
-                      >
-                        <div>
-                          <div className="flex items-start justify-between gap-1 mb-2">
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded bg-[#F3F2F1] dark:bg-[#292827] flex items-center justify-center text-[#605E5C] dark:text-[#C8C6C4] shrink-0">
-                                {camp.iconType === "shopping-cart" ? (
-                                  <ShoppingCart className="w-3.5 h-3.5 text-amber-600" />
-                                ) : camp.iconType === "zap" ? (
-                                  <Zap className="w-3.5 h-3.5 text-yellow-600" />
-                                ) : (
-                                  <UserCheck className="w-3.5 h-3.5 text-[#107C10]" />
-                                )}
+                  {activeCampaigns.length === 0 ? (
+                    <div className="p-6 text-center bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px]">
+                      <Zap className="w-6 h-6 text-[#A19F9D] mx-auto mb-1.5 opacity-50" />
+                      <span className="text-xs font-semibold text-[#242424] dark:text-white block">
+                        No Active Campaign Automations
+                      </span>
+                      <span className="text-[11px] text-[#605E5C] dark:text-[#C8C6C4]">
+                        Marketing automations and campaign designs will appear here once configured under Growth &amp; Campaigns.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {activeCampaigns.map((camp) => (
+                        <div
+                          key={camp.id}
+                          className="bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] rounded-[6px] p-3 shadow-xs flex flex-col justify-between hover:border-purple-400 transition-colors"
+                        >
+                          <div>
+                            <div className="flex items-start justify-between gap-1 mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded bg-[#F3F2F1] dark:bg-[#292827] flex items-center justify-center text-[#605E5C] dark:text-[#C8C6C4] shrink-0">
+                                  {camp.iconType === "shopping-cart" ? (
+                                    <ShoppingCart className="w-3.5 h-3.5 text-amber-600" />
+                                  ) : camp.iconType === "zap" ? (
+                                    <Zap className="w-3.5 h-3.5 text-yellow-600" />
+                                  ) : (
+                                    <UserCheck className="w-3.5 h-3.5 text-[#107C10]" />
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <h5 className="font-bold text-wrap text-xs text-[#242424] dark:text-white truncate" title={camp.name}>
+                                    {camp.name}
+                                  </h5>
+                                  <span className="text-[10px] text-[#605E5C] dark:text-[#C8C6C4] block truncate">
+                                    {camp.subtitle}
+                                  </span>
+                                </div>
                               </div>
-                              <div className="min-w-0">
-                                <h5 className="font-bold text-wrap text-xs text-[#242424] dark:text-white truncate" title={camp.name}>
-                                  {camp.name}
-                                </h5>
-                                <span className="text-[10px] text-[#605E5C] dark:text-[#C8C6C4] block truncate">
-                                  {camp.subtitle}
-                                </span>
+                            </div>
+
+                            <div className="mb-2.5">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-100 text-[#107C10] dark:bg-emerald-900/40 dark:text-[#54B054]">
+                                {camp.status}
+                              </span>
+                            </div>
+
+                            <div className="space-y-1 text-[11px]">
+                              <div className="flex justify-between items-center text-[#605E5C] dark:text-[#C8C6C4]">
+                                <span>Enrolled:</span>
+                                <strong className="text-[#242424] dark:text-white font-semibold">
+                                  {camp.enrolled.toLocaleString()}
+                                </strong>
+                              </div>
+                              <div className="flex justify-between items-center text-[#605E5C] dark:text-[#C8C6C4]">
+                                <span>Completed:</span>
+                                <strong className="text-[#242424] dark:text-white font-semibold">
+                                  {camp.completed.toLocaleString()}
+                                </strong>
+                              </div>
+                              <div className="flex justify-between items-center text-[#605E5C] dark:text-[#C8C6C4] pt-1 border-t border-[#F3F2F1] dark:divide-[#292827]">
+                                <span>Revenue:</span>
+                                <strong className="text-[#107C10] dark:text-[#54B054] font-bold">
+                                  ${camp.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </strong>
                               </div>
                             </div>
                           </div>
 
-                          <div className="mb-2.5">
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-100 text-[#107C10] dark:bg-emerald-900/40 dark:text-[#54B054]">
-                              {camp.status}
+                          <div className="mt-2.5 pt-2 border-t border-[#F3F2F1] dark:border-[#292827] text-[10px] text-[#605E5C] dark:text-[#C8C6C4] flex items-center justify-between">
+                            <span>Allocated:</span>
+                            <span className="font-semibold text-purple-700 dark:text-purple-300">
+                              {camp.allocatedHours}h / wk
                             </span>
                           </div>
-
-                          <div className="space-y-1 text-[11px]">
-                            <div className="flex justify-between items-center text-[#605E5C] dark:text-[#C8C6C4]">
-                              <span>Enrolled:</span>
-                              <strong className="text-[#242424] dark:text-white font-semibold">
-                                {camp.enrolled.toLocaleString()}
-                              </strong>
-                            </div>
-                            <div className="flex justify-between items-center text-[#605E5C] dark:text-[#C8C6C4]">
-                              <span>Completed:</span>
-                              <strong className="text-[#242424] dark:text-white font-semibold">
-                                {camp.completed.toLocaleString()}
-                              </strong>
-                            </div>
-                            <div className="flex justify-between items-center text-[#605E5C] dark:text-[#C8C6C4] pt-1 border-t border-[#F3F2F1] dark:divide-[#292827]">
-                              <span>Revenue:</span>
-                              <strong className="text-[#107C10] dark:text-[#54B054] font-bold">
-                                ${camp.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              </strong>
-                            </div>
-                          </div>
                         </div>
-
-                        <div className="mt-2.5 pt-2 border-t border-[#F3F2F1] dark:border-[#292827] text-[10px] text-[#605E5C] dark:text-[#C8C6C4] flex items-center justify-between">
-                          <span>Allocated:</span>
-                          <span className="font-semibold text-purple-700 dark:text-purple-300">
-                            {camp.allocatedHours}h / wk
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-3 pt-2.5 border-t border-[#EDEBE9] dark:border-[#292827] flex items-center justify-between text-xs text-[#605E5C] dark:text-[#C8C6C4]">
@@ -1336,13 +1322,17 @@ export default function ResourceDashboardClient({
                     <div className="p-2.5 rounded bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39]">
                       <span className="text-[10px] text-[#605E5C] dark:text-[#C8C6C4] block">Total Deal Value</span>
                       <strong className="text-sm font-bold text-[#107C10]">
-                        ${(salesTelemetry.totalDealValue / 1000000).toFixed(2)}M
+                        {salesTelemetry.totalDealValue >= 1000000
+                          ? `$${(salesTelemetry.totalDealValue / 1000000).toFixed(2)}M`
+                          : `$${salesTelemetry.totalDealValue.toLocaleString()}`}
                       </strong>
                     </div>
                     <div className="p-2.5 rounded bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39]">
                       <span className="text-[10px] text-[#605E5C] dark:text-[#C8C6C4] block">Average Deal Value</span>
                       <strong className="text-sm font-bold text-[#242424] dark:text-white">
-                        ${(salesTelemetry.avgDealValue / 1000).toFixed(2)}K
+                        {salesTelemetry.avgDealValue >= 1000
+                          ? `$${(salesTelemetry.avgDealValue / 1000).toFixed(1)}K`
+                          : `$${salesTelemetry.avgDealValue.toLocaleString()}`}
                       </strong>
                     </div>
                     <div className="p-2.5 rounded bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39]">
@@ -1360,24 +1350,33 @@ export default function ResourceDashboardClient({
                   </div>
 
                   {/* Flagship Deal Feature Card */}
-                  <div className="p-3 rounded-[6px] bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39]">
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="font-bold text-[#242424] dark:text-white truncate">
-                        Wholesale Distribution &amp; Retail Channel Pipeline
+                  {topDeal ? (
+                    <div className="p-3 rounded-[6px] bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39]">
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="font-bold text-[#242424] dark:text-white truncate">
+                          {topDeal.name}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                          Stage: {topDeal.stage || "Active"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs bg-[#FAF9F8] dark:bg-[#1B1A19] p-2 rounded border border-[#EDEBE9] dark:border-[#292827]">
+                        <span>Deal Value: <strong className="text-[#107C10]">${(topDeal.amount || 0).toLocaleString()} USD</strong></span>
+                        <span>Status: <strong className="text-[#0078D4]">{topDeal.stage || "Prospect"}</strong></span>
+                        <span>Cycle: <strong className="text-[#605E5C] dark:text-[#C8C6C4]">{salesTelemetry.avgSalesCycleDays} days avg</strong></span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-[6px] bg-white dark:bg-[#201F1E] border border-[#E1DFDD] dark:border-[#3B3A39] text-center">
+                      <DollarSign className="w-5 h-5 text-[#A19F9D] mx-auto mb-1 opacity-50" />
+                      <span className="text-xs font-semibold text-[#242424] dark:text-white block">
+                        No Commercial Sales Deals
                       </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
-                        Stage: Contract Negotiation
+                      <span className="text-[11px] text-[#605E5C] dark:text-[#C8C6C4]">
+                        Pipeline deals and contract performance metrics will display here once deals are initiated.
                       </span>
                     </div>
-                    <p className="text-[11px] text-[#605E5C] dark:text-[#C8C6C4] mb-2 truncate">
-                      🏢 ApexVision Esports Monitor 2K &bull; 👤 Alex Rivera &bull; 👥 sales_direct_Global_Esports_Retail
-                    </p>
-                    <div className="flex items-center justify-between text-xs bg-[#FAF9F8] dark:bg-[#1B1A19] p-2 rounded border border-[#EDEBE9] dark:border-[#292827]">
-                      <span>Deal Value: <strong className="text-[#107C10]">$250,000 USD</strong></span>
-                      <span>Probability: <strong className="text-[#0078D4]">60%</strong></span>
-                      <span>Cycle: <strong className="text-[#605E5C] dark:text-[#C8C6C4]">112 days avg</strong></span>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 <div className="mt-3 pt-2.5 border-t border-[#EDEBE9] dark:border-[#292827] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs text-[#605E5C] dark:text-[#C8C6C4]">

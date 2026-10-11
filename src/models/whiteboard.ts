@@ -27,6 +27,7 @@ export interface IWhiteboardNode {
   subtitle?: string;
   body?: string;
   color?: string;
+  textColor?: string;
   fillType?: "solid" | "tint" | "pattern" | "none";
   shapeType?: "rectangle" | "rounded" | "circle" | "diamond" | "triangle" | "star" | "heart" | "arrow-right" | "hexagon";
   fontSize?: string;
@@ -148,6 +149,7 @@ const whiteboardSchema = new Schema<IWhiteboard>(
         subtitle: { type: String, default: "" },
         body: { type: String, default: "" },
         color: { type: String, default: "#0078D4" },
+        textColor: { type: String, default: "" },
         fillType: {
           type: String,
           enum: ["solid", "tint", "pattern", "none"],

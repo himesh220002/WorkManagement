@@ -63,9 +63,9 @@ export default function PipelineCard({
   const [isSavingDates, setIsSavingDates] = useState(false);
   const [datesFeedback, setDatesFeedback] = useState<string | null>(null);
 
-  // Delete mode (option 1 vs option 2): unlink keeps tasks as No Pipeline,
-  // cascade discards linked tasks + branches completely.
-  const [cascadeDelete, setCascadeDelete] = useState(false);
+  // Delete mode (option 1 vs option 2): cascade (default) discards linked tasks + branches completely,
+  // unlink keeps tasks as No Pipeline.
+  const [cascadeDelete, setCascadeDelete] = useState(true);
 
   // Daily-delta triple: day-before -> yesterday -> today (lazy-loaded on open)
   const [history, setHistory] = useState<{ points: { date: string; value: number }[]; deltas: number[] } | null>(null);

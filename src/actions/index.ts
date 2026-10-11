@@ -859,6 +859,7 @@ export async function deletePipeline(formData: FormData) {
   try {
     await PipelineProgressSnapshot.deleteMany({ pipelineId });
   } catch {}
+  invalidateAllAppCaches();
   revalidatePipelineSurfaces();
   revalidatePath("/projects");
   revalidatePath("/my-work");
