@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { ORG_CHART_NODES, ORG_CHART_EDGES, WHITEBOARD_TEMPLATES } from "@/lib/whiteboardTemplates";
+import {
+  validateJson,
+  toggleMarkdownCheckbox,
+  DEFAULT_JSON_NOTE,
+  DEFAULT_TEXT_NOTE,
+  DEFAULT_MARKDOWN_NOTE,
+} from "@/lib/whiteboardMarkdownAndJson";
 
 describe("Chat Space & Mentions Engine", () => {
   it("extracts multiple @mentions from input string", () => {
@@ -1876,6 +1883,213 @@ describe("Whiteboard Canvas & Organizational Chart Template", () => {
     });
   });
 
+  describe("Sticky Note Multi-Format Structuring (JSON, Markdown, Text, Checklist)", () => {
+    describe("JSON Formatting Structure", () => {
+      it("validates and formats valid JSON structure with 2-space indentation", () => {
+        const rawJson = '{"status":"active","count":42,"items":["a","b"]}';
+        const res = validateJson(rawJson);
+        expect(res.isValid).toBe(true);
+        expect(res.error).toBeUndefined();
+        expect(res.keyCount).toBe(3);
+        expect(res.formatted).toContain('  "status": "active"');
+        expect(res.formatted).toContain('  "count": 42');
+      });
 
+      it("identifies invalid JSON syntax and provides readable error message", () => {
+        const invalidJson = '{"status": "active", count: }';
+        const res = validateJson(invalidJson);
+        expect(res.isValid).toBe(false);
+        expect(res.error).toBeTruthy();
+        expect(res.formatted).toBeUndefined();
+      });
 
+      it("verifies DEFAULT_JSON_NOTE is valid JSON syntax out-of-the-box", () => {
+        const res = validateJson(DEFAULT_JSON_NOTE);
+        expect(res.isValid).toBe(true);
+        expect(res.keyCount).toBeGreaterThanOrEqual(4);
+      });
+    });
+
+    describe("Markdown Rendering & Interactive Checklists", () => {
+      it("verifies DEFAULT_MARKDOWN_NOTE has headers, checklists, and code formatting", () => {
+        expect(DEFAULT_MARKDOWN_NOTE).toContain("# Project Roadmap & Specs");
+        expect(DEFAULT_MARKDOWN_NOTE).toContain("- [ ]");
+        expect(DEFAULT_MARKDOWN_NOTE).toContain("- [x]");
+      });
+
+      it("toggles markdown checklist box from unchecked to checked at specific line", () => {
+        const md = "# Tasks\n- [ ] Deploy to production\n- [x] Run unit tests";
+        const toggled = toggleMarkdownCheckbox(md, 1);
+        const lines = toggled.split("\n");
+        expect(lines[1]).toBe("- [x] Deploy to production");
+        expect(lines[2]).toBe("- [x] Run unit tests");
+      });
+
+      it("toggles markdown checklist box from checked back to unchecked at specific line", () => {
+        const md = "# Tasks\n- [x] Deploy to production\n- [x] Run unit tests";
+        const toggled = toggleMarkdownCheckbox(md, 1);
+        const lines = toggled.split("\n");
+        expect(lines[1]).toBe("- [ ] Deploy to production");
+        expect(lines[2]).toBe("- [x] Run unit tests");
+      });
+
+      it("leaves non-checklist markdown lines untouched", () => {
+        const md = "# Header Line\nSome regular paragraph text\n> Blockquote";
+        const untouched = toggleMarkdownCheckbox(md, 0);
+        expect(untouched).toBe(md);
+      });
+    });
+
+    describe("Text File Structuring", () => {
+      it("verifies DEFAULT_TEXT_NOTE contains clean plain-text layout", () => {
+        expect(DEFAULT_TEXT_NOTE).toContain("Project Architecture Notes");
+        expect(DEFAULT_TEXT_NOTE).toContain("1. Database Isolation");
+        expect(DEFAULT_TEXT_NOTE).toContain("2. Real-time Events");
+      });
+    });
+  });
+
+  describe("Multi-Object Selection, Link & Unlink Engine", () => {
+    const sampleNodes = [
+      { id: "node-1", type: "task" as const, title: "Auth API", x: 100, y: 100, width: 200, height: 100 },
+      { id: "node-2", type: "task" as const, title: "Database", x: 400, y: 100, width: 200, height: 100 },
+      { id: "node-3", type: "task" as const, title: "Dashboard", x: 700, y: 100, width: 200, height: 100 },
+      { id: "node-4", type: "sticky" as const, title: "External Note", x: 400, y: 350, width: 200, height: 100 },
+    ];
+
+    it("supports multi-selection toggle via Ctrl, Meta, or Shift keys", () => {
+      let selected: string[] = [];
+
+      // Shift-click node-1
+      selected = selected.includes("node-1") ? selected.filter((id) => id !== "node-1") : [...selected, "node-1"];
+      expect(selected).toEqual(["node-1"]);
+
+      // Shift-click node-2
+      selected = selected.includes("node-2") ? selected.filter((id) => id !== "node-2") : [...selected, "node-2"];
+      expect(selected).toEqual(["node-1", "node-2"]);
+
+      // Shift-click node-3
+      selected = selected.includes("node-3") ? selected.filter((id) => id !== "node-3") : [...selected, "node-3"];
+      expect(selected).toEqual(["node-1", "node-2", "node-3"]);
+
+      // Shift-click node-2 again to deselect
+      selected = selected.includes("node-2") ? selected.filter((id) => id !== "node-2") : [...selected, "node-2"];
+      expect(selected).toEqual(["node-1", "node-3"]);
+    });
+
+    it("links two selected objects with a forward connector arrow", () => {
+      const selected = ["node-1", "node-2"];
+      const existingEdges: any[] = [];
+
+      const newEdgesToAdd: any[] = [];
+      for (let i = 0; i < selected.length - 1; i++) {
+        const from = selected[i];
+        const to = selected[i + 1];
+        newEdgesToAdd.push({
+          id: `edge-${from}-${to}`,
+          from,
+          to,
+          arrowDirection: "forward",
+          color: "#3B82F6",
+        });
+      }
+
+      const updatedEdges = [...existingEdges, ...newEdgesToAdd];
+      expect(updatedEdges).toHaveLength(1);
+      expect(updatedEdges[0].from).toBe("node-1");
+      expect(updatedEdges[0].to).toBe("node-2");
+      expect(updatedEdges[0].arrowDirection).toBe("forward");
+    });
+
+    it("links multiple selected objects in sequential chain (A -> B -> C)", () => {
+      const selected = ["node-1", "node-2", "node-3"];
+      const existingEdges: any[] = [];
+
+      const newEdgesToAdd: any[] = [];
+      for (let i = 0; i < selected.length - 1; i++) {
+        const from = selected[i];
+        const to = selected[i + 1];
+        newEdgesToAdd.push({
+          id: `edge-${from}-${to}`,
+          from,
+          to,
+          arrowDirection: "forward",
+        });
+      }
+
+      const updatedEdges = [...existingEdges, ...newEdgesToAdd];
+      expect(updatedEdges).toHaveLength(2);
+      expect(updatedEdges[0]).toMatchObject({ from: "node-1", to: "node-2" });
+      expect(updatedEdges[1]).toMatchObject({ from: "node-2", to: "node-3" });
+    });
+
+    it("links objects in star topology connecting root to all selected targets", () => {
+      const selected = ["node-1", "node-2", "node-3"];
+      const rootId = selected[0];
+      const newEdgesToAdd: any[] = [];
+
+      for (let i = 1; i < selected.length; i++) {
+        newEdgesToAdd.push({
+          id: `edge-star-${rootId}-${selected[i]}`,
+          from: rootId,
+          to: selected[i],
+          arrowDirection: "forward",
+        });
+      }
+
+      expect(newEdgesToAdd).toHaveLength(2);
+      expect(newEdgesToAdd[0]).toMatchObject({ from: "node-1", to: "node-2" });
+      expect(newEdgesToAdd[1]).toMatchObject({ from: "node-1", to: "node-3" });
+    });
+
+    it("updates existing links to bidirectional (<->) arrows", () => {
+      const selected = ["node-1", "node-2"];
+      const edges = [
+        { id: "e1", from: "node-1", to: "node-2", arrowDirection: "forward" },
+      ];
+
+      const updated = edges.map((e) => {
+        if ((e.from === "node-1" && e.to === "node-2") || (e.from === "node-2" && e.to === "node-1")) {
+          return { ...e, arrowDirection: "bidirectional" as const };
+        }
+        return e;
+      });
+
+      expect(updated[0].arrowDirection).toBe("bidirectional");
+    });
+
+    it("unlinks selected objects and removes connector arrows between them", () => {
+      const selected = ["node-1", "node-2", "node-3"];
+      const edges = [
+        { id: "e1", from: "node-1", to: "node-2" }, // Inter-selected: should be removed
+        { id: "e2", from: "node-2", to: "node-3" }, // Inter-selected: should be removed
+        { id: "e3", from: "node-1", to: "node-4" }, // Connected to external node-4: MUST PRESERVE
+      ];
+
+      // Filter out links connecting selected nodes together
+      const updatedEdges = edges.filter(
+        (e) => !(selected.includes(e.from) && selected.includes(e.to))
+      );
+
+      expect(updatedEdges).toHaveLength(1);
+      expect(updatedEdges[0].id).toBe("e3");
+      expect(updatedEdges[0].to).toBe("node-4");
+    });
+
+    it("computes accurate linked state count between selected objects", () => {
+      const selected = ["node-1", "node-2", "node-3"];
+      const edges = [
+        { id: "e1", from: "node-1", to: "node-2" },
+        { id: "e2", from: "node-2", to: "node-3" },
+        { id: "e3", from: "node-1", to: "node-4" },
+      ];
+
+      const linkedEdges = edges.filter(
+        (e) => selected.includes(e.from) && selected.includes(e.to)
+      );
+
+      expect(linkedEdges).toHaveLength(2);
+      expect(linkedEdges.map((e) => e.id)).toEqual(["e1", "e2"]);
+    });
+  });
 

@@ -33,6 +33,7 @@ export interface IWhiteboardNode {
   title: string;
   subtitle?: string;
   body?: string;
+  noteFormat?: "text" | "json" | "markdown" | "checklist";
   hasCheckbox?: boolean;
   checked?: boolean;
   checklist?: IChecklistItem[];
@@ -165,6 +166,11 @@ const whiteboardSchema = new Schema<IWhiteboard>(
         title: { type: String, default: "" },
         subtitle: { type: String, default: "" },
         body: { type: String, default: "" },
+        noteFormat: {
+          type: String,
+          enum: ["text", "json", "markdown", "checklist"],
+          default: "text",
+        },
         hasCheckbox: { type: Boolean, default: false },
         checked: { type: Boolean, default: false },
         checklist: [

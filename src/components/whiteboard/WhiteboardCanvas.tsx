@@ -67,6 +67,13 @@ import {
   ListTodo,
   Compass,
   RefreshCcwIcon,
+  Braces,
+  FileUp,
+  Eye,
+  Edit3,
+  Link2,
+  Unlink,
+  ChevronDown,
 } from "lucide-react";
 import { IWhiteboardNode, IWhiteboardEdge } from "@/models/whiteboard";
 import { WHITEBOARD_TEMPLATES, createFunctionalArea } from "@/lib/whiteboardTemplates";
@@ -80,6 +87,16 @@ import {
   deleteChecklistItem,
   getStickyTextColor,
 } from "@/lib/whiteboardChecklist";
+import {
+  DEFAULT_TEXT_NOTE,
+  DEFAULT_JSON_NOTE,
+  DEFAULT_MARKDOWN_NOTE,
+  validateJson,
+  renderJsonSyntaxHighlighted,
+  renderMarkdownToJsx,
+  toggleMarkdownCheckbox,
+  NoteFormat,
+} from "@/lib/whiteboardMarkdownAndJson";
 import { RxReset } from "react-icons/rx";
 
 interface WhiteboardCanvasProps {
@@ -559,9 +576,13 @@ export default function WhiteboardCanvas({
 
   // Shape switcher popover for selected shape node
   const [showShapeSwitcher, setShowShapeSwitcher] = useState(false);
+  // Multi-selection link options dropdown menu
+  const [showLinkMenu, setShowLinkMenu] = useState(false);
 
   // Direct file upload ref for images, SVGs, graphs, diagrams
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Direct file import ref for .md, .json, .txt into formatted sticky notes
+  const directFileInputRef = useRef<HTMLInputElement>(null);
   const [isDraggingFileOver, setIsDraggingFileOver] = useState(false);
   const [isDraggingItemOver, setIsDraggingItemOver] = useState(false);
 
@@ -1497,7 +1518,10 @@ export default function WhiteboardCanvas({
     shapeType: string = "rectangle",
     customColor?: string,
     isChecklist?: boolean,
-    explicitCoords?: { x: number; y: number }
+    explicitCoords?: { x: number; y: number },
+    noteFormat?: NoteFormat,
+    initialTitle?: string,
+    initialBody?: string
   ) => {
     const coords = explicitCoords
       ? explicitCoords
@@ -1509,28 +1533,60 @@ export default function WhiteboardCanvas({
     let newNode: IWhiteboardNode;
 
     if (type === "sticky") {
-      const defaultChecklist = isChecklist
+      const resolvedFormat: NoteFormat =
+        noteFormat || (isChecklist ? "checklist" : "text");
+      const isFormatChecklist = resolvedFormat === "checklist";
+      const isFormatJson = resolvedFormat === "json";
+      const isFormatMd = resolvedFormat === "markdown";
+
+      const defaultChecklist = isFormatChecklist
         ? [
-          { id: `c-${Date.now()}-1`, text: "Review milestone goals", completed: false },
-          { id: `c-${Date.now()}-2`, text: "Update project whiteboard", completed: false },
-          { id: `c-${Date.now()}-3`, text: "Sync with team squad", completed: false },
-        ]
+            { id: `c-${Date.now()}-1`, text: "Review milestone goals", completed: false },
+            { id: `c-${Date.now()}-2`, text: "Update project whiteboard", completed: false },
+            { id: `c-${Date.now()}-3`, text: "Sync with team squad", completed: false },
+          ]
         : undefined;
+
+      const resolvedTitle = initialTitle
+        ? initialTitle
+        : isFormatJson
+        ? "data.json"
+        : isFormatMd
+        ? "notes.md"
+        : isFormatChecklist
+        ? "Action Items"
+        : "notes.txt";
+
+      const resolvedBody =
+        initialBody !== undefined
+          ? initialBody
+          : isFormatJson
+          ? DEFAULT_JSON_NOTE
+          : isFormatMd
+          ? DEFAULT_MARKDOWN_NOTE
+          : isFormatChecklist
+          ? serializeChecklistToBody(defaultChecklist!)
+          : DEFAULT_TEXT_NOTE;
+
+      const resolvedWidth = isFormatMd ? 320 : isFormatJson ? 300 : isFormatChecklist ? 240 : 220;
+      const resolvedHeight = isFormatMd ? 320 : isFormatJson ? 280 : isFormatChecklist ? 220 : 200;
+      const resolvedColor =
+        customColor ||
+        (isFormatJson ? "#F59E0B" : isFormatMd ? "#6366F1" : isFormatChecklist ? "#38BDF8" : "#EC4899");
 
       newNode = {
         id: newId,
         type: "sticky",
-        x: coords.x - (isChecklist ? 110 : 95),
-        y: coords.y - (isChecklist ? 105 : 85),
-        width: isChecklist ? 220 : 190,
-        height: isChecklist ? 210 : 170,
-        title: isChecklist ? "Action Items" : "Note",
-        body: isChecklist
-          ? serializeChecklistToBody(defaultChecklist!)
-          : "Type your notes or pro-tips here...",
-        hasCheckbox: Boolean(isChecklist),
+        x: coords.x - Math.round(resolvedWidth / 2),
+        y: coords.y - Math.round(resolvedHeight / 2),
+        width: resolvedWidth,
+        height: resolvedHeight,
+        title: resolvedTitle,
+        body: resolvedBody,
+        hasCheckbox: isFormatChecklist,
         checklist: defaultChecklist,
-        color: customColor || (isChecklist ? "#38BDF8" : "#EC4899"),
+        noteFormat: resolvedFormat,
+        color: resolvedColor,
         fillType: "tint",
         zIndex: nodes.length + 1,
       };
@@ -1799,9 +1855,9 @@ export default function WhiteboardCanvas({
       return;
     }
 
-    const isCtrl = e.ctrlKey || e.metaKey;
+    const isMultiSelect = e.ctrlKey || e.metaKey || e.shiftKey;
 
-    if (isCtrl) {
+    if (isMultiSelect) {
       // Toggle node in multi-selection group
       let nextSelected: string[];
       if (selectedNodeIds.includes(node.id)) {
@@ -2379,6 +2435,133 @@ export default function WhiteboardCanvas({
     }
   }, [s3DeleteModal, executeCanvasDelete, showTemporaryToast]);
 
+  // Link Selected Objects together with connector edges (supports Sequential, Star, and Bidirectional)
+  const handleLinkSelectedNodes = useCallback(
+    (mode: "sequence" | "star" | "bidirectional" = "sequence") => {
+      const ids =
+        selectedNodeIds.length > 0 ? selectedNodeIds : selectedNodeId ? [selectedNodeId] : [];
+      if (ids.length < 2) {
+        showTemporaryToast("Select 2 or more objects to create a link");
+        return;
+      }
+
+      const newEdgesToAdd: IWhiteboardEdge[] = [];
+      const updatedExisting = [...edges];
+
+      if (mode === "bidirectional") {
+        for (let i = 0; i < ids.length - 1; i++) {
+          const fromId = ids[i];
+          const toId = ids[i + 1];
+          const existingIdx = updatedExisting.findIndex(
+            (e) => (e.from === fromId && e.to === toId) || (e.from === toId && e.to === fromId)
+          );
+          if (existingIdx !== -1) {
+            updatedExisting[existingIdx] = {
+              ...updatedExisting[existingIdx],
+              arrowDirection: "bidirectional",
+            };
+          } else {
+            newEdgesToAdd.push({
+              id: `edge-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+              from: fromId,
+              to: toId,
+              color: "#3B82F6",
+              style: "orthogonal",
+              lineStyle: "solid",
+              arrowDirection: "bidirectional",
+            });
+          }
+        }
+      } else if (mode === "star") {
+        // Star topology: First selected node links to all other selected nodes
+        const rootId = ids[0];
+        for (let i = 1; i < ids.length; i++) {
+          const targetId = ids[i];
+          const alreadyLinked = updatedExisting.some(
+            (e) => (e.from === rootId && e.to === targetId) || (e.from === targetId && e.to === rootId)
+          );
+          if (!alreadyLinked) {
+            newEdgesToAdd.push({
+              id: `edge-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+              from: rootId,
+              to: targetId,
+              color: "#3B82F6",
+              style: "orthogonal",
+              lineStyle: "solid",
+              arrowDirection: "forward",
+            });
+          }
+        }
+      } else {
+        // Sequence topology: ids[0] -> ids[1] -> ids[2] ...
+        for (let i = 0; i < ids.length - 1; i++) {
+          const fromId = ids[i];
+          const toId = ids[i + 1];
+          const alreadyLinked = updatedExisting.some(
+            (e) => (e.from === fromId && e.to === toId) || (e.from === toId && e.to === fromId)
+          );
+          if (!alreadyLinked) {
+            newEdgesToAdd.push({
+              id: `edge-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+              from: fromId,
+              to: toId,
+              color: "#3B82F6",
+              style: "orthogonal",
+              lineStyle: "solid",
+              arrowDirection: "forward",
+            });
+          }
+        }
+      }
+
+      if (newEdgesToAdd.length > 0 || mode === "bidirectional") {
+        const merged = [...updatedExisting, ...newEdgesToAdd];
+        setEdges(merged);
+        pushHistory(nodes, merged);
+        triggerAutoSave(nodes, merged);
+        const count = newEdgesToAdd.length;
+        showTemporaryToast(
+          count > 0
+            ? `Linked ${ids.length} objects with ${count} connector ${count === 1 ? "arrow" : "arrows"}`
+            : `Updated links to bidirectional between ${ids.length} objects`
+        );
+      } else {
+        showTemporaryToast("Selected objects are already linked");
+      }
+    },
+    [selectedNodeIds, selectedNodeId, edges, nodes, pushHistory, triggerAutoSave, showTemporaryToast]
+  );
+
+  // Unlink Selected Objects - removes all connector edges between selected objects
+  const handleUnlinkSelectedNodes = useCallback(() => {
+    const ids =
+      selectedNodeIds.length > 0 ? selectedNodeIds : selectedNodeId ? [selectedNodeId] : [];
+    if (ids.length < 2) {
+      showTemporaryToast("Select 2 or more objects to unlink");
+      return;
+    }
+
+    const unlinkedEdges = edges.filter(
+      (e) => ids.includes(e.from) && ids.includes(e.to)
+    );
+
+    if (unlinkedEdges.length === 0) {
+      showTemporaryToast("No links to remove between selected objects");
+      return;
+    }
+
+    const updatedEdges = edges.filter(
+      (e) => !(ids.includes(e.from) && ids.includes(e.to))
+    );
+
+    setEdges(updatedEdges);
+    pushHistory(nodes, updatedEdges);
+    triggerAutoSave(nodes, updatedEdges);
+    showTemporaryToast(
+      `Unlinked ${ids.length} objects (removed ${unlinkedEdges.length} ${unlinkedEdges.length === 1 ? "arrow" : "arrows"})`
+    );
+  }, [selectedNodeIds, selectedNodeId, edges, nodes, pushHistory, triggerAutoSave, showTemporaryToast]);
+
   // Keybindings (Delete, Backspace, Esc, Shortcuts)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -2406,6 +2589,20 @@ export default function WhiteboardCanvas({
           e.preventDefault();
           handleRedo();
           return;
+        } else if (e.key === "a" || e.key === "A") {
+          e.preventDefault();
+          const allIds = nodes.map((n) => n.id);
+          setSelectedNodeIds(allIds);
+          setSelectedNodeId(allIds[0] || null);
+          return;
+        } else if (e.key === "l" || e.key === "L") {
+          e.preventDefault();
+          if (e.shiftKey) {
+            handleUnlinkSelectedNodes();
+          } else {
+            handleLinkSelectedNodes("sequence");
+          }
+          return;
         }
       }
 
@@ -2430,6 +2627,7 @@ export default function WhiteboardCanvas({
         setShowShapePalette(false);
         setShowStylePalette(false);
         setShowBgColorPicker(false);
+        setShowLinkMenu(false);
         if (activeTool === "arrow" || activeTool === "draw") {
           setActiveTool("select");
         }
@@ -2462,6 +2660,7 @@ export default function WhiteboardCanvas({
     handleUndo,
     handleRedo,
     selectedNodeId,
+    selectedNodeIds,
     editingNodeId,
     nodes,
     edges,
@@ -2469,6 +2668,8 @@ export default function WhiteboardCanvas({
     connectingFromNodeId,
     s3DeleteModal,
     handleDeleteSelected,
+    handleLinkSelectedNodes,
+    handleUnlinkSelectedNodes,
   ]);
 
   // Synchronize zoom and pan refs for wheel listener
@@ -2755,6 +2956,144 @@ export default function WhiteboardCanvas({
       }
     },
     [updateSelectedNode]
+  );
+
+  const handleSetStickyFormat = useCallback(
+    (node: IWhiteboardNode, targetFormat: NoteFormat) => {
+      let newBody = node.body || "";
+      let newTitle = node.title || "";
+      let newChecklist = node.checklist;
+      let hasCheckbox = targetFormat === "checklist";
+      let newColor = node.color;
+      let newWidth = node.width;
+      let newHeight = node.height;
+
+      if (targetFormat === "json") {
+        if (!newBody || newBody === DEFAULT_TEXT_NOTE || newBody === DEFAULT_MARKDOWN_NOTE) {
+          newBody = DEFAULT_JSON_NOTE;
+        } else {
+          const v = validateJson(newBody);
+          if (!v.isValid) {
+            newBody = JSON.stringify({ title: node.title || "Note", content: node.body || "" }, null, 2);
+          }
+        }
+        if (!newTitle || newTitle.endsWith(".txt") || newTitle.endsWith(".md") || newTitle === "Action Items") {
+          newTitle = "data.json";
+        }
+        if (newColor === "#EC4899" || newColor === "#38BDF8") newColor = "#F59E0B";
+        newWidth = Math.max(node.width, 300);
+        newHeight = Math.max(node.height, 280);
+      } else if (targetFormat === "markdown") {
+        if (!newBody || newBody === DEFAULT_TEXT_NOTE || newBody === DEFAULT_JSON_NOTE) {
+          newBody = DEFAULT_MARKDOWN_NOTE;
+        }
+        if (!newTitle || newTitle.endsWith(".txt") || newTitle.endsWith(".json") || newTitle === "Action Items") {
+          newTitle = "notes.md";
+        }
+        if (newColor === "#EC4899" || newColor === "#F59E0B") newColor = "#6366F1";
+        newWidth = Math.max(node.width, 320);
+        newHeight = Math.max(node.height, 300);
+      } else if (targetFormat === "checklist") {
+        if (!newChecklist || newChecklist.length === 0) {
+          newChecklist = parseNodeChecklist(node);
+          newBody = serializeChecklistToBody(newChecklist);
+        }
+        if (!newTitle || newTitle.endsWith(".txt") || newTitle.endsWith(".json") || newTitle.endsWith(".md")) {
+          newTitle = "Action Items";
+        }
+        if (newColor === "#EC4899" || newColor === "#F59E0B") newColor = "#38BDF8";
+        newWidth = Math.max(node.width, 240);
+        newHeight = Math.max(node.height, 220);
+      } else if (targetFormat === "text") {
+        if (!newBody || newBody === DEFAULT_JSON_NOTE || newBody === DEFAULT_MARKDOWN_NOTE) {
+          newBody = DEFAULT_TEXT_NOTE;
+        }
+        if (!newTitle || newTitle.endsWith(".json") || newTitle.endsWith(".md") || newTitle === "Action Items") {
+          newTitle = "notes.txt";
+        }
+      }
+
+      const updatedNodes = nodes.map((n) =>
+        n.id === node.id
+          ? {
+              ...n,
+              noteFormat: targetFormat,
+              hasCheckbox,
+              checklist: targetFormat === "checklist" ? newChecklist : undefined,
+              body: newBody,
+              title: newTitle,
+              color: newColor,
+              width: newWidth,
+              height: newHeight,
+            }
+          : n
+      );
+      setNodes(updatedNodes);
+      pushHistory(updatedNodes, edges);
+    },
+    [nodes, edges, pushHistory]
+  );
+
+  const handlePrettifyJson = useCallback(
+    (nodeId: string) => {
+      const targetNode = nodes.find((n) => n.id === nodeId);
+      if (!targetNode || !targetNode.body) return;
+      const v = validateJson(targetNode.body);
+      if (v.isValid && v.formatted) {
+        updateNode(nodeId, { body: v.formatted });
+      }
+    },
+    [nodes, updateNode]
+  );
+
+  const handleToggleMarkdownCheckboxOnNode = useCallback(
+    (nodeId: string, lineIndex: number) => {
+      const targetNode = nodes.find((n) => n.id === nodeId);
+      if (!targetNode || !targetNode.body) return;
+      const updatedBody = toggleMarkdownCheckbox(targetNode.body, lineIndex);
+      updateNode(nodeId, { body: updatedBody });
+    },
+    [nodes, updateNode]
+  );
+
+  // Direct add .md / .json / .txt file from PC
+  const handleDirectFileAdd = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+      const file = files[0];
+      const ext = file.name.split(".").pop()?.toLowerCase() || "";
+      const isMd = ext === "md" || ext === "markdown";
+      const isJson = ext === "json";
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const content = (event.target?.result as string) || "";
+        const format: NoteFormat = isMd ? "markdown" : isJson ? "json" : "text";
+        const wW = typeof window !== "undefined" ? window.innerWidth : 1400;
+        const wH = typeof window !== "undefined" ? window.innerHeight : 900;
+        const coords = doubleClickMenu
+          ? { x: doubleClickMenu.canvasX, y: doubleClickMenu.canvasY }
+          : {
+              x: Math.round(-pan.x / zoom + wW / 2 / zoom),
+              y: Math.round(-pan.y / zoom + wH / 2 / zoom),
+            };
+        handleAddNode(
+          "sticky",
+          "rectangle",
+          isMd ? "#6366F1" : isJson ? "#F59E0B" : "#EC4899",
+          false,
+          coords,
+          format,
+          file.name,
+          content
+        );
+        setDoubleClickMenu(null);
+      };
+      reader.readAsText(file);
+      e.target.value = "";
+    },
+    [doubleClickMenu, pan, zoom, handleAddNode]
   );
 
   const updateNodeTitle = useCallback(
@@ -3205,13 +3544,15 @@ export default function WhiteboardCanvas({
           handleInsertFunctionalArea(parsed.areaType, dropCoords);
           setShowTemplateSelector(false);
           return;
-        } else if (parsed.category === "node") {
           handleAddNode(
             parsed.type,
             parsed.shapeType || "rectangle",
             parsed.color,
             parsed.isChecklist,
-            dropCoords
+            dropCoords,
+            parsed.noteFormat,
+            parsed.initialTitle,
+            parsed.initialBody
           );
           setShowShapePalette(false);
           return;
@@ -3287,6 +3628,15 @@ export default function WhiteboardCanvas({
           }
           e.target.value = "";
         }}
+      />
+
+      {/* Hidden File Input for Direct .md, .json, .txt Sticky Note Import */}
+      <input
+        ref={directFileInputRef}
+        type="file"
+        accept=".md,.markdown,.json,.txt"
+        className="hidden"
+        onChange={handleDirectFileAdd}
       />
 
       {/* 1. TOP HEADER BAR (Breadcrumb, Title, Favorite, Author Avatar, Share, Fullscreen) */}
@@ -3675,104 +4025,198 @@ export default function WhiteboardCanvas({
             </>
           )}
 
-          {/* C. STICKY NOTE CONTROLS */}
-          {selectedNode.type === "sticky" && (
-            <>
-              {/* Checklist / Todo Mode Toggle */}
-              <button
-                onClick={() => handleToggleStickyChecklist(selectedNode)}
-                className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${selectedNode.hasCheckbox || (selectedNode.checklist && selectedNode.checklist.length > 0)
-                  ? "bg-blue-600/30 text-blue-300 ring-1 ring-blue-500/50"
-                  : "text-gray-300 hover:text-white hover:bg-[#282A33]"
-                  }`}
-                title={
-                  selectedNode.hasCheckbox || (selectedNode.checklist && selectedNode.checklist.length > 0)
-                    ? "Switch to Plain Text Note"
-                    : "Convert to Todo Checklist with Checkboxes"
-                }
-              >
-                <ListTodo className="w-3.5 h-3.5 text-blue-400" />
-                <span>
-                  {selectedNode.hasCheckbox || (selectedNode.checklist && selectedNode.checklist.length > 0)
-                    ? "Checklist On"
-                    : "Checklist"}
-                </span>
-              </button>
+          {/* C. STICKY NOTE CONTROLS (Text, JSON, Markdown, Checklist) */}
+          {selectedNode.type === "sticky" && (() => {
+            const currentFormat: NoteFormat =
+              selectedNode.noteFormat ||
+              (selectedNode.hasCheckbox || (selectedNode.checklist && selectedNode.checklist.length > 0)
+                ? "checklist"
+                : selectedNode.body?.trim().startsWith("{") && selectedNode.body?.trim().endsWith("}")
+                ? "json"
+                : "text");
 
-              {(selectedNode.hasCheckbox || (selectedNode.checklist && selectedNode.checklist.length > 0)) && (
-                <button
-                  onClick={() => handleAddChecklistItem(selectedNode.id)}
-                  className="px-2 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 hover:text-emerald-200 rounded text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
-                  title="Add Item to Checklist"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>+ Task</span>
-                </button>
-              )}
-
-              <div className="h-4 w-px bg-[#30333D]" />
-
-              {/* Pastel Color Swatches */}
-              <div className="flex items-center gap-1">
-                {[
-                  { color: "#F472B6", name: "Pink" },
-                  { color: "#FBBF24", name: "Yellow" },
-                  { color: "#34D399", name: "Green" },
-                  { color: "#38BDF8", name: "Cyan" },
-                  { color: "#A78BFA", name: "Purple" },
-                  { color: "#F87171", name: "Red" },
-                ].map((c) => (
+            return (
+              <>
+                {/* Format Switcher Selector */}
+                <div className="flex items-center gap-0.5 bg-black/40 p-0.5 rounded-lg border border-white/10">
                   <button
-                    key={c.name}
-                    onClick={() => updateSelectedNode({ color: c.color })}
-                    className={`w-4 h-4 rounded-full transition-transform ${selectedNode.color === c.color ? "ring-2 ring-white scale-110" : "hover:scale-110"
-                      }`}
-                    style={{ backgroundColor: c.color }}
-                    title={c.name}
-                  />
-                ))}
-              </div>
+                    onClick={() => handleSetStickyFormat(selectedNode, "text")}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                      currentFormat === "text"
+                        ? "bg-pink-600/40 text-pink-300 ring-1 ring-pink-500/50"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                    title="Plain Text File Structuring"
+                  >
+                    <FileText className="w-3 h-3" />
+                    <span>Text</span>
+                  </button>
 
-              <div className="h-4 w-px bg-[#30333D]" />
+                  <button
+                    onClick={() => handleSetStickyFormat(selectedNode, "json")}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                      currentFormat === "json"
+                        ? "bg-amber-600/40 text-amber-300 ring-1 ring-amber-500/50"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                    title="JSON Formatting Structure"
+                  >
+                    <Braces className="w-3 h-3" />
+                    <span>JSON</span>
+                  </button>
 
-              <button
-                onClick={() => updateSelectedNode({ textAlign: "left" })}
-                className={`p-1 rounded hover:bg-[#282A33] ${selectedNode.textAlign === "left" || !selectedNode.textAlign ? "text-blue-400 bg-[#282A33]" : ""
-                  }`}
-                title="Align Left"
-              >
-                <AlignLeft className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => updateSelectedNode({ textAlign: "center" })}
-                className={`p-1 rounded hover:bg-[#282A33] ${selectedNode.textAlign === "center" ? "text-blue-400 bg-[#282A33]" : ""
-                  }`}
-                title="Align Center"
-              >
-                <AlignCenter className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => updateSelectedNode({ textAlign: "right" })}
-                className={`p-1 rounded hover:bg-[#282A33] ${selectedNode.textAlign === "right" ? "text-blue-400 bg-[#282A33]" : ""
-                  }`}
-                title="Align Right"
-              >
-                <AlignRight className="w-3.5 h-3.5" />
-              </button>
+                  <button
+                    onClick={() => handleSetStickyFormat(selectedNode, "markdown")}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                      currentFormat === "markdown"
+                        ? "bg-indigo-600/40 text-indigo-300 ring-1 ring-indigo-500/50"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                    title="Rendered Markdown Format (.md)"
+                  >
+                    <FileCode className="w-3 h-3" />
+                    <span>.MD</span>
+                  </button>
 
-              <FontSizeControl
-                fontSize={selectedNode.fontSize}
-                onChange={(sz) => updateSelectedNode({ fontSize: sz })}
-                defaultPx={12}
-              />
+                  <button
+                    onClick={() => handleSetStickyFormat(selectedNode, "checklist")}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                      currentFormat === "checklist"
+                        ? "bg-cyan-600/40 text-cyan-300 ring-1 ring-cyan-500/50"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                    title="Todo Checklist with Checkboxes"
+                  >
+                    <ListTodo className="w-3 h-3" />
+                    <span>Todo</span>
+                  </button>
+                </div>
 
-              <TextColorPicker
-                value={selectedNode.textColor}
-                onChange={(color) => updateSelectedNode({ textColor: color })}
-                defaultColor="#FBCFE8"
-              />
-            </>
-          )}
+                {/* JSON Format Specific Actions */}
+                {currentFormat === "json" && (
+                  <button
+                    onClick={() => handlePrettifyJson(selectedNode.id)}
+                    className="px-2 py-1 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 hover:text-amber-200 rounded text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Auto-format / Prettify JSON with 2-space indentation"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>Prettify</span>
+                  </button>
+                )}
+
+                {/* Markdown Format Specific Actions */}
+                {currentFormat === "markdown" && (
+                  <button
+                    onClick={() => {
+                      if (editingNodeId === selectedNode.id) {
+                        setEditingNodeId(null);
+                      } else {
+                        setEditingNodeId(selectedNode.id);
+                      }
+                    }}
+                    className="px-2 py-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-indigo-200 rounded text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                    title={editingNodeId === selectedNode.id ? "Switch to Rendered Preview" : "Edit Raw Markdown"}
+                  >
+                    {editingNodeId === selectedNode.id ? (
+                      <>
+                        <Eye className="w-3 h-3" />
+                        <span>Rendered</span>
+                      </>
+                    ) : (
+                      <>
+                        <Edit3 className="w-3 h-3" />
+                        <span>Edit Raw</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {/* Checklist Format Specific Actions */}
+                {currentFormat === "checklist" && (
+                  <button
+                    onClick={() => handleAddChecklistItem(selectedNode.id)}
+                    className="px-2 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 hover:text-emerald-200 rounded text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Add Item to Checklist"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>+ Task</span>
+                  </button>
+                )}
+
+                {/* Direct Import file into this note */}
+                <button
+                  onClick={() => directFileInputRef.current?.click()}
+                  className="px-2 py-1 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Import .md, .json, or .txt file directly into whiteboard"
+                >
+                  <FileUp className="w-3 h-3 text-cyan-400" />
+                  <span>Import</span>
+                </button>
+
+                <div className="h-4 w-px bg-[#30333D]" />
+
+                {/* Pastel Color Swatches */}
+                <div className="flex items-center gap-1">
+                  {[
+                    { color: "#F472B6", name: "Pink" },
+                    { color: "#FBBF24", name: "Yellow" },
+                    { color: "#34D399", name: "Green" },
+                    { color: "#38BDF8", name: "Cyan" },
+                    { color: "#A78BFA", name: "Purple" },
+                    { color: "#F87171", name: "Red" },
+                  ].map((c) => (
+                    <button
+                      key={c.name}
+                      onClick={() => updateSelectedNode({ color: c.color })}
+                      className={`w-4 h-4 rounded-full transition-transform ${selectedNode.color === c.color ? "ring-2 ring-white scale-110" : "hover:scale-110"
+                        }`}
+                      style={{ backgroundColor: c.color }}
+                      title={c.name}
+                    />
+                  ))}
+                </div>
+
+                <div className="h-4 w-px bg-[#30333D]" />
+
+                <button
+                  onClick={() => updateSelectedNode({ textAlign: "left" })}
+                  className={`p-1 rounded hover:bg-[#282A33] ${selectedNode.textAlign === "left" || !selectedNode.textAlign ? "text-blue-400 bg-[#282A33]" : ""
+                    }`}
+                  title="Align Left"
+                >
+                  <AlignLeft className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => updateSelectedNode({ textAlign: "center" })}
+                  className={`p-1 rounded hover:bg-[#282A33] ${selectedNode.textAlign === "center" ? "text-blue-400 bg-[#282A33]" : ""
+                    }`}
+                  title="Align Center"
+                >
+                  <AlignCenter className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => updateSelectedNode({ textAlign: "right" })}
+                  className={`p-1 rounded hover:bg-[#282A33] ${selectedNode.textAlign === "right" ? "text-blue-400 bg-[#282A33]" : ""
+                    }`}
+                  title="Align Right"
+                >
+                  <AlignRight className="w-3.5 h-3.5" />
+                </button>
+
+                <FontSizeControl
+                  fontSize={selectedNode.fontSize}
+                  onChange={(sz) => updateSelectedNode({ fontSize: sz })}
+                  defaultPx={12}
+                />
+
+                <TextColorPicker
+                  value={selectedNode.textColor}
+                  onChange={(color) => updateSelectedNode({ textColor: color })}
+                  defaultColor="#FBCFE8"
+                />
+              </>
+            );
+          })()}
 
           {/* D. TEXT BLOCK CONTROLS */}
           {selectedNode.type === "text" && (
@@ -4131,42 +4575,190 @@ export default function WhiteboardCanvas({
         </div>
       )}
 
-      {/* 2b. TEMPORARY GROUP FLOATING TOOLBAR */}
-      {selectedNodeIds.length > 1 && (
-        <div
-          className="absolute z-40 bg-[#1A1C22]/95 backdrop-blur-md border border-cyan-500/50 rounded-lg shadow-2xl px-3 py-1.5 flex items-center gap-2.5 text-xs text-gray-200 animate-in fade-in-50"
-          style={{
-            left: 20,
-            top: 60,
-          }}
-        >
-          <div className="flex items-center gap-1.5 font-bold text-cyan-400">
-            <Layers className="w-4 h-4" />
-            <span>Temporary Group ({selectedNodeIds.length} items)</span>
-          </div>
-          <div className="h-4 w-px bg-[#30333D]" />
-          <span className="text-[11px] text-gray-400">Drag any element to move entire group</span>
-          <div className="h-4 w-px bg-[#30333D]" />
-          <button
-            onClick={handleDeleteSelected}
-            className="px-2 py-1 bg-red-950/60 hover:bg-red-900 text-red-300 rounded text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-            title="Delete all nodes in group"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Delete Group</span>
-          </button>
-          <button
-            onClick={() => {
-              setSelectedNodeIds([]);
-              setSelectedNodeId(null);
+      {/* 2b. MULTI-SELECTION FLOATING TOOLBAR WITH LINK & UNLINK ACTIONS */}
+      {selectedNodeIds.length > 1 && (() => {
+        const selectedNodes = nodes.filter((n) => selectedNodeIds.includes(n.id));
+        const minX = selectedNodes.length > 0 ? Math.min(...selectedNodes.map((n) => n.x)) : 0;
+        const minY = selectedNodes.length > 0 ? Math.min(...selectedNodes.map((n) => n.y)) : 0;
+        const maxX = selectedNodes.length > 0 ? Math.max(...selectedNodes.map((n) => n.x + n.width)) : 0;
+
+        // Position centered above group in screen coordinates, safely clamped to screen viewport
+        const groupCenterX = minX + (maxX - minX) / 2;
+        const winW = typeof window !== "undefined" ? window.innerWidth : 1400;
+        const screenLeft = Math.max(20, Math.min(winW - 680, groupCenterX * zoom + pan.x - 220));
+        const screenTop = Math.max(65, minY * zoom + pan.y - 54);
+
+        const linkedEdges = edges.filter(
+          (e) => selectedNodeIds.includes(e.from) && selectedNodeIds.includes(e.to)
+        );
+        const isLinked = linkedEdges.length > 0;
+
+        return (
+          <div
+            className="absolute z-40 bg-[#1A1C22]/95 backdrop-blur-md border border-cyan-500/50 rounded-xl shadow-2xl px-3 py-1.5 flex items-center gap-2.5 text-xs text-gray-200 animate-in fade-in-50"
+            style={{
+              left: screenLeft,
+              top: screenTop,
             }}
-            className="px-2 py-1 hover:bg-[#282A33] text-gray-400 hover:text-white rounded text-[11px] font-semibold transition-colors cursor-pointer"
-            title="Dissolve group (or click outside)"
           >
-            <span>Dissolve Group</span>
-          </button>
-        </div>
-      )}
+            {/* Group Header Badge */}
+            <div className="flex items-center gap-1.5 font-bold text-cyan-400 shrink-0">
+              <Layers className="w-4 h-4" />
+              <span>{selectedNodeIds.length} Selected</span>
+            </div>
+
+            {/* Link Status Pill */}
+            {isLinked ? (
+              <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-mono border border-blue-500/40 flex items-center gap-1 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                Linked ({linkedEdges.length})
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full bg-white/5 text-gray-400 text-[10px] font-mono border border-white/10 flex items-center gap-1 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
+                Not Linked
+              </span>
+            )}
+
+            <div className="h-4 w-px bg-[#30333D] shrink-0" />
+
+            {/* LINK BUTTON WITH SPLIT DROPDOWN */}
+            <div className="relative flex items-center shrink-0">
+              <button
+                type="button"
+                onClick={() => handleLinkSelectedNodes("sequence")}
+                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-l text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                title="Link selected objects with arrows in sequence (Ctrl+L)"
+              >
+                <Link2 className="w-3.5 h-3.5" />
+                <span>Link</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowLinkMenu(!showLinkMenu);
+                }}
+                className="px-1.5 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded-r text-xs border-l border-blue-500/40 transition-colors cursor-pointer"
+                title="More link options"
+              >
+                <ChevronDown className="w-3 h-3" />
+              </button>
+
+              {showLinkMenu && (
+                <div
+                  className="absolute top-full left-0 mt-1.5 bg-[#16171D] border border-blue-500/40 rounded-lg shadow-2xl p-1.5 w-52 z-50 flex flex-col gap-1 text-xs"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleLinkSelectedNodes("sequence");
+                      setShowLinkMenu(false);
+                    }}
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-blue-600/20 text-gray-200 hover:text-white transition-colors text-left cursor-pointer"
+                  >
+                    <MoveRight className="w-3.5 h-3.5 text-blue-400" />
+                    <div>
+                      <div className="font-semibold text-[11px]">Sequential Link</div>
+                      <div className="text-[9px] text-gray-400">Node 1 → Node 2 → Node 3</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleLinkSelectedNodes("bidirectional");
+                      setShowLinkMenu(false);
+                    }}
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-blue-600/20 text-gray-200 hover:text-white transition-colors text-left cursor-pointer"
+                  >
+                    <ArrowLeftRight className="w-3.5 h-3.5 text-indigo-400" />
+                    <div>
+                      <div className="font-semibold text-[11px]">Bidirectional Link</div>
+                      <div className="text-[9px] text-gray-400">Node A ↔ Node B (Both Ways)</div>
+                    </div>
+                  </button>
+
+                  {selectedNodeIds.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleLinkSelectedNodes("star");
+                        setShowLinkMenu(false);
+                      }}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-blue-600/20 text-gray-200 hover:text-white transition-colors text-left cursor-pointer"
+                    >
+                      <GitFork className="w-3.5 h-3.5 text-cyan-400" />
+                      <div>
+                        <div className="font-semibold text-[11px]">Link All from First</div>
+                        <div className="text-[9px] text-gray-400">Node 1 → All others</div>
+                      </div>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* UNLINK BUTTON */}
+            {isLinked ? (
+              <button
+                type="button"
+                onClick={handleUnlinkSelectedNodes}
+                className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-amber-200 border border-amber-500/40 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                title="Unlink and remove all arrows connecting selected objects (Ctrl+Shift+L)"
+              >
+                <Unlink className="w-3.5 h-3.5" />
+                <span>Unlink ({linkedEdges.length})</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="px-2.5 py-1 bg-white/5 text-gray-500 border border-white/5 rounded text-xs font-medium flex items-center gap-1.5 opacity-40 cursor-not-allowed shrink-0"
+                title="No links exist between selected objects"
+              >
+                <Unlink className="w-3.5 h-3.5" />
+                <span>Unlink</span>
+              </button>
+            )}
+
+            <div className="h-4 w-px bg-[#30333D] shrink-0" />
+
+            {/* Group Movement Hint */}
+            <span className="text-[11px] text-gray-400 hidden lg:inline shrink-0">
+              Drag to move group
+            </span>
+
+            <div className="h-4 w-px bg-[#30333D] shrink-0" />
+
+            {/* Delete Group */}
+            <button
+              type="button"
+              onClick={handleDeleteSelected}
+              className="px-2 py-1 bg-red-950/60 hover:bg-red-900 text-red-300 rounded text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+              title="Delete all nodes in group (Del)"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete</span>
+            </button>
+
+            {/* Dissolve Group */}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedNodeIds([]);
+                setSelectedNodeId(null);
+                setShowLinkMenu(false);
+              }}
+              className="px-2 py-1 hover:bg-[#282A33] text-gray-400 hover:text-white rounded text-[11px] font-semibold transition-colors cursor-pointer shrink-0"
+              title="Dissolve selection (Esc)"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        );
+      })()}
 
       {/* 2c. ARROW LINK SETTINGS & BRANCHING POPOVER */}
       {edgeSettingsPopover && (() => {
@@ -4354,6 +4946,43 @@ export default function WhiteboardCanvas({
             </button>
           </div>
 
+          {/* Quick Link / Unlink if multiple objects are currently selected */}
+          {selectedNodeIds.length >= 2 && (() => {
+            const linkedEdges = edges.filter(
+              (e) => selectedNodeIds.includes(e.from) && selectedNodeIds.includes(e.to)
+            );
+            return (
+              <div className="p-1.5 mb-2 bg-blue-950/40 border border-blue-500/30 rounded-lg flex items-center justify-between gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleLinkSelectedNodes("sequence");
+                    setDoubleClickMenu(null);
+                  }}
+                  className="flex-1 py-1 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                  title="Link selected objects"
+                >
+                  <Link2 className="w-3 h-3" />
+                  <span>Link ({selectedNodeIds.length})</span>
+                </button>
+                {linkedEdges.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleUnlinkSelectedNodes();
+                      setDoubleClickMenu(null);
+                    }}
+                    className="py-1 px-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer transition-colors border border-amber-500/30"
+                    title="Unlink selected objects"
+                  >
+                    <Unlink className="w-3 h-3" />
+                    <span>Unlink</span>
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+
           {/* 4 Functional Areas requested by user */}
           <div className="space-y-1 mb-2">
             <button
@@ -4472,6 +5101,40 @@ export default function WhiteboardCanvas({
               onDragStart={(e) =>
                 handleItemDragStart(e, {
                   category: "node",
+                  type: "sticky",
+                  noteFormat: "json",
+                  color: "#F59E0B",
+                })
+              }
+              onClick={() => handleAddNode("sticky", "rectangle", "#F59E0B", false, undefined, "json")}
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-amber-300 hover:bg-[#22242D] hover:text-white cursor-grab active:cursor-grabbing"
+              title="JSON Structured Sticky Note with Syntax Highlighting"
+            >
+              <Braces className="w-3.5 h-3.5 text-amber-400" />
+              <span>JSON Note</span>
+            </button>
+            <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "node",
+                  type: "sticky",
+                  noteFormat: "markdown",
+                  color: "#6366F1",
+                })
+              }
+              onClick={() => handleAddNode("sticky", "rectangle", "#6366F1", false, undefined, "markdown")}
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-indigo-300 hover:bg-[#22242D] hover:text-white cursor-grab active:cursor-grabbing"
+              title="Markdown Rendered Sticky Note (.md)"
+            >
+              <FileCode className="w-3.5 h-3.5 text-indigo-400" />
+              <span>MD Note</span>
+            </button>
+            <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "node",
                   type: "task",
                   color: "#0078D4",
                 })
@@ -4540,6 +5203,17 @@ export default function WhiteboardCanvas({
             >
               <ArrowUpRight className="w-3.5 h-3.5 text-blue-400" />
               <span>Arrow</span>
+            </button>
+            <button
+              onClick={() => {
+                directFileInputRef.current?.click();
+                setDoubleClickMenu(null);
+              }}
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-cyan-300 hover:bg-[#22242D] hover:text-white cursor-pointer"
+              title="Direct add .md / .json / .txt file in rendered format"
+            >
+              <FileUp className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Add .md File</span>
             </button>
             <button
               onClick={() => {
@@ -4951,17 +5625,27 @@ export default function WhiteboardCanvas({
               );
             }
 
-            // 3. STICKY NOTE (With interactive Checklist / Todo checkboxes option)
+            // 3. STICKY NOTE (Text structuring, JSON formatting, Markdown rendered, and Checklist todo)
             if (node.type === "sticky") {
-              const isChecklist = Boolean(
-                node.hasCheckbox || (node.checklist && node.checklist.length > 0)
-              );
+              const format: NoteFormat =
+                node.noteFormat ||
+                (node.hasCheckbox || (node.checklist && node.checklist.length > 0)
+                  ? "checklist"
+                  : node.body?.trim().startsWith("{") && node.body?.trim().endsWith("}")
+                  ? "json"
+                  : "text");
+              const isChecklist = format === "checklist";
+              const isJson = format === "json";
+              const isMarkdown = format === "markdown";
+              const isText = format === "text";
+
               const stickyTextColor = getStickyTextColor(node.color, node.textColor);
               const items = isChecklist ? parseNodeChecklist(node) : [];
               const completedCount = items.filter((i) => i.completed).length;
               const totalCount = items.length;
               const progressPct =
                 totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+              const jsonInfo = isJson ? validateJson(node.body || "") : null;
 
               return (
                 <div
@@ -4977,60 +5661,151 @@ export default function WhiteboardCanvas({
                     backgroundColor: `${node.color || "#EC4899"}26`,
                     borderColor: node.color || "#EC4899",
                   }}
-                  className={`p-3.5 rounded-xl border-2 cursor-pointer shadow-lg flex flex-col justify-between transition-all relative overflow-hidden group/sticky ${isSelected ? "ring-2 ring-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.3)]" : ""
+                  className={`p-3 rounded-xl border-2 cursor-pointer shadow-lg flex flex-col justify-between transition-all relative overflow-hidden group/sticky ${isSelected ? "ring-2 ring-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.3)]" : ""
                     }`}
                 >
-                  {isChecklist ? (
-                    <div className="w-full h-full flex flex-col overflow-hidden">
-                      {/* Top Header: Title / Todo Badge & Progress Pill */}
-                      <div className="flex items-center justify-between gap-1.5 pb-1.5 border-b border-white/10 shrink-0">
-                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                          <ListTodo
-                            className="w-3.5 h-3.5 shrink-0"
-                            style={{ color: node.color || "#EC4899" }}
-                          />
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              defaultValue={node.title || "Checklist"}
-                              autoFocus
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onChange={(e) => handleLiveTextChange(node.id, { title: e.target.value })}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") e.currentTarget.blur();
-                              }}
-                              onBlur={(e) => {
-                                updateNode(node.id, { title: e.target.value });
-                                setEditingNodeId(null);
-                              }}
-                              className="bg-black/30 border border-white/20 rounded px-1.5 py-0.5 text-xs font-semibold text-white focus:outline-none w-full"
-                              placeholder="Checklist Title"
-                            />
-                          ) : (
-                            <span
-                              className="text-xs font-bold truncate tracking-wide"
-                              style={{ color: stickyTextColor }}
-                            >
-                              {node.title || "Checklist"}
-                            </span>
-                          )}
-                        </div>
+                  {/* HEADER FOR ALL FORMATS */}
+                  <div className="flex items-center justify-between gap-1.5 pb-1.5 border-b border-white/10 shrink-0 select-none">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      {/* Format Badge Indicator */}
+                      {isJson && (
+                        <span className="px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-300 font-mono text-[9px] font-bold border border-amber-500/30 flex items-center gap-1 shrink-0">
+                          <Braces className="w-2.5 h-2.5" /> JSON
+                        </span>
+                      )}
+                      {isMarkdown && (
+                        <span className="px-1.5 py-0.5 rounded bg-indigo-500/25 text-indigo-300 font-mono text-[9px] font-bold border border-indigo-500/30 flex items-center gap-1 shrink-0">
+                          <FileCode className="w-2.5 h-2.5" /> MD
+                        </span>
+                      )}
+                      {isChecklist && (
+                        <span className="px-1.5 py-0.5 rounded bg-cyan-500/25 text-cyan-300 font-mono text-[9px] font-bold border border-cyan-500/30 flex items-center gap-1 shrink-0">
+                          <ListTodo className="w-2.5 h-2.5" /> TODO
+                        </span>
+                      )}
+                      {isText && (
+                        <span className="px-1.5 py-0.5 rounded bg-pink-500/25 text-pink-300 font-mono text-[9px] font-bold border border-pink-500/30 flex items-center gap-1 shrink-0">
+                          <FileText className="w-2.5 h-2.5" /> TXT
+                        </span>
+                      )}
 
-                        {/* Progress Badge */}
-                        <div className="flex items-center gap-1 shrink-0">
-                          <span
-                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-colors ${completedCount === totalCount && totalCount > 0
-                              ? "bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
-                              : "bg-black/25 text-gray-300 border border-white/10"
-                              }`}
+                      {/* Editable Note Title */}
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          defaultValue={node.title || (isJson ? "data.json" : isMarkdown ? "notes.md" : isChecklist ? "Action Items" : "notes.txt")}
+                          autoFocus
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onChange={(e) => handleLiveTextChange(node.id, { title: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                          }}
+                          onBlur={(e) => {
+                            updateNode(node.id, { title: e.target.value });
+                            setEditingNodeId(null);
+                          }}
+                          className="bg-black/30 border border-white/20 rounded px-1.5 py-0.5 text-xs font-semibold text-white focus:outline-none w-full"
+                          placeholder="Note Title"
+                        />
+                      ) : (
+                        <span
+                          className="text-xs font-bold truncate tracking-wide"
+                          style={{ color: stickyTextColor }}
+                          title={node.title}
+                        >
+                          {node.title || (isJson ? "data.json" : isMarkdown ? "notes.md" : isChecklist ? "Action Items" : "notes.txt")}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Right Header Actions */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {isJson && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePrettifyJson(node.id);
+                            }}
+                            className="p-1 hover:bg-white/10 rounded text-amber-300 transition-colors cursor-pointer"
+                            title="Format / Prettify JSON"
                           >
-                            {completedCount}/{totalCount}
-                          </span>
-                        </div>
-                      </div>
+                            <Sparkles className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (node.body) navigator.clipboard.writeText(node.body);
+                            }}
+                            className="p-1 hover:bg-white/10 rounded text-gray-300 hover:text-white transition-colors cursor-pointer"
+                            title="Copy JSON"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        </>
+                      )}
 
+                      {isMarkdown && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingNodeId(isEditing ? null : node.id);
+                            }}
+                            className="p-1 hover:bg-white/10 rounded text-indigo-300 transition-colors cursor-pointer"
+                            title={isEditing ? "Switch to Rendered Preview" : "Edit Raw Markdown"}
+                          >
+                            {isEditing ? <Eye className="w-3 h-3" /> : <Edit3 className="w-3 h-3" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (node.body) navigator.clipboard.writeText(node.body);
+                            }}
+                            className="p-1 hover:bg-white/10 rounded text-gray-300 hover:text-white transition-colors cursor-pointer"
+                            title="Copy Markdown"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        </>
+                      )}
+
+                      {isChecklist && (
+                        <span
+                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-colors ${completedCount === totalCount && totalCount > 0
+                            ? "bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
+                            : "bg-black/25 text-gray-300 border border-white/10"
+                            }`}
+                        >
+                          {completedCount}/{totalCount}
+                        </span>
+                      )}
+
+                      {isText && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (node.body) navigator.clipboard.writeText(node.body);
+                          }}
+                          className="p-1 hover:bg-white/10 rounded text-gray-300 hover:text-white transition-colors cursor-pointer"
+                          title="Copy Text"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* BODY CONTENT BY FORMAT */}
+                  {isChecklist && (
+                    <div className="w-full flex-1 flex flex-col overflow-hidden mt-1.5">
                       {/* Mini Progress Track */}
-                      <div className="w-full h-1 bg-black/25 rounded-full overflow-hidden my-1.5 shrink-0">
+                      <div className="w-full h-1 bg-black/25 rounded-full overflow-hidden mb-1.5 shrink-0">
                         <div
                           className="h-full rounded-full transition-all duration-300"
                           style={{
@@ -5044,13 +5819,12 @@ export default function WhiteboardCanvas({
                       </div>
 
                       {/* Items List */}
-                      <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 my-1 scrollbar-thin">
+                      <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
                         {items.map((item, idx) => (
                           <div
                             key={item.id}
                             className="flex items-start gap-2 group/item relative py-0.5"
                           >
-                            {/* Interactive Checkbox */}
                             <button
                               type="button"
                               onMouseDown={(e) => e.stopPropagation()}
@@ -5065,12 +5839,10 @@ export default function WhiteboardCanvas({
                               title={item.completed ? "Mark incomplete" : "Mark completed"}
                             >
                               <Check
-                                className={`w-3 h-3 stroke-[3] transition-transform ${item.completed ? "opacity-100 scale-100" : "opacity-0 scale-75"
-                                  }`}
+                                className={`w-3 h-3 stroke-[3] transition-transform ${item.completed ? "opacity-100 scale-100" : "opacity-0 scale-75"}`}
                               />
                             </button>
 
-                            {/* Item Text */}
                             {isEditing ? (
                               <div className="flex-1 flex items-center gap-1">
                                 <input
@@ -5148,38 +5920,140 @@ export default function WhiteboardCanvas({
                         <span>Add task</span>
                       </button>
                     </div>
-                  ) : isEditing ? (
-                    <textarea
-                      autoFocus
-                      defaultValue={node.body}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onChange={(e) => handleLiveTextChange(node.id, { body: e.target.value })}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") e.currentTarget.blur();
-                      }}
-                      onBlur={(e) => {
-                        updateNode(node.id, { body: e.target.value });
-                        setEditingNodeId(null);
-                      }}
-                      className="w-full h-full bg-transparent focus:outline-none resize-none leading-relaxed"
-                      style={{
-                        textAlign: node.textAlign || "left",
-                        fontSize: `${parseFontSizePx(node.fontSize, 12)}px`,
-                        color: stickyTextColor,
-                      }}
-                    />
-                  ) : (
-                    <p
-                      className="leading-relaxed font-sans"
-                      style={{
-                        textAlign: node.textAlign || "left",
-                        fontSize: `${parseFontSizePx(node.fontSize, 12)}px`,
-                        color: stickyTextColor,
-                      }}
-                    >
-                      {node.body || "Click to add text..."}
-                    </p>
                   )}
+
+                  {isJson && (
+                    <div className="w-full flex-1 flex flex-col overflow-hidden mt-1.5">
+                      {isEditing ? (
+                        <textarea
+                          autoFocus
+                          defaultValue={node.body}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onChange={(e) => handleLiveTextChange(node.id, { body: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") e.currentTarget.blur();
+                          }}
+                          onBlur={(e) => {
+                            updateNode(node.id, { body: e.target.value });
+                            setEditingNodeId(null);
+                          }}
+                          className="w-full flex-1 bg-black/40 text-amber-200 font-mono text-[11px] p-2 rounded-lg border border-amber-500/30 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none leading-relaxed"
+                          placeholder="{\n  &quot;key&quot;: &quot;value&quot;\n}"
+                        />
+                      ) : (
+                        <div
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            setEditingNodeId(node.id);
+                          }}
+                          className="flex-1 overflow-auto p-1.5 bg-black/40 rounded-lg border border-amber-500/10 font-mono text-[11px] leading-relaxed scrollbar-thin"
+                          title="Double-click to edit JSON raw code"
+                        >
+                          {renderJsonSyntaxHighlighted(node.body || "{}")}
+                        </div>
+                      )}
+
+                      {/* JSON Status Footer */}
+                      <div className="mt-1 pt-1 border-t border-amber-500/15 flex items-center justify-between text-[9px] text-gray-400 font-mono shrink-0 select-none">
+                        {jsonInfo?.isValid ? (
+                          <span className="flex items-center gap-1 text-emerald-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            Valid JSON ({jsonInfo.keyCount} keys)
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-rose-400 font-semibold" title={jsonInfo?.error}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+                            Syntax Error
+                          </span>
+                        )}
+                        <span className="text-gray-500">Double-click to edit</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {isMarkdown && (
+                    <div className="w-full flex-1 flex flex-col overflow-hidden mt-1.5">
+                      {isEditing ? (
+                        <textarea
+                          autoFocus
+                          defaultValue={node.body}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onChange={(e) => handleLiveTextChange(node.id, { body: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") e.currentTarget.blur();
+                          }}
+                          onBlur={(e) => {
+                            updateNode(node.id, { body: e.target.value });
+                            setEditingNodeId(null);
+                          }}
+                          className="w-full flex-1 bg-black/40 text-indigo-100 font-mono text-xs p-2.5 rounded-lg border border-indigo-500/30 focus:outline-none focus:ring-1 focus:ring-indigo-400 resize-none leading-relaxed"
+                          placeholder="# Write markdown...\n- [ ] Task item\n**Bold** text"
+                        />
+                      ) : (
+                        <div
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            setEditingNodeId(node.id);
+                          }}
+                          className="flex-1 overflow-y-auto p-2.5 bg-black/35 rounded-lg border border-indigo-500/10 select-text text-gray-200 text-xs leading-relaxed scrollbar-thin"
+                          title="Double-click to edit Markdown raw text"
+                        >
+                          {renderMarkdownToJsx(node.body || "", {
+                            onToggleCheckbox: (lineIdx) => handleToggleMarkdownCheckboxOnNode(node.id, lineIdx),
+                          })}
+                        </div>
+                      )}
+
+                      <div className="mt-1 pt-1 border-t border-indigo-500/15 flex items-center justify-between text-[9px] text-gray-400 font-mono shrink-0 select-none">
+                        <span className="text-indigo-300/80">Markdown Rendered</span>
+                        <span className="text-gray-500">Double-click to edit raw</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {isText && (
+                    <div className="w-full flex-1 flex flex-col overflow-hidden mt-1.5">
+                      {isEditing ? (
+                        <textarea
+                          autoFocus
+                          defaultValue={node.body}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onChange={(e) => handleLiveTextChange(node.id, { body: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") e.currentTarget.blur();
+                          }}
+                          onBlur={(e) => {
+                            updateNode(node.id, { body: e.target.value });
+                            setEditingNodeId(null);
+                          }}
+                          className="w-full flex-1 bg-black/30 focus:outline-none border border-white/20 rounded-lg p-2 resize-none leading-relaxed text-xs text-gray-200 font-sans"
+                          style={{
+                            textAlign: node.textAlign || "left",
+                            fontSize: `${parseFontSizePx(node.fontSize, 12)}px`,
+                            color: stickyTextColor,
+                          }}
+                          placeholder="Type your notes here..."
+                        />
+                      ) : (
+                        <div
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            setEditingNodeId(node.id);
+                          }}
+                          className="flex-1 overflow-y-auto p-2 bg-black/20 rounded-lg border border-white/10 select-text whitespace-pre-wrap leading-relaxed font-sans scrollbar-thin"
+                          style={{
+                            textAlign: node.textAlign || "left",
+                            fontSize: `${parseFontSizePx(node.fontSize, 12)}px`,
+                            color: stickyTextColor,
+                          }}
+                          title="Double-click to edit text"
+                        >
+                          {node.body || "Click to add text..."}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {isSelected && renderResizeHandles(node)}
                 </div>
               );
@@ -5754,10 +6628,8 @@ export default function WhiteboardCanvas({
                   </div>
 
                   {/* Markdown Body Preview */}
-                  <div className="flex-1 p-3 bg-black/30 overflow-y-auto select-text text-gray-200 text-xs leading-relaxed font-sans">
-                    <div className="whitespace-pre-wrap break-words">
-                      {node.previewText || node.body || "Empty markdown document."}
-                    </div>
+                  <div className="flex-1 p-3 bg-black/30 overflow-y-auto select-text text-gray-200 text-xs leading-relaxed font-sans scrollbar-thin">
+                    {renderMarkdownToJsx(node.previewText || node.body || "Empty markdown document.")}
                   </div>
 
                   {/* Markdown Footer Actions */}
@@ -6889,27 +7761,82 @@ export default function WhiteboardCanvas({
           <MoveRight className="w-4 h-4" />
         </button>
 
-        {/* N - Sticky Note Tool */}
+        {/* Sticky Note Tool (Text File Structuring) */}
         <button
           draggable={true}
           onDragStart={(e) =>
             handleItemDragStart(e, {
               category: "node",
               type: "sticky",
+              noteFormat: "text",
               isChecklist: false,
             })
           }
           onClick={() => {
             setActiveTool("sticky");
-            handleAddNode("sticky");
+            handleAddNode("sticky", "rectangle", "#EC4899", false, undefined, "text");
           }}
           className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "sticky"
-            ? "bg-blue-600 text-white shadow-sm"
+            ? "bg-pink-600/30 text-pink-300 shadow-sm"
             : "text-gray-400 hover:text-white hover:bg-[#22242D]"
             }`}
-          title="Sticky Note (Click or Hold & Drag onto canvas)"
+          title="Sticky Note - Text File Structuring (Click or Hold & Drag)"
         >
-          <StickyNote className="w-4 h-4" />
+          <StickyNote className="w-4 h-4 text-pink-400" />
+        </button>
+
+        {/* JSON Note Tool */}
+        <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "node",
+              type: "sticky",
+              color: "#F59E0B",
+              isChecklist: false,
+              noteFormat: "json",
+            })
+          }
+          onClick={() => {
+            setActiveTool("sticky");
+            handleAddNode("sticky", "rectangle", "#F59E0B", false, undefined, "json");
+          }}
+          className="p-2 rounded-lg text-amber-400 hover:text-amber-300 hover:bg-[#22242D] transition-colors cursor-grab active:cursor-grabbing"
+          title="JSON Note - Syntax Highlighted & Auto-Format Structure (Click or Hold & Drag)"
+        >
+          <Braces className="w-4 h-4" />
+        </button>
+
+        {/* Markdown Note Tool */}
+        <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "node",
+              type: "sticky",
+              color: "#6366F1",
+              isChecklist: false,
+              noteFormat: "markdown",
+            })
+          }
+          onClick={() => {
+            setActiveTool("sticky");
+            handleAddNode("sticky", "rectangle", "#6366F1", false, undefined, "markdown");
+          }}
+          className="p-2 rounded-lg text-indigo-400 hover:text-indigo-300 hover:bg-[#22242D] transition-colors cursor-grab active:cursor-grabbing"
+          title="Markdown Note - Rendered Markdown & Checklists (Click or Hold & Drag)"
+        >
+          <FileCode className="w-4 h-4" />
+        </button>
+
+        {/* Direct Add .md / .json File Tool */}
+        <button
+          type="button"
+          onClick={() => directFileInputRef.current?.click()}
+          className="p-2 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-[#22242D] transition-colors cursor-pointer"
+          title="Direct Add .md / .json / .txt File from PC"
+        >
+          <FileUp className="w-4 h-4" />
         </button>
 
         {/* Shift+N - Todo / Checklist Sticky Tool */}
@@ -6921,11 +7848,12 @@ export default function WhiteboardCanvas({
               type: "sticky",
               isChecklist: true,
               color: "#38BDF8",
+              noteFormat: "checklist",
             })
           }
           onClick={() => {
             setActiveTool("sticky");
-            handleAddNode("sticky", "rectangle", "#38BDF8", true);
+            handleAddNode("sticky", "rectangle", "#38BDF8", true, undefined, "checklist");
           }}
           className="p-2 rounded-lg text-cyan-400 hover:text-cyan-300 hover:bg-[#22242D] transition-colors cursor-grab active:cursor-grabbing"
           title="Todo / Checklist Note with Checkboxes (Click or Hold & Drag onto canvas)"
