@@ -16,6 +16,12 @@ export type WhiteboardNodeType =
   | "json"
   | "graphml";
 
+export interface IChecklistItem {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
 export interface IWhiteboardNode {
   id: string;
   type: WhiteboardNodeType;
@@ -26,6 +32,9 @@ export interface IWhiteboardNode {
   title: string;
   subtitle?: string;
   body?: string;
+  hasCheckbox?: boolean;
+  checked?: boolean;
+  checklist?: IChecklistItem[];
   color?: string;
   textColor?: string;
   fillType?: "solid" | "tint" | "pattern" | "none";
@@ -82,6 +91,7 @@ export interface IWhiteboard {
   authorInitials?: string;
   nodes: IWhiteboardNode[];
   edges: IWhiteboardEdge[];
+  backgroundColor?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -91,6 +101,7 @@ const whiteboardSchema = new Schema<IWhiteboard>(
     companyId: { type: Schema.Types.ObjectId, ref: "Company", index: true, required: true },
     title: { type: String, required: true, trim: true },
     description: { type: String, default: "" },
+    backgroundColor: { type: String, default: "#0D0E11" },
     templateId: {
       type: String,
       enum: [
@@ -148,6 +159,15 @@ const whiteboardSchema = new Schema<IWhiteboard>(
         title: { type: String, default: "" },
         subtitle: { type: String, default: "" },
         body: { type: String, default: "" },
+        hasCheckbox: { type: Boolean, default: false },
+        checked: { type: Boolean, default: false },
+        checklist: [
+          {
+            id: { type: String },
+            text: { type: String, default: "" },
+            completed: { type: Boolean, default: false },
+          },
+        ],
         color: { type: String, default: "#0078D4" },
         textColor: { type: String, default: "" },
         fillType: {

@@ -77,8 +77,32 @@ interface WhiteboardCanvasProps {
     authorInitials?: string;
     nodes: IWhiteboardNode[];
     edges: IWhiteboardEdge[];
+    backgroundColor?: string;
   };
   currentUserName: string;
+}
+
+const CANVAS_BG_THEMES = [
+  { name: "Dark (Default)", label: "Dark", value: "#0D0E11" },
+  { name: "Light (Clean)", label: "Light", value: "#F8FAFC" },
+  { name: "Light Yellow (Paper)", label: "Yellow", value: "#FEF9C3" },
+  { name: "Soft Green (Sage)", label: "Green", value: "#DCFCE7" },
+  { name: "Soft Blue (Sky)", label: "Blue", value: "#E0F2FE" },
+  { name: "Dark Slate", label: "Slate", value: "#1E293B" },
+  { name: "Deep Navy", label: "Navy", value: "#0A192F" },
+  { name: "Charcoal", label: "Charcoal", value: "#18181B" },
+];
+
+function isLightBackground(hex: string): boolean {
+  if (!hex) return false;
+  const cleanHex = hex.replace("#", "");
+  if (cleanHex.length === 6) {
+    const r = parseInt(cleanHex.substring(0, 2), 16);
+    const g = parseInt(cleanHex.substring(2, 4), 16);
+    const b = parseInt(cleanHex.substring(4, 6), 16);
+    return (r * 299 + g * 587 + b * 114) / 1000 > 160;
+  }
+  return false;
 }
 
 const COLOR_PALETTE = [
@@ -336,11 +360,39 @@ export default function WhiteboardCanvas({
   const [isFavorite, setIsFavorite] = useState(Boolean(initialBoard.isFavorite));
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
 
-  // Canvas State: Nodes & Edges
+  // Canvas State: Nodes, Edges & Background Color
   const [nodes, setNodes] = useState<IWhiteboardNode[]>(initialBoard.nodes || []);
   const [edges, setEdges] = useState<IWhiteboardEdge[]>(initialBoard.edges || []);
-  const [history, setHistory] = useState<{ nodes: IWhiteboardNode[]; edges: IWhiteboardEdge[] }[]>([]);
-  const [historyStep, setHistoryStep] = useState<number>(-1);
+  const [canvasBgColor, setCanvasBgColor] = useState<string>(
+    initialBoard.backgroundColor || "#0D0E11"
+  );
+  const [showBgColorPicker, setShowBgColorPicker] = useState<boolean>(false);
+  const bgColorPickerRef = useRef<HTMLDivElement>(null);
+  const canvasBgColorRef = useRef<string>(canvasBgColor);
+  useEffect(() => {
+    canvasBgColorRef.current = canvasBgColor;
+  }, [canvasBgColor]);
+
+  // Nodes & Edges refs to guarantee event handlers & pushHistory always read freshest state
+  const nodesRef = useRef<IWhiteboardNode[]>(nodes);
+  const edgesRef = useRef<IWhiteboardEdge[]>(edges);
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
+  useEffect(() => {
+    edgesRef.current = edges;
+  }, [edges]);
+
+  // Robust History Stack (Pre-initialized with the initial board snapshot so first actions can always be undone!)
+  const historyStackRef = useRef<{ nodes: IWhiteboardNode[]; edges: IWhiteboardEdge[] }[]>([
+    {
+      nodes: JSON.parse(JSON.stringify(initialBoard.nodes || [])),
+      edges: JSON.parse(JSON.stringify(initialBoard.edges || [])),
+    },
+  ]);
+  const historyIndexRef = useRef<number>(0);
+  const [canUndo, setCanUndo] = useState<boolean>(false);
+  const [canRedo, setCanRedo] = useState<boolean>(false);
 
   // Pan & Zoom
   const [zoom, setZoom] = useState<number>(0.3); // Default 30% matching screenshot 3
@@ -443,8 +495,14 @@ export default function WhiteboardCanvas({
 
   // Auto-save with instant localStorage cache and debounced server sync
   const triggerAutoSave = useCallback(
-    (newNodes: IWhiteboardNode[], newEdges: IWhiteboardEdge[], newTitle?: string) => {
+    (
+      newNodes: IWhiteboardNode[],
+      newEdges: IWhiteboardEdge[],
+      newTitle?: string,
+      newBgColor?: string
+    ) => {
       setSaveStatus("unsaved");
+      const currentBg = newBgColor !== undefined ? newBgColor : canvasBgColorRef.current;
 
       // 1. Instant local persistence cache (0ms latency, eliminates data loss on crash/reload)
       try {
@@ -455,6 +513,7 @@ export default function WhiteboardCanvas({
               title: newTitle || title,
               nodes: newNodes,
               edges: newEdges,
+              backgroundColor: currentBg,
               savedAt: Date.now(),
             })
           );
@@ -477,6 +536,7 @@ export default function WhiteboardCanvas({
               nodes: newNodes,
               edges: newEdges,
               isFavorite,
+              backgroundColor: currentBg,
             }),
           });
           setSaveStatus("saved");
@@ -501,6 +561,7 @@ export default function WhiteboardCanvas({
               setNodes(cached.nodes);
               if (Array.isArray(cached.edges)) setEdges(cached.edges);
               if (cached.title) setTitle(cached.title);
+              if (cached.backgroundColor) setCanvasBgColor(cached.backgroundColor);
             }
           }
         }
@@ -516,32 +577,97 @@ export default function WhiteboardCanvas({
     };
   }, []);
 
-  // Push history state
-  const pushHistory = (newNodes: IWhiteboardNode[], newEdges: IWhiteboardEdge[]) => {
-    setHistory((prev) => [...prev.slice(0, historyStep + 1), { nodes: newNodes, edges: newEdges }]);
-    setHistoryStep((prev) => prev + 1);
-    triggerAutoSave(newNodes, newEdges);
-  };
-
-  const handleUndo = () => {
-    if (historyStep > 0) {
-      const prevStep = historyStep - 1;
-      setNodes(history[prevStep].nodes);
-      setEdges(history[prevStep].edges);
-      setHistoryStep(prevStep);
-      triggerAutoSave(history[prevStep].nodes, history[prevStep].edges);
+  // Dismiss canvas background color picker on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (bgColorPickerRef.current && !bgColorPickerRef.current.contains(e.target as Node)) {
+        setShowBgColorPicker(false);
+      }
     }
-  };
-
-  const handleRedo = () => {
-    if (historyStep < history.length - 1) {
-      const nextStep = historyStep + 1;
-      setNodes(history[nextStep].nodes);
-      setEdges(history[nextStep].edges);
-      setHistoryStep(nextStep);
-      triggerAutoSave(history[nextStep].nodes, history[nextStep].edges);
+    if (showBgColorPicker) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
     }
-  };
+  }, [showBgColorPicker]);
+
+  // Push history state with deep clone & boundary checks
+  const pushHistory = useCallback(
+    (newNodes: IWhiteboardNode[], newEdges: IWhiteboardEdge[]) => {
+      const clonedNodes = JSON.parse(JSON.stringify(newNodes));
+      const clonedEdges = JSON.parse(JSON.stringify(newEdges));
+
+      const currentIndex = historyIndexRef.current;
+      const currentStack = historyStackRef.current.slice(0, currentIndex + 1);
+
+      // Skip duplicate consecutive state pushes
+      const lastItem = currentStack[currentStack.length - 1];
+      if (
+        lastItem &&
+        JSON.stringify(lastItem.nodes) === JSON.stringify(clonedNodes) &&
+        JSON.stringify(lastItem.edges) === JSON.stringify(clonedEdges)
+      ) {
+        return;
+      }
+
+      if (currentStack.length >= 60) {
+        currentStack.shift();
+      }
+
+      currentStack.push({ nodes: clonedNodes, edges: clonedEdges });
+      historyStackRef.current = currentStack;
+      historyIndexRef.current = currentStack.length - 1;
+
+      setCanUndo(historyIndexRef.current > 0);
+      setCanRedo(false);
+
+      triggerAutoSave(newNodes, newEdges);
+    },
+    [triggerAutoSave]
+  );
+
+  const handleUndo = useCallback(() => {
+    if (historyIndexRef.current > 0) {
+      const prevIndex = historyIndexRef.current - 1;
+      historyIndexRef.current = prevIndex;
+      const snapshot = historyStackRef.current[prevIndex];
+      if (snapshot) {
+        const restoredNodes = JSON.parse(JSON.stringify(snapshot.nodes));
+        const restoredEdges = JSON.parse(JSON.stringify(snapshot.edges));
+        setNodes(restoredNodes);
+        setEdges(restoredEdges);
+        setSelectedNodeId(null);
+        setSelectedNodeIds([]);
+        setEditingNodeId(null);
+
+        setCanUndo(prevIndex > 0);
+        setCanRedo(prevIndex < historyStackRef.current.length - 1);
+
+        triggerAutoSave(restoredNodes, restoredEdges);
+      }
+    }
+  }, [triggerAutoSave]);
+
+  const handleRedo = useCallback(() => {
+    if (historyIndexRef.current < historyStackRef.current.length - 1) {
+      const nextIndex = historyIndexRef.current + 1;
+      historyIndexRef.current = nextIndex;
+      const snapshot = historyStackRef.current[nextIndex];
+      if (snapshot) {
+        const restoredNodes = JSON.parse(JSON.stringify(snapshot.nodes));
+        const restoredEdges = JSON.parse(JSON.stringify(snapshot.edges));
+        setNodes(restoredNodes);
+        setEdges(restoredEdges);
+        setSelectedNodeId(null);
+        setSelectedNodeIds([]);
+        setEditingNodeId(null);
+
+        setCanUndo(nextIndex > 0);
+        setCanRedo(nextIndex < historyStackRef.current.length - 1);
+
+        triggerAutoSave(restoredNodes, restoredEdges);
+      }
+    }
+  }, [triggerAutoSave]);
 
   // Convert Screen Coordinates to Canvas Coordinates
   const getCanvasCoords = (clientX: number, clientY: number) => {
@@ -1422,7 +1548,7 @@ export default function WhiteboardCanvas({
 
     if (resizing) {
       setResizing(null);
-      pushHistory(nodes, edges);
+      pushHistory(nodesRef.current, edgesRef.current);
     }
 
     if (isDraggingGroup) {
@@ -1430,7 +1556,7 @@ export default function WhiteboardCanvas({
       setDraggingNodeId(null);
       setGroupDragStartCoords(null);
       setInitialGroupNodePositions({});
-      pushHistory(nodes, edges);
+      pushHistory(nodesRef.current, edgesRef.current);
     }
   };
 
@@ -1548,7 +1674,34 @@ export default function WhiteboardCanvas({
   // Keybindings (Delete, Backspace, Esc, Shortcuts)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (editingNodeId) return; // Typing in input
+      // 1. If actively typing in a form input or textarea or editing a node title, allow native input shortcuts
+      const isInputActive =
+        Boolean(editingNodeId) ||
+        Boolean(
+          document.activeElement &&
+            (document.activeElement.tagName === "INPUT" ||
+              document.activeElement.tagName === "TEXTAREA" ||
+              (document.activeElement as HTMLElement).isContentEditable)
+        );
+
+      // 2. Undo & Redo Shortcuts (Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z, Cmd+Z, Cmd+Shift+Z)
+      if ((e.ctrlKey || e.metaKey) && !isInputActive) {
+        if (e.key === "z" || e.key === "Z") {
+          e.preventDefault();
+          if (e.shiftKey) {
+            handleRedo();
+          } else {
+            handleUndo();
+          }
+          return;
+        } else if (e.key === "y" || e.key === "Y") {
+          e.preventDefault();
+          handleRedo();
+          return;
+        }
+      }
+
+      if (editingNodeId || isInputActive) return; // Typing in input
 
       // If S3 deletion modal is open, Escape closes it and other shortcuts are suppressed
       if (s3DeleteModal) {
@@ -1568,6 +1721,7 @@ export default function WhiteboardCanvas({
         setDoubleClickMenu(null);
         setShowShapePalette(false);
         setShowStylePalette(false);
+        setShowBgColorPicker(false);
         if (activeTool === "arrow" || activeTool === "draw") {
           setActiveTool("select");
         }
@@ -1591,6 +1745,8 @@ export default function WhiteboardCanvas({
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [
+    handleUndo,
+    handleRedo,
     selectedNodeId,
     editingNodeId,
     nodes,
@@ -3051,7 +3207,7 @@ export default function WhiteboardCanvas({
             : "cursor-default"
         }`}
         style={{
-          backgroundColor: "#0D0E11",
+          backgroundColor: canvasBgColor,
         }}
       >
         {/* SVG Infinite Dot Grid Pattern */}
@@ -3072,7 +3228,7 @@ export default function WhiteboardCanvas({
                 cx={2}
                 cy={2}
                 r={1.2 * Math.min(1.5, Math.max(0.6, zoom))}
-                fill="#242630"
+                fill={isLightBackground(canvasBgColor) ? "rgba(0, 0, 0, 0.22)" : "#242630"}
               />
             </pattern>
           </defs>
@@ -4131,6 +4287,85 @@ export default function WhiteboardCanvas({
         >
           <ZoomIn className="w-3.5 h-3.5" />
         </button>
+
+        <div className="h-4 w-px bg-[#262832]" />
+
+        {/* Whiteboard Background Color Chooser */}
+        <div className="relative" ref={bgColorPickerRef}>
+          <button
+            type="button"
+            onClick={() => setShowBgColorPicker(!showBgColorPicker)}
+            className="w-6 h-6 rounded flex items-center justify-center border border-[#2A2C38] hover:border-gray-500 hover:bg-[#23252E] transition-all cursor-pointer group"
+            title={`Whiteboard Background (${canvasBgColor})`}
+            aria-label="Choose whiteboard canvas background color"
+          >
+            <div
+              className="w-3.5 h-3.5 rounded-full border border-black/40 shadow-xs transition-transform group-hover:scale-110"
+              style={{ backgroundColor: canvasBgColor }}
+            />
+          </button>
+
+          {showBgColorPicker && (
+            <div
+              className="absolute bottom-full left-0 mb-2 p-2.5 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl z-50 flex flex-col gap-2 min-w-[210px]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-0.5">
+                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                  Canvas Background
+                </span>
+                <span className="text-[10px] font-mono text-gray-300 uppercase">
+                  {canvasBgColor}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-4 gap-1.5">
+                {CANVAS_BG_THEMES.map((theme) => (
+                  <button
+                    key={theme.name}
+                    type="button"
+                    onClick={() => {
+                      setCanvasBgColor(theme.value);
+                      setShowBgColorPicker(false);
+                      triggerAutoSave(nodesRef.current, edgesRef.current, undefined, theme.value);
+                    }}
+                    className={`flex flex-col items-center gap-1 p-1.5 rounded-md border text-[10px] transition-all cursor-pointer ${
+                      canvasBgColor.toLowerCase() === theme.value.toLowerCase()
+                        ? "border-blue-500 bg-blue-500/15 text-white font-bold"
+                        : "border-[#2E313B] hover:border-gray-500 text-gray-400 hover:text-gray-200 hover:bg-[#23252E]"
+                    }`}
+                    title={theme.name}
+                  >
+                    <div
+                      className="w-4 h-4 rounded-full border border-black/30 shadow-xs"
+                      style={{ backgroundColor: theme.value }}
+                    />
+                    <span className="truncate max-w-[42px] leading-tight text-[9px]">{theme.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="pt-2 border-t border-[#2E313B] flex items-center justify-between gap-2 px-0.5">
+                <span className="text-[11px] text-gray-400">Custom</span>
+                <div className="flex items-center gap-1.5 bg-[#121316] px-1.5 py-0.5 rounded border border-[#282B33]">
+                  <input
+                    type="color"
+                    value={canvasBgColor.startsWith("#") ? canvasBgColor : "#0D0E11"}
+                    onChange={(e) => {
+                      setCanvasBgColor(e.target.value);
+                      triggerAutoSave(nodesRef.current, edgesRef.current, undefined, e.target.value);
+                    }}
+                    className="w-4 h-4 rounded cursor-pointer border-0 bg-transparent p-0"
+                    title="Choose custom hex color"
+                  />
+                  <span className="text-[10px] font-mono text-gray-300 uppercase select-all">
+                    {canvasBgColor}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 5b. FLOATING ARROW CONNECTION TOOLBAR ("connect two different nodes by arrows <- or -> or <->") */}
@@ -4629,16 +4864,30 @@ export default function WhiteboardCanvas({
 
         {/* Undo / Redo */}
         <button
+          type="button"
           onClick={handleUndo}
-          className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#22242D] transition-colors"
+          disabled={!canUndo}
+          className={`p-2 rounded-lg transition-colors ${
+            canUndo
+              ? "text-gray-300 hover:text-white hover:bg-[#22242D] cursor-pointer"
+              : "text-gray-600 cursor-not-allowed opacity-40"
+          }`}
           title="Undo (Ctrl+Z)"
+          aria-label="Undo action"
         >
           <Undo2 className="w-4 h-4" />
         </button>
         <button
+          type="button"
           onClick={handleRedo}
-          className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#22242D] transition-colors"
-          title="Redo (Ctrl+Y)"
+          disabled={!canRedo}
+          className={`p-2 rounded-lg transition-colors ${
+            canRedo
+              ? "text-gray-300 hover:text-white hover:bg-[#22242D] cursor-pointer"
+              : "text-gray-600 cursor-not-allowed opacity-40"
+          }`}
+          title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
+          aria-label="Redo action"
         >
           <Redo2 className="w-4 h-4" />
         </button>

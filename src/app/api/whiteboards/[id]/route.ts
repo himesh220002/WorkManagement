@@ -70,7 +70,7 @@ export async function PUT(
     const { id } = await context.params;
 
     const body = await req.json();
-    const { title, nodes, edges, isFavorite, description } = body;
+    const { title, nodes, edges, isFavorite, description, backgroundColor } = body;
 
     const updateFields: any = { updatedAt: new Date() };
     if (title !== undefined) updateFields.title = title;
@@ -78,6 +78,7 @@ export async function PUT(
     if (edges !== undefined) updateFields.edges = edges;
     if (isFavorite !== undefined) updateFields.isFavorite = isFavorite;
     if (description !== undefined) updateFields.description = description;
+    if (backgroundColor !== undefined) updateFields.backgroundColor = backgroundColor;
 
     let updatedBoard = await Whiteboard.findByIdAndUpdate(
       id,
