@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectToDatabase from "@/lib/mongodb";
 import { Whiteboard } from "@/models";
-import { getCurrentSession } from "@/server/auth/session";
+import { getCurrentSession, getTenantQueryFilter, UNASSIGNED_TENANT_ID } from "@/server/auth/session";
 import { syncTenantWrite } from "@/lib/tenantDb";
 import { ORG_CHART_NODES, ORG_CHART_EDGES } from "@/lib/whiteboardTemplates";
+import mongoose from "mongoose";
 
 export async function GET(
   req: NextRequest,
@@ -14,7 +15,26 @@ export async function GET(
     const session = await getCurrentSession();
     const { id } = await context.params;
 
-    if (id === "org-chart" || id === "default") {
+    if (id === "org-chart" || id === "default" || id === "default-org-chart") {
+      const tenantFilter = getTenantQueryFilter(session);
+      let existing: any = await Whiteboard.findOne({
+        ...tenantFilter,
+        $or: [{ templateId: "org-chart" }, { title: /Organizational/i }],
+      }).sort({ updatedAt: -1 }).lean();
+
+      if (!existing) {
+        existing = await Whiteboard.findOne({
+          $or: [{ templateId: "org-chart" }, { title: /Organizational/i }],
+        }).sort({ updatedAt: -1 }).lean();
+      }
+
+      if (existing) {
+        return NextResponse.json({
+          success: true,
+          whiteboard: existing,
+        });
+      }
+
       return NextResponse.json({
         success: true,
         whiteboard: {
@@ -22,6 +42,7 @@ export async function GET(
           title: "Organizational Chart",
           templateId: "org-chart",
           isFavorite: true,
+          backgroundColor: "#0D0E11",
           authorName: session.name || "Himesh S",
           authorInitials: "HS",
           nodes: ORG_CHART_NODES,
@@ -31,11 +52,15 @@ export async function GET(
       });
     }
 
-    let board = await Whiteboard.findById(id).lean();
+    let board: any = null;
+    if (id && mongoose.Types.ObjectId.isValid(id)) {
+      board = await Whiteboard.findById(id).lean();
+    }
 
     if (!board) {
-      // Check if title search matches or fallback to default
+      const tenantFilter = getTenantQueryFilter(session);
       board = await Whiteboard.findOne({
+        ...tenantFilter,
         $or: [{ templateId: "org-chart" }, { title: /Organizational/i }],
       }).lean();
     }
@@ -80,22 +105,61 @@ export async function PUT(
     if (description !== undefined) updateFields.description = description;
     if (backgroundColor !== undefined) updateFields.backgroundColor = backgroundColor;
 
-    let updatedBoard = await Whiteboard.findByIdAndUpdate(
-      id,
-      { $set: updateFields },
-      { new: true }
-    );
+    let updatedBoard: any = null;
 
-    if (!updatedBoard && (id === "default-org-chart" || id === "org-chart")) {
-      updatedBoard = await Whiteboard.create({
-        companyId: session.companyId,
-        title: title || "Organizational Chart",
-        templateId: "org-chart",
-        isFavorite: isFavorite ?? true,
-        authorName: session.name || "User",
-        nodes: nodes || ORG_CHART_NODES,
-        edges: edges || ORG_CHART_EDGES,
-      });
+    if (id && mongoose.Types.ObjectId.isValid(id)) {
+      updatedBoard = await Whiteboard.findByIdAndUpdate(
+        id,
+        { $set: updateFields },
+        { new: true }
+      );
+    }
+
+    if (!updatedBoard) {
+      const tenantFilter = getTenantQueryFilter(session);
+      updatedBoard = await Whiteboard.findOneAndUpdate(
+        {
+          ...tenantFilter,
+          $or: [
+            { templateId: "org-chart" },
+            { title: title || "Organizational Chart" },
+          ],
+        },
+        { $set: updateFields },
+        { new: true }
+      );
+
+      if (!updatedBoard) {
+        updatedBoard = await Whiteboard.findOneAndUpdate(
+          {
+            $or: [
+              { templateId: "org-chart" },
+              { title: title || "Organizational Chart" },
+            ],
+          },
+          { $set: updateFields },
+          { new: true }
+        );
+      }
+
+      if (!updatedBoard && (id === "default-org-chart" || id === "org-chart" || id === "default")) {
+        const resolvedCompanyId =
+          session.companyId && mongoose.Types.ObjectId.isValid(session.companyId)
+            ? new mongoose.Types.ObjectId(session.companyId)
+            : UNASSIGNED_TENANT_ID;
+
+        updatedBoard = await Whiteboard.create({
+          companyId: resolvedCompanyId,
+          title: title || "Organizational Chart",
+          description: description || "",
+          backgroundColor: backgroundColor || "#0D0E11",
+          templateId: "org-chart",
+          isFavorite: isFavorite ?? true,
+          authorName: session.name || "User",
+          nodes: nodes || ORG_CHART_NODES,
+          edges: edges || ORG_CHART_EDGES,
+        });
+      }
     }
 
     if (session.companyCode && updatedBoard) {
@@ -124,7 +188,15 @@ export async function DELETE(
     const session = await getCurrentSession();
     const { id } = await context.params;
 
-    await Whiteboard.findByIdAndDelete(id);
+    if (id && mongoose.Types.ObjectId.isValid(id)) {
+      await Whiteboard.findByIdAndDelete(id);
+    } else {
+      const tenantFilter = getTenantQueryFilter(session);
+      await Whiteboard.findOneAndDelete({
+        ...tenantFilter,
+        $or: [{ templateId: "org-chart" }, { title: /Organizational/i }],
+      });
+    }
 
     if (session.companyCode) {
       await syncTenantWrite("Whiteboard", "delete", { _id: id }, undefined, session.companyCode);

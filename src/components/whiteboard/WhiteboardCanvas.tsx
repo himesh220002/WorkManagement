@@ -62,9 +62,20 @@ import {
   Loader2,
   Network,
   File,
+  ListTodo,
 } from "lucide-react";
 import { IWhiteboardNode, IWhiteboardEdge } from "@/models/whiteboard";
 import { WHITEBOARD_TEMPLATES, createFunctionalArea } from "@/lib/whiteboardTemplates";
+import {
+  parseNodeChecklist,
+  serializeChecklistToBody,
+  toggleChecklistItem,
+  updateChecklistItemText,
+  addChecklistItem,
+  insertChecklistItemAfter,
+  deleteChecklistItem,
+  getStickyTextColor,
+} from "@/lib/whiteboardChecklist";
 
 interface WhiteboardCanvasProps {
   initialBoard: {
@@ -78,6 +89,7 @@ interface WhiteboardCanvasProps {
     nodes: IWhiteboardNode[];
     edges: IWhiteboardEdge[];
     backgroundColor?: string;
+    updatedAt?: string | Date;
   };
   currentUserName: string;
 }
@@ -355,8 +367,18 @@ export default function WhiteboardCanvas({
   const router = useRouter();
 
   // Canvas Metadata
-  const [boardId] = useState(initialBoard._id);
+  const [boardId, setBoardId] = useState(initialBoard._id);
+  const boardIdRef = useRef<string>(boardId);
+  useEffect(() => {
+    boardIdRef.current = boardId;
+  }, [boardId]);
+
   const [title, setTitle] = useState(initialBoard.title || "Organizational Chart");
+  const titleRef = useRef<string>(title);
+  useEffect(() => {
+    titleRef.current = title;
+  }, [title]);
+
   const [isFavorite, setIsFavorite] = useState(Boolean(initialBoard.isFavorite));
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
 
@@ -499,75 +521,227 @@ export default function WhiteboardCanvas({
       newNodes: IWhiteboardNode[],
       newEdges: IWhiteboardEdge[],
       newTitle?: string,
-      newBgColor?: string
+      newBgColor?: string,
+      immediate?: boolean
     ) => {
       setSaveStatus("unsaved");
       const currentBg = newBgColor !== undefined ? newBgColor : canvasBgColorRef.current;
+      const currentTitle = newTitle !== undefined ? newTitle : titleRef.current;
+
+      // Update refs synchronously so unmount or event handlers read current state instantly
+      nodesRef.current = newNodes;
+      edgesRef.current = newEdges;
+      if (newBgColor !== undefined) {
+        canvasBgColorRef.current = newBgColor;
+      }
+      if (newTitle !== undefined) {
+        titleRef.current = newTitle;
+      }
 
       // 1. Instant local persistence cache (0ms latency, eliminates data loss on crash/reload)
       try {
-        if (typeof window !== "undefined" && boardId) {
-          localStorage.setItem(
-            `taskflow_wb_cache_${boardId}`,
-            JSON.stringify({
-              title: newTitle || title,
-              nodes: newNodes,
-              edges: newEdges,
-              backgroundColor: currentBg,
-              savedAt: Date.now(),
-            })
-          );
+        if (typeof window !== "undefined") {
+          const snapshot = {
+            title: currentTitle,
+            nodes: newNodes,
+            edges: newEdges,
+            backgroundColor: currentBg,
+            savedAt: Date.now(),
+          };
+          const jsonStr = JSON.stringify(snapshot);
+          const activeId = boardIdRef.current || boardId || "default-org-chart";
+          localStorage.setItem(`taskflow_wb_cache_${activeId}`, jsonStr);
+
+          // If working on default or org-chart template, also write to default keys
+          if (
+            activeId === "default-org-chart" ||
+            activeId === "org-chart" ||
+            activeId === "default" ||
+            !activeId
+          ) {
+            localStorage.setItem("taskflow_wb_cache_default-org-chart", jsonStr);
+            localStorage.setItem("taskflow_wb_cache_org-chart", jsonStr);
+          }
         }
       } catch {
         // Handle storage quota exceeded gracefully
       }
 
-      // 2. Debounced background sync to MongoDB (1.5s avoids network/thread congestion while moving items)
+      // 2. Background sync to MongoDB (0ms if immediate, else 400ms debounce)
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
-      saveTimeoutRef.current = setTimeout(async () => {
+      const doSync = async () => {
+        const activeId = boardIdRef.current || boardId || "default-org-chart";
         try {
           setSaveStatus("saving");
-          await fetch(`/api/whiteboards/${boardId}`, {
+          const res = await fetch(`/api/whiteboards/${activeId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              title: newTitle || title,
+              title: currentTitle,
               nodes: newNodes,
               edges: newEdges,
               isFavorite,
               backgroundColor: currentBg,
             }),
           });
-          setSaveStatus("saved");
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.whiteboard?._id) {
+              const newServerId = String(data.whiteboard._id);
+              if (newServerId !== activeId && activeId === "default-org-chart") {
+                setBoardId(newServerId);
+                boardIdRef.current = newServerId;
+                try {
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem(
+                      `taskflow_wb_cache_${newServerId}`,
+                      JSON.stringify({
+                        title: currentTitle,
+                        nodes: newNodes,
+                        edges: newEdges,
+                        backgroundColor: currentBg,
+                        savedAt: Date.now(),
+                      })
+                    );
+                  }
+                } catch {}
+              }
+            }
+            setSaveStatus("saved");
+          } else {
+            setSaveStatus("unsaved");
+          }
         } catch (err) {
           console.error("Auto-save failed:", err);
           setSaveStatus("unsaved");
         }
-      }, 1500);
+      };
+
+      if (immediate) {
+        doSync();
+      } else {
+        saveTimeoutRef.current = setTimeout(doSync, 400);
+      }
     },
-    [boardId, title, isFavorite]
+    [boardId, isFavorite]
   );
 
-  // Hydrate from localStorage on initial load if local cache is newer or initial board was empty
+  // Hydrate from localStorage on initial load if local cache is valid
   useEffect(() => {
     try {
-      if (typeof window !== "undefined" && boardId) {
-        const cachedStr = localStorage.getItem(`taskflow_wb_cache_${boardId}`);
-        if (cachedStr) {
-          const cached = JSON.parse(cachedStr);
-          if (cached && Array.isArray(cached.nodes) && cached.nodes.length > 0) {
-            if (!initialBoard.nodes || initialBoard.nodes.length === 0) {
+      if (typeof window !== "undefined") {
+        const activeId = boardId || "default-org-chart";
+        const cacheKeys = [
+          `taskflow_wb_cache_${activeId}`,
+          "taskflow_wb_cache_default-org-chart",
+          "taskflow_wb_cache_org-chart",
+        ];
+
+        let cached: any = null;
+        for (const key of cacheKeys) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw);
+              if (
+                parsed &&
+                (parsed.backgroundColor || (Array.isArray(parsed.nodes) && parsed.nodes.length > 0))
+              ) {
+                cached = parsed;
+                break;
+              }
+            } catch {}
+          }
+        }
+
+        if (cached) {
+          // 1. Restore canvas background color if present in cache
+          if (cached.backgroundColor) {
+            setCanvasBgColor(cached.backgroundColor);
+            canvasBgColorRef.current = cached.backgroundColor;
+          }
+
+          // 2. Restore nodes, edges & title if cache exists
+          if (Array.isArray(cached.nodes) && cached.nodes.length > 0) {
+            const initialTime = initialBoard.updatedAt
+              ? new Date(initialBoard.updatedAt).getTime()
+              : 0;
+            const cacheTime = cached.savedAt || 0;
+
+            const isDefaultOrTemplate =
+              !activeId ||
+              activeId === "default-org-chart" ||
+              activeId === "org-chart" ||
+              activeId === "default" ||
+              !initialBoard.updatedAt;
+
+            if (isDefaultOrTemplate || cacheTime >= initialTime - 5000) {
               setNodes(cached.nodes);
-              if (Array.isArray(cached.edges)) setEdges(cached.edges);
-              if (cached.title) setTitle(cached.title);
-              if (cached.backgroundColor) setCanvasBgColor(cached.backgroundColor);
+              nodesRef.current = cached.nodes;
+              if (Array.isArray(cached.edges)) {
+                setEdges(cached.edges);
+                edgesRef.current = cached.edges;
+              }
+              if (cached.title) {
+                setTitle(cached.title);
+                titleRef.current = cached.title;
+              }
+              historyStackRef.current = [
+                {
+                  nodes: JSON.parse(JSON.stringify(cached.nodes)),
+                  edges: JSON.parse(JSON.stringify(cached.edges || [])),
+                },
+              ];
+              historyIndexRef.current = 0;
             }
           }
         }
       }
-    } catch {}
-  }, [boardId, initialBoard.nodes]);
+    } catch (err) {
+      console.error("Hydration from cache failed:", err);
+    }
+  }, [boardId, initialBoard.updatedAt]);
+
+  // Flush latest canvas state on page refresh or unload to guarantee zero data loss
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      try {
+        if (typeof window !== "undefined") {
+          const activeId = boardIdRef.current || boardId || "default-org-chart";
+          const snapshot = {
+            title: titleRef.current,
+            nodes: nodesRef.current,
+            edges: edgesRef.current,
+            backgroundColor: canvasBgColorRef.current,
+            savedAt: Date.now(),
+          };
+          const jsonSnap = JSON.stringify(snapshot);
+          localStorage.setItem(`taskflow_wb_cache_${activeId}`, jsonSnap);
+          localStorage.setItem("taskflow_wb_cache_default-org-chart", jsonSnap);
+          localStorage.setItem("taskflow_wb_cache_org-chart", jsonSnap);
+
+          fetch(`/api/whiteboards/${activeId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: titleRef.current,
+              nodes: nodesRef.current,
+              edges: edgesRef.current,
+              isFavorite,
+              backgroundColor: canvasBgColorRef.current,
+            }),
+            keepalive: true,
+          }).catch(() => {});
+        }
+      } catch {}
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [boardId, isFavorite]);
 
   // Clean up RAF and timer on unmount
   useEffect(() => {
@@ -1043,7 +1217,12 @@ export default function WhiteboardCanvas({
   };
 
   // Add a node at specific canvas position
-  const handleAddNode = (type: IWhiteboardNode["type"], shapeType: string = "rectangle", customColor?: string) => {
+  const handleAddNode = (
+    type: IWhiteboardNode["type"],
+    shapeType: string = "rectangle",
+    customColor?: string,
+    isChecklist?: boolean
+  ) => {
     const coords = doubleClickMenu
       ? { x: doubleClickMenu.canvasX, y: doubleClickMenu.canvasY }
       : { x: Math.round(-pan.x / zoom + 400), y: Math.round(-pan.y / zoom + 300) };
@@ -1052,16 +1231,28 @@ export default function WhiteboardCanvas({
     let newNode: IWhiteboardNode;
 
     if (type === "sticky") {
+      const defaultChecklist = isChecklist
+        ? [
+            { id: `c-${Date.now()}-1`, text: "Review milestone goals", completed: false },
+            { id: `c-${Date.now()}-2`, text: "Update project whiteboard", completed: false },
+            { id: `c-${Date.now()}-3`, text: "Sync with team squad", completed: false },
+          ]
+        : undefined;
+
       newNode = {
         id: newId,
         type: "sticky",
-        x: coords.x - 90,
-        y: coords.y - 80,
-        width: 190,
-        height: 170,
-        title: "Note",
-        body: "Type your notes or pro-tips here...",
-        color: customColor || "#EC4899",
+        x: coords.x - (isChecklist ? 110 : 90),
+        y: coords.y - (isChecklist ? 100 : 80),
+        width: isChecklist ? 220 : 190,
+        height: isChecklist ? 210 : 170,
+        title: isChecklist ? "Action Items" : "Note",
+        body: isChecklist
+          ? serializeChecklistToBody(defaultChecklist!)
+          : "Type your notes or pro-tips here...",
+        hasCheckbox: Boolean(isChecklist),
+        checklist: defaultChecklist,
+        color: customColor || (isChecklist ? "#38BDF8" : "#EC4899"),
         fillType: "tint",
         zIndex: nodes.length + 1,
       };
@@ -1735,7 +1926,11 @@ export default function WhiteboardCanvas({
         setActiveTool("draw");
       } else if (e.key === "n" || e.key === "N") {
         setActiveTool("sticky");
-        handleAddNode("sticky");
+        if (e.shiftKey) {
+          handleAddNode("sticky", "rectangle", "#38BDF8", true);
+        } else {
+          handleAddNode("sticky");
+        }
       } else if (e.key === "t" || e.key === "T") {
         setActiveTool("text");
         handleAddNode("text");
@@ -1839,6 +2034,173 @@ export default function WhiteboardCanvas({
     setNodes(updated);
     pushHistory(updated, edges);
   };
+
+  // Sticky Note Checklist Handlers
+  const handleToggleChecklistItem = useCallback(
+    (nodeId: string, itemId: string) => {
+      const targetNode = nodes.find((n) => n.id === nodeId);
+      if (!targetNode) return;
+      const currentList = parseNodeChecklist(targetNode);
+      const updatedList = toggleChecklistItem(currentList, itemId);
+      const updatedBody = serializeChecklistToBody(updatedList);
+
+      const updatedNodes = nodes.map((n) =>
+        n.id === nodeId
+          ? {
+              ...n,
+              hasCheckbox: true,
+              checklist: updatedList,
+              body: updatedBody,
+            }
+          : n
+      );
+      setNodes(updatedNodes);
+      pushHistory(updatedNodes, edges);
+    },
+    [nodes, edges, pushHistory]
+  );
+
+  const handleUpdateChecklistItemText = useCallback(
+    (nodeId: string, itemId: string, text: string) => {
+      const targetNode = nodes.find((n) => n.id === nodeId);
+      if (!targetNode) return;
+      const currentList = parseNodeChecklist(targetNode);
+      const updatedList = updateChecklistItemText(currentList, itemId, text);
+      const updatedBody = serializeChecklistToBody(updatedList);
+
+      const updatedNodes = nodes.map((n) =>
+        n.id === nodeId
+          ? {
+              ...n,
+              hasCheckbox: true,
+              checklist: updatedList,
+              body: updatedBody,
+            }
+          : n
+      );
+      setNodes(updatedNodes);
+    },
+    [nodes]
+  );
+
+  const handleAddChecklistItem = useCallback(
+    (nodeId: string) => {
+      const targetNode = nodes.find((n) => n.id === nodeId);
+      if (!targetNode) return;
+      const currentList = parseNodeChecklist(targetNode);
+      const updatedList = addChecklistItem(currentList, "");
+      const updatedBody = serializeChecklistToBody(updatedList);
+
+      const updatedNodes = nodes.map((n) =>
+        n.id === nodeId
+          ? {
+              ...n,
+              hasCheckbox: true,
+              checklist: updatedList,
+              body: updatedBody,
+              height: Math.max(n.height, Math.min(500, 80 + updatedList.length * 34)),
+            }
+          : n
+      );
+      setNodes(updatedNodes);
+      pushHistory(updatedNodes, edges);
+      setSelectedNodeId(nodeId);
+      setEditingNodeId(nodeId);
+    },
+    [nodes, edges, pushHistory]
+  );
+
+  const handleInsertChecklistItemAfter = useCallback(
+    (nodeId: string, afterIndex: number) => {
+      const targetNode = nodes.find((n) => n.id === nodeId);
+      if (!targetNode) return;
+      const currentList = parseNodeChecklist(targetNode);
+      const updatedList = insertChecklistItemAfter(currentList, afterIndex, "");
+      const updatedBody = serializeChecklistToBody(updatedList);
+
+      const updatedNodes = nodes.map((n) =>
+        n.id === nodeId
+          ? {
+              ...n,
+              hasCheckbox: true,
+              checklist: updatedList,
+              body: updatedBody,
+              height: Math.max(n.height, Math.min(500, 80 + updatedList.length * 34)),
+            }
+          : n
+      );
+      setNodes(updatedNodes);
+      pushHistory(updatedNodes, edges);
+    },
+    [nodes, edges, pushHistory]
+  );
+
+  const handleDeleteChecklistItem = useCallback(
+    (nodeId: string, itemId: string) => {
+      const targetNode = nodes.find((n) => n.id === nodeId);
+      if (!targetNode) return;
+      const currentList = parseNodeChecklist(targetNode);
+      const updatedList = deleteChecklistItem(currentList, itemId);
+      const updatedBody = serializeChecklistToBody(updatedList);
+
+      const updatedNodes = nodes.map((n) =>
+        n.id === nodeId
+          ? {
+              ...n,
+              hasCheckbox: true,
+              checklist: updatedList,
+              body: updatedBody,
+            }
+          : n
+      );
+      setNodes(updatedNodes);
+      pushHistory(updatedNodes, edges);
+    },
+    [nodes, edges, pushHistory]
+  );
+
+  const handleToggleStickyChecklist = useCallback(
+    (node: IWhiteboardNode) => {
+      const isCurrentlyChecklist = Boolean(
+        node.hasCheckbox || (node.checklist && node.checklist.length > 0)
+      );
+
+      if (isCurrentlyChecklist) {
+        const items = parseNodeChecklist(node);
+        const plainBody =
+          items.length > 0
+            ? items.map((i) => (i.completed ? `✓ ${i.text}` : `• ${i.text}`)).join("\n")
+            : node.body || "";
+
+        updateSelectedNode({
+          hasCheckbox: false,
+          checklist: [],
+          body: plainBody,
+        });
+      } else {
+        const items = parseNodeChecklist(node);
+        const bodyText = serializeChecklistToBody(items);
+
+        updateSelectedNode({
+          hasCheckbox: true,
+          checklist: items,
+          body: bodyText,
+          height: Math.max(node.height, 210),
+          width: Math.max(node.width, 220),
+        });
+      }
+    },
+    [updateSelectedNode]
+  );
+
+  const updateNodeTitle = useCallback(
+    (id: string, title: string) => {
+      const updatedNodes = nodes.map((n) => (n.id === id ? { ...n, title } : n));
+      setNodes(updatedNodes);
+      pushHistory(updatedNodes, edges);
+    },
+    [nodes, edges, pushHistory]
+  );
 
   // Generate smooth SVG path from stroke points for freehand pen drawing
   const generateSvgPath = (pts: { x: number; y: number }[]): string => {
@@ -2289,7 +2651,14 @@ export default function WhiteboardCanvas({
           </div>
 
           {/* Auto-save telemetry status */}
-          <span className="text-[10px] text-gray-500 flex items-center gap-1 font-mono">
+          <button
+            type="button"
+            onClick={() => {
+              triggerAutoSave(nodesRef.current, edgesRef.current, undefined, undefined, true);
+            }}
+            className="text-[10px] text-gray-500 hover:text-gray-300 flex items-center gap-1 font-mono cursor-pointer transition-colors"
+            title="Click to force immediate save"
+          >
             {saveStatus === "saving" ? (
               <span className="text-amber-400">Saving...</span>
             ) : saveStatus === "saved" ? (
@@ -2297,9 +2666,9 @@ export default function WhiteboardCanvas({
                 <Check className="w-3 h-3" /> Saved
               </span>
             ) : (
-              <span className="text-gray-400">Unsaved edits</span>
+              <span className="text-gray-400">Unsaved edits (click to save)</span>
             )}
-          </span>
+          </button>
         </div>
 
         {/* Header Right Tools */}
@@ -2580,6 +2949,41 @@ export default function WhiteboardCanvas({
           {/* C. STICKY NOTE CONTROLS */}
           {selectedNode.type === "sticky" && (
             <>
+              {/* Checklist / Todo Mode Toggle */}
+              <button
+                onClick={() => handleToggleStickyChecklist(selectedNode)}
+                className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  selectedNode.hasCheckbox || (selectedNode.checklist && selectedNode.checklist.length > 0)
+                    ? "bg-blue-600/30 text-blue-300 ring-1 ring-blue-500/50"
+                    : "text-gray-300 hover:text-white hover:bg-[#282A33]"
+                }`}
+                title={
+                  selectedNode.hasCheckbox || (selectedNode.checklist && selectedNode.checklist.length > 0)
+                    ? "Switch to Plain Text Note"
+                    : "Convert to Todo Checklist with Checkboxes"
+                }
+              >
+                <ListTodo className="w-3.5 h-3.5 text-blue-400" />
+                <span>
+                  {selectedNode.hasCheckbox || (selectedNode.checklist && selectedNode.checklist.length > 0)
+                    ? "Checklist On"
+                    : "Checklist"}
+                </span>
+              </button>
+
+              {(selectedNode.hasCheckbox || (selectedNode.checklist && selectedNode.checklist.length > 0)) && (
+                <button
+                  onClick={() => handleAddChecklistItem(selectedNode.id)}
+                  className="px-2 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 hover:text-emerald-200 rounded text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Add Item to Checklist"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>+ Task</span>
+                </button>
+              )}
+
+              <div className="h-4 w-px bg-[#30333D]" />
+
               {/* Pastel Color Swatches */}
               <div className="flex items-center gap-1">
                 {[
@@ -3151,10 +3555,18 @@ export default function WhiteboardCanvas({
           <div className="grid grid-cols-2 gap-1">
             <button
               onClick={() => handleAddNode("sticky", "rectangle", "#EC4899")}
-              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-gray-200 hover:bg-[#22242D] hover:text-white"
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-gray-200 hover:bg-[#22242D] hover:text-white cursor-pointer"
             >
               <StickyNote className="w-3.5 h-3.5 text-pink-400" />
               <span>Sticky</span>
+            </button>
+            <button
+              onClick={() => handleAddNode("sticky", "rectangle", "#38BDF8", true)}
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-cyan-300 hover:bg-[#22242D] hover:text-white cursor-pointer"
+              title="Sticky Note with Interactive Todo Checkboxes"
+            >
+              <ListTodo className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Todo Note</span>
             </button>
             <button
               onClick={() => handleAddNode("task", "rectangle", "#0078D4")}
@@ -3481,8 +3893,18 @@ export default function WhiteboardCanvas({
               );
             }
 
-            // 3. STICKY NOTE (Pink Pro-tip from screenshots)
+            // 3. STICKY NOTE (With interactive Checklist / Todo checkboxes option)
             if (node.type === "sticky") {
+              const isChecklist = Boolean(
+                node.hasCheckbox || (node.checklist && node.checklist.length > 0)
+              );
+              const stickyTextColor = getStickyTextColor(node.color, node.textColor);
+              const items = isChecklist ? parseNodeChecklist(node) : [];
+              const completedCount = items.filter((i) => i.completed).length;
+              const totalCount = items.length;
+              const progressPct =
+                totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
               return (
                 <div
                   key={node.id}
@@ -3497,11 +3919,177 @@ export default function WhiteboardCanvas({
                     backgroundColor: `${node.color || "#EC4899"}26`,
                     borderColor: node.color || "#EC4899",
                   }}
-                  className={`p-4 rounded-xl border-2 cursor-pointer shadow-lg flex flex-col justify-between transition-all relative ${
-                    isSelected ? "ring-2 ring-pink-400" : ""
+                  className={`p-3.5 rounded-xl border-2 cursor-pointer shadow-lg flex flex-col justify-between transition-all relative overflow-hidden group/sticky ${
+                    isSelected ? "ring-2 ring-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.3)]" : ""
                   }`}
                 >
-                  {isEditing ? (
+                  {isChecklist ? (
+                    <div className="w-full h-full flex flex-col overflow-hidden">
+                      {/* Top Header: Title / Todo Badge & Progress Pill */}
+                      <div className="flex items-center justify-between gap-1.5 pb-1.5 border-b border-white/10 shrink-0">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <ListTodo
+                            className="w-3.5 h-3.5 shrink-0"
+                            style={{ color: node.color || "#EC4899" }}
+                          />
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              defaultValue={node.title || "Checklist"}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") e.currentTarget.blur();
+                              }}
+                              onBlur={(e) => updateNodeTitle(node.id, e.target.value)}
+                              className="bg-black/30 border border-white/20 rounded px-1.5 py-0.5 text-xs font-semibold text-white focus:outline-none w-full"
+                              placeholder="Checklist Title"
+                            />
+                          ) : (
+                            <span
+                              className="text-xs font-bold truncate tracking-wide"
+                              style={{ color: stickyTextColor }}
+                            >
+                              {node.title || "Checklist"}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Progress Badge */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-colors ${
+                              completedCount === totalCount && totalCount > 0
+                                ? "bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
+                                : "bg-black/25 text-gray-300 border border-white/10"
+                            }`}
+                          >
+                            {completedCount}/{totalCount}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Mini Progress Track */}
+                      <div className="w-full h-1 bg-black/25 rounded-full overflow-hidden my-1.5 shrink-0">
+                        <div
+                          className="h-full rounded-full transition-all duration-300"
+                          style={{
+                            width: `${progressPct}%`,
+                            backgroundColor:
+                              completedCount === totalCount && totalCount > 0
+                                ? "#10B981"
+                                : node.color || "#EC4899",
+                          }}
+                        />
+                      </div>
+
+                      {/* Items List */}
+                      <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 my-1 scrollbar-thin">
+                        {items.map((item, idx) => (
+                          <div
+                            key={item.id}
+                            className="flex items-start gap-2 group/item relative py-0.5"
+                          >
+                            {/* Interactive Checkbox */}
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleChecklistItem(node.id, item.id);
+                              }}
+                              className={`w-4 h-4 rounded mt-0.5 shrink-0 flex items-center justify-center transition-all cursor-pointer border ${
+                                item.completed
+                                  ? "bg-emerald-500 border-emerald-400 text-white shadow-sm"
+                                  : "bg-black/20 hover:bg-black/40 border-white/40 hover:border-white/80 text-transparent"
+                              }`}
+                              title={item.completed ? "Mark incomplete" : "Mark completed"}
+                            >
+                              <Check
+                                className={`w-3 h-3 stroke-[3] transition-transform ${
+                                  item.completed ? "opacity-100 scale-100" : "opacity-0 scale-75"
+                                }`}
+                              />
+                            </button>
+
+                            {/* Item Text */}
+                            {isEditing ? (
+                              <div className="flex-1 flex items-center gap-1">
+                                <input
+                                  type="text"
+                                  defaultValue={item.text}
+                                  onChange={(e) =>
+                                    handleUpdateChecklistItemText(node.id, item.id, e.target.value)
+                                  }
+                                  onBlur={() => pushHistory(nodes, edges)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      handleInsertChecklistItemAfter(node.id, idx);
+                                    } else if (
+                                      e.key === "Backspace" &&
+                                      item.text === "" &&
+                                      items.length > 1
+                                    ) {
+                                      e.preventDefault();
+                                      handleDeleteChecklistItem(node.id, item.id);
+                                    }
+                                  }}
+                                  className="w-full bg-black/20 focus:bg-black/40 border border-transparent focus:border-white/30 rounded px-1.5 py-0.5 text-xs focus:outline-none"
+                                  style={{ color: stickyTextColor }}
+                                  placeholder="Type task..."
+                                />
+                                <button
+                                  type="button"
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteChecklistItem(node.id, item.id);
+                                  }}
+                                  className="p-0.5 text-gray-400 hover:text-red-400 transition-colors cursor-pointer"
+                                  title="Delete task"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingNodeId(node.id);
+                                }}
+                                className={`text-xs leading-relaxed flex-1 select-none transition-all break-words ${
+                                  item.completed
+                                    ? "line-through opacity-60 italic"
+                                    : "opacity-95 font-medium"
+                                }`}
+                                style={{
+                                  textAlign: node.textAlign || "left",
+                                  fontSize: `${parseFontSizePx(node.fontSize, 12)}px`,
+                                  color: stickyTextColor,
+                                }}
+                              >
+                                {item.text || "Empty item"}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Add Item Button */}
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddChecklistItem(node.id);
+                        }}
+                        className="mt-1 shrink-0 flex items-center gap-1.5 text-[11px] font-medium text-white/70 hover:text-white px-2 py-1 rounded bg-black/20 hover:bg-black/40 border border-white/10 hover:border-white/20 transition-all cursor-pointer w-fit"
+                        title="Add task to checklist"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Add task</span>
+                      </button>
+                    </div>
+                  ) : isEditing ? (
                     <textarea
                       autoFocus
                       defaultValue={node.body}
@@ -3513,7 +4101,7 @@ export default function WhiteboardCanvas({
                       style={{
                         textAlign: node.textAlign || "left",
                         fontSize: `${parseFontSizePx(node.fontSize, 12)}px`,
-                        color: node.textColor || "#FBCFE8",
+                        color: stickyTextColor,
                       }}
                     />
                   ) : (
@@ -3522,7 +4110,7 @@ export default function WhiteboardCanvas({
                       style={{
                         textAlign: node.textAlign || "left",
                         fontSize: `${parseFontSizePx(node.fontSize, 12)}px`,
-                        color: node.textColor || "#FBCFE8",
+                        color: stickyTextColor,
                       }}
                     >
                       {node.body || "Click to add text..."}
@@ -3558,6 +4146,10 @@ export default function WhiteboardCanvas({
                         <input
                           type="text"
                           defaultValue={node.title}
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                          }}
                           onBlur={(e) => updateSelectedNode({ title: e.target.value })}
                           className="bg-transparent text-center w-full focus:outline-none font-medium"
                           style={{
@@ -3584,6 +4176,9 @@ export default function WhiteboardCanvas({
                         <input
                           type="text"
                           defaultValue={node.subtitle}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                          }}
                           onBlur={(e) => {
                             updateSelectedNode({ subtitle: e.target.value });
                             setEditingNodeId(null);
@@ -4226,6 +4821,9 @@ export default function WhiteboardCanvas({
                       type="text"
                       defaultValue={node.title}
                       autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                      }}
                       onBlur={(e) => {
                         updateSelectedNode({ title: e.target.value });
                         setEditingNodeId(null);
@@ -4326,8 +4924,9 @@ export default function WhiteboardCanvas({
                     type="button"
                     onClick={() => {
                       setCanvasBgColor(theme.value);
+                      canvasBgColorRef.current = theme.value;
                       setShowBgColorPicker(false);
-                      triggerAutoSave(nodesRef.current, edgesRef.current, undefined, theme.value);
+                      triggerAutoSave(nodesRef.current, edgesRef.current, undefined, theme.value, true);
                     }}
                     className={`flex flex-col items-center gap-1 p-1.5 rounded-md border text-[10px] transition-all cursor-pointer ${
                       canvasBgColor.toLowerCase() === theme.value.toLowerCase()
@@ -4352,8 +4951,10 @@ export default function WhiteboardCanvas({
                     type="color"
                     value={canvasBgColor.startsWith("#") ? canvasBgColor : "#0D0E11"}
                     onChange={(e) => {
-                      setCanvasBgColor(e.target.value);
-                      triggerAutoSave(nodesRef.current, edgesRef.current, undefined, e.target.value);
+                      const val = e.target.value;
+                      setCanvasBgColor(val);
+                      canvasBgColorRef.current = val;
+                      triggerAutoSave(nodesRef.current, edgesRef.current, undefined, val, true);
                     }}
                     className="w-4 h-4 rounded cursor-pointer border-0 bg-transparent p-0"
                     title="Choose custom hex color"
@@ -4681,6 +5282,18 @@ export default function WhiteboardCanvas({
           title="Sticky Note (N)"
         >
           <StickyNote className="w-4 h-4" />
+        </button>
+
+        {/* Shift+N - Todo / Checklist Sticky Tool */}
+        <button
+          onClick={() => {
+            setActiveTool("sticky");
+            handleAddNode("sticky", "rectangle", "#38BDF8", true);
+          }}
+          className="p-2 rounded-lg text-cyan-400 hover:text-cyan-300 hover:bg-[#22242D] transition-colors cursor-pointer"
+          title="Todo / Checklist Note with Checkboxes (Shift+N)"
+        >
+          <ListTodo className="w-4 h-4" />
         </button>
 
         {/* T - Text Tool */}

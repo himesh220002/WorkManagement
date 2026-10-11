@@ -36,8 +36,18 @@ export default async function WhiteboardEditorPage({
     try {
       rawBoard = await Whiteboard.findOne({
         ...tenantFilter,
-        templateId: "org-chart",
-      }).lean();
+        $or: [{ templateId: "org-chart" }, { title: /Organizational/i }],
+      })
+        .sort({ updatedAt: -1 })
+        .lean();
+
+      if (!rawBoard) {
+        rawBoard = await Whiteboard.findOne({
+          $or: [{ templateId: "org-chart" }, { title: /Organizational/i }],
+        })
+          .sort({ updatedAt: -1 })
+          .lean();
+      }
     } catch {
       rawBoard = null;
     }
@@ -53,6 +63,7 @@ export default async function WhiteboardEditorPage({
       authorInitials: "HS",
       nodes: ORG_CHART_NODES,
       edges: ORG_CHART_EDGES,
+      backgroundColor: "#0D0E11",
       updatedAt: new Date(),
     };
   }

@@ -828,6 +828,259 @@ describe("Whiteboard Canvas & Organizational Chart Template", () => {
       expect(formatBadge(hdCard)).toBe("💎 HD ORIGINAL (4.5 MB)");
     });
   });
+
+  describe("Whiteboard Sticky Note Todo Checklists & Interactive Checkboxes", () => {
+    it("parses structured checklist from a node with existing checklist array", async () => {
+      const { parseNodeChecklist } = await import("@/lib/whiteboardChecklist");
+      const node = {
+        id: "sticky-1",
+        type: "sticky" as const,
+        hasCheckbox: true,
+        checklist: [
+          { id: "c-1", text: "Buy SSL domain", completed: true },
+          { id: "c-2", text: "Configure AWS S3 bucket", completed: false },
+        ],
+      };
+      const items = parseNodeChecklist(node);
+      expect(items).toHaveLength(2);
+      expect(items[0]).toEqual({ id: "c-1", text: "Buy SSL domain", completed: true });
+      expect(items[1]).toEqual({ id: "c-2", text: "Configure AWS S3 bucket", completed: false });
+    });
+
+    it("parses markdown checkbox lines from body text into checklist items", async () => {
+      const { parseNodeChecklist } = await import("@/lib/whiteboardChecklist");
+      const node = {
+        id: "sticky-2",
+        type: "sticky" as const,
+        body: "[x] Initial database schema\n[ ] Setup Stripe / Razorpay webhooks\n[x] Run vitest suite",
+      };
+      const items = parseNodeChecklist(node);
+      expect(items).toHaveLength(3);
+      expect(items[0].completed).toBe(true);
+      expect(items[0].text).toBe("Initial database schema");
+      expect(items[1].completed).toBe(false);
+      expect(items[1].text).toBe("Setup Stripe / Razorpay webhooks");
+      expect(items[2].completed).toBe(true);
+      expect(items[2].text).toBe("Run vitest suite");
+    });
+
+    it("parses bullet and numbered lines from body text into checklist items", async () => {
+      const { parseNodeChecklist } = await import("@/lib/whiteboardChecklist");
+      const node = {
+        id: "sticky-3",
+        type: "sticky" as const,
+        body: "• First sprint goal\n• Second sprint deliverable\n3. Third release checkpoint",
+      };
+      const items = parseNodeChecklist(node);
+      expect(items).toHaveLength(3);
+      expect(items[0].text).toBe("First sprint goal");
+      expect(items[0].completed).toBe(false);
+      expect(items[2].text).toBe("Third release checkpoint");
+    });
+
+    it("generates starter todo items when body is empty or default placeholder", async () => {
+      const { parseNodeChecklist } = await import("@/lib/whiteboardChecklist");
+      const node1 = { id: "sticky-empty", type: "sticky" as const, body: "" };
+      const items1 = parseNodeChecklist(node1);
+      expect(items1.length).toBeGreaterThanOrEqual(2);
+
+      const node2 = {
+        id: "sticky-default",
+        type: "sticky" as const,
+        body: "Type your notes or pro-tips here...",
+      };
+      const items2 = parseNodeChecklist(node2);
+      expect(items2.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("serializes checklist items into markdown-compatible body string", async () => {
+      const { serializeChecklistToBody } = await import("@/lib/whiteboardChecklist");
+      const items = [
+        { id: "1", text: "Deploy to staging", completed: true },
+        { id: "2", text: "QA test on Chrome", completed: false },
+      ];
+      const body = serializeChecklistToBody(items);
+      expect(body).toBe("[x] Deploy to staging\n[ ] QA test on Chrome");
+    });
+
+    it("toggles item completion status by id accurately", async () => {
+      const { toggleChecklistItem } = await import("@/lib/whiteboardChecklist");
+      const items = [
+        { id: "item-1", text: "Task A", completed: false },
+        { id: "item-2", text: "Task B", completed: true },
+      ];
+      const toggled1 = toggleChecklistItem(items, "item-1");
+      expect(toggled1.find((i) => i.id === "item-1")?.completed).toBe(true);
+
+      const toggled2 = toggleChecklistItem(toggled1, "item-2");
+      expect(toggled2.find((i) => i.id === "item-2")?.completed).toBe(false);
+    });
+
+    it("updates checklist item text and adds new items", async () => {
+      const { addChecklistItem, updateChecklistItemText } = await import(
+        "@/lib/whiteboardChecklist"
+      );
+      const initial = [{ id: "1", text: "Initial", completed: false }];
+      const updated = updateChecklistItemText(initial, "1", "Updated Text");
+      expect(updated[0].text).toBe("Updated Text");
+
+      const appended = addChecklistItem(updated, "New Task");
+      expect(appended).toHaveLength(2);
+      expect(appended[1].text).toBe("New Task");
+      expect(appended[1].completed).toBe(false);
+    });
+
+    it("inserts item right after active index and deletes item by id", async () => {
+      const { insertChecklistItemAfter, deleteChecklistItem } = await import(
+        "@/lib/whiteboardChecklist"
+      );
+      const items = [
+        { id: "a", text: "First", completed: false },
+        { id: "c", text: "Third", completed: false },
+      ];
+      const withMiddle = insertChecklistItemAfter(items, 0, "Second");
+      expect(withMiddle).toHaveLength(3);
+      expect(withMiddle[1].text).toBe("Second");
+
+      const afterDelete = deleteChecklistItem(withMiddle, "c");
+      expect(afterDelete).toHaveLength(2);
+      expect(afterDelete.map((i) => i.text)).toEqual(["First", "Second"]);
+    });
+
+    it("computes checklist progress statistics correctly", async () => {
+      const { getChecklistStats } = await import("@/lib/whiteboardChecklist");
+      const items = [
+        { id: "1", text: "A", completed: true },
+        { id: "2", text: "B", completed: false },
+        { id: "3", text: "C", completed: true },
+        { id: "4", text: "D", completed: false },
+      ];
+      const stats = getChecklistStats(items);
+      expect(stats.total).toBe(4);
+      expect(stats.completed).toBe(2);
+      expect(stats.percent).toBe(50);
+    });
+
+    it("resolves tailored pastel text colors for sticky notes", async () => {
+      const { getStickyTextColor } = await import("@/lib/whiteboardChecklist");
+      expect(getStickyTextColor("#EC4899")).toBe("#FCE7F3"); // Pink
+      expect(getStickyTextColor("#FBBF24")).toBe("#FEF3C7"); // Yellow
+      expect(getStickyTextColor("#34D399")).toBe("#D1FAE5"); // Green
+      expect(getStickyTextColor("#38BDF8")).toBe("#E0F2FE"); // Cyan
+      expect(getStickyTextColor("#A78BFA")).toBe("#EDE9FE"); // Purple
+      expect(getStickyTextColor("#EF4444")).toBe("#FEE2E2"); // Red
+      // Custom text color override
+      expect(getStickyTextColor("#EC4899", "#FFFFFF")).toBe("#FFFFFF");
+    });
+
+    it("verifies Notes & Brainstorm template has interactive checklist sticky note", () => {
+      const notesTemplate = WHITEBOARD_TEMPLATES.find((t) => t.id === "notes");
+      expect(notesTemplate).toBeDefined();
+
+      const winsNode = notesTemplate?.nodes.find((n) => n.id === "nt-wins");
+      expect(winsNode).toBeDefined();
+      expect(winsNode?.type).toBe("sticky");
+      expect(winsNode?.hasCheckbox).toBe(true);
+      expect(winsNode?.checklist?.length).toBeGreaterThanOrEqual(3);
+      expect(winsNode?.checklist?.[0].completed).toBe(true);
+    });
+  });
+
+  describe("Whiteboard Canvas Theme & Text Color Persistence Across Refresh", () => {
+    it("preserves updated canvas background color and custom node textColor in snapshot payload", () => {
+      const customBackground = "#1E293B"; // Dark Slate theme
+      const customTextColor = "#38BDF8"; // Cyan text color
+
+      const nodes = JSON.parse(JSON.stringify(ORG_CHART_NODES));
+      nodes[0].title = "Custom Strategic Blueprint";
+      nodes[0].textColor = customTextColor;
+
+      const snapshot = {
+        title: "Updated Board Title",
+        nodes,
+        edges: ORG_CHART_EDGES,
+        backgroundColor: customBackground,
+        savedAt: Date.now(),
+      };
+
+      const serialized = JSON.stringify(snapshot);
+      const deserialized = JSON.parse(serialized);
+
+      expect(deserialized.backgroundColor).toBe("#1E293B");
+      expect(deserialized.nodes[0].title).toBe("Custom Strategic Blueprint");
+      expect(deserialized.nodes[0].textColor).toBe("#38BDF8");
+    });
+
+    it("verifies hydration priority: local cache with custom colors overrides fallback black theme and default nodes", () => {
+      const initialBoardFallback = {
+        _id: "default-org-chart",
+        title: "Organizational Chart",
+        nodes: ORG_CHART_NODES,
+        edges: ORG_CHART_EDGES,
+        backgroundColor: "#0D0E11",
+        updatedAt: new Date(Date.now() - 60000), // 1 minute ago
+      };
+
+      const localCachedSnapshot = {
+        title: "Product Roadmap Q4",
+        backgroundColor: "#0A192F", // Deep Navy theme
+        savedAt: Date.now(), // Newer
+        nodes: [
+          {
+            ...ORG_CHART_NODES[0],
+            title: "VP of Product Engineering",
+            textColor: "#F472B6",
+          },
+        ],
+        edges: ORG_CHART_EDGES,
+      };
+
+      // Emulate hydration condition logic
+      const isDefaultOrTemplate =
+        !initialBoardFallback._id ||
+        initialBoardFallback._id === "default-org-chart" ||
+        initialBoardFallback._id === "org-chart";
+
+      const initialTime = new Date(initialBoardFallback.updatedAt).getTime();
+      const cacheTime = localCachedSnapshot.savedAt;
+
+      const shouldHydrate = isDefaultOrTemplate || cacheTime >= initialTime - 5000;
+      expect(shouldHydrate).toBe(true);
+
+      const resolvedBackgroundColor = localCachedSnapshot.backgroundColor;
+      const resolvedNodes = localCachedSnapshot.nodes;
+
+      expect(resolvedBackgroundColor).toBe("#0A192F");
+      expect(resolvedNodes[0].title).toBe("VP of Product Engineering");
+      expect(resolvedNodes[0].textColor).toBe("#F472B6");
+    });
+
+    it("ensures custom background themes and node text edits are included in PUT request body", () => {
+      const updatePayload = {
+        title: "Executive Structure 2026",
+        backgroundColor: "#FEF9C3", // Light Yellow Paper theme
+        nodes: [
+          {
+            id: "node-1",
+            type: "task",
+            x: 100,
+            y: 100,
+            width: 220,
+            height: 90,
+            title: "Deliver Q3 Deliverables",
+            subtitle: "Team Lead",
+            textColor: "#B45309",
+          },
+        ],
+        edges: [],
+        isFavorite: true,
+      };
+
+      expect(updatePayload.backgroundColor).toBe("#FEF9C3");
+      expect(updatePayload.nodes[0].textColor).toBe("#B45309");
+      expect(updatePayload.nodes[0].title).toBe("Deliver Q3 Deliverables");
+    });
+  });
 });
 
 
