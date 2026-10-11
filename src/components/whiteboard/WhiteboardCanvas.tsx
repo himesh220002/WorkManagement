@@ -506,6 +506,24 @@ export default function WhiteboardCanvas({
   const [showMinimap, setShowMinimap] = useState(true);
   const minimapSvgRef = useRef<SVGSVGElement | null>(null);
   const [isDraggingMinimap, setIsDraggingMinimap] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [viewportSize, setViewportSize] = useState<{ width: number; height: number }>({
+    width: 1400,
+    height: 900,
+  });
+
+  useEffect(() => {
+    setIsMounted(true);
+    const handleResize = () => {
+      setViewportSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Double Click Creation Popover (Prompt requirement: "functions double left click opens")
   const [doubleClickMenu, setDoubleClickMenu] = useState<{
@@ -1400,8 +1418,8 @@ export default function WhiteboardCanvas({
     };
   }, [nodes]);
 
-  const winWidth = typeof window !== "undefined" ? window.innerWidth : 1400;
-  const winHeight = typeof window !== "undefined" ? window.innerHeight : 900;
+  const winWidth = viewportSize.width;
+  const winHeight = viewportSize.height;
   const viewCanvasX = -pan.x / zoom;
   const viewCanvasY = -pan.y / zoom;
   const viewCanvasW = winWidth / zoom;
@@ -6292,140 +6310,142 @@ export default function WhiteboardCanvas({
 
       {/* 5a. BOTTOM-RIGHT CANVAS NAVIGATOR / MINIMAP RADAR ("small section at right corner which displays position ontime") */}
       <div className="absolute bottom-3 right-3 z-40 select-none">
-        {showMinimap ? (
-          <div className="bg-[#14151B]/95 backdrop-blur-md border border-[#262832] rounded-xl shadow-2xl p-2 animate-in fade-in-50 duration-150">
-            {/* Navigator Header */}
-            <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[#242630] text-[10px] text-gray-400">
-              <div className="flex items-center gap-1.5 font-bold text-gray-200">
-                <Compass className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Navigator</span>
-                <span className="text-[9px] text-gray-500 font-normal">
-                  ({nodes.length})
-                </span>
+        {isMounted && (
+          showMinimap ? (
+            <div className="bg-[#14151B]/95 backdrop-blur-md border border-[#262832] rounded-xl shadow-2xl p-2 animate-in fade-in-50 duration-150">
+              {/* Navigator Header */}
+              <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[#242630] text-[10px] text-gray-400">
+                <div className="flex items-center gap-1.5 font-bold text-gray-200">
+                  <Compass className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Navigator</span>
+                  <span className="text-[9px] text-gray-500 font-normal">
+                    ({nodes.length})
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleFitAllToScreen}
+                    className="p-1 hover:bg-[#22242D] rounded text-gray-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                    title="Fit all diagrams to screen"
+                  >
+                    <Maximize2 className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={() => setShowMinimap(false)}
+                    className="p-1 hover:bg-[#22242D] rounded text-gray-400 hover:text-white transition-colors cursor-pointer"
+                    title="Minimize navigator"
+                  >
+                    <Minimize2 className="w-3 h-3" />
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={handleFitAllToScreen}
-                  className="p-1 hover:bg-[#22242D] rounded text-gray-400 hover:text-cyan-300 transition-colors cursor-pointer"
-                  title="Fit all diagrams to screen"
-                >
-                  <Maximize2 className="w-3 h-3" />
-                </button>
-                <button
-                  onClick={() => setShowMinimap(false)}
-                  className="p-1 hover:bg-[#22242D] rounded text-gray-400 hover:text-white transition-colors cursor-pointer"
-                  title="Minimize navigator"
-                >
-                  <Minimize2 className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
 
-            {/* Interactive Minimap SVG */}
-            <div className="relative rounded-lg overflow-hidden border border-[#22242E] bg-[#0A0B0E]">
-              <svg
-                ref={minimapSvgRef}
-                width={minimapW}
-                height={minimapH}
-                className="cursor-crosshair block"
-                onMouseDown={(e) => {
-                  setIsDraggingMinimap(true);
-                  handleMinimapNav(e);
-                }}
-                onMouseMove={(e) => {
-                  if (isDraggingMinimap) {
+              {/* Interactive Minimap SVG */}
+              <div className="relative rounded-lg overflow-hidden border border-[#22242E] bg-[#0A0B0E]">
+                <svg
+                  ref={minimapSvgRef}
+                  width={minimapW}
+                  height={minimapH}
+                  className="cursor-crosshair block"
+                  onMouseDown={(e) => {
+                    setIsDraggingMinimap(true);
                     handleMinimapNav(e);
-                  }
-                }}
-                onMouseUp={() => setIsDraggingMinimap(false)}
-                onMouseLeave={() => setIsDraggingMinimap(false)}
-              >
-                {/* Subtle Grid Dots */}
-                <pattern
-                  id="minimap-grid"
-                  width="15"
-                  height="15"
-                  patternUnits="userSpaceOnUse"
+                  }}
+                  onMouseMove={(e) => {
+                    if (isDraggingMinimap) {
+                      handleMinimapNav(e);
+                    }
+                  }}
+                  onMouseUp={() => setIsDraggingMinimap(false)}
+                  onMouseLeave={() => setIsDraggingMinimap(false)}
                 >
-                  <circle cx="2" cy="2" r="0.7" fill="#1C1E26" />
-                </pattern>
-                <rect width={minimapW} height={minimapH} fill="url(#minimap-grid)" />
+                  {/* Subtle Grid Dots */}
+                  <pattern
+                    id="minimap-grid"
+                    width="15"
+                    height="15"
+                    patternUnits="userSpaceOnUse"
+                  >
+                    <circle cx="2" cy="2" r="0.7" fill="#1C1E26" />
+                  </pattern>
+                  <rect width={minimapW} height={minimapH} fill="url(#minimap-grid)" />
 
-                {/* Miniature Nodes & Lines */}
-                {nodes.map((n) => {
-                  if (n.type === "line" || n.shapeType === "line" || n.shapeType === "arrow") {
-                    const { x1, y1, x2, y2 } = getLineEndpoints(n);
-                    const mx1 = mmOffsetX + (x1 - mmMinX) * mmScale;
-                    const my1 = mmOffsetY + (y1 - mmMinY) * mmScale;
-                    const mx2 = mmOffsetX + (x2 - mmMinX) * mmScale;
-                    const my2 = mmOffsetY + (y2 - mmMinY) * mmScale;
+                  {/* Miniature Nodes & Lines */}
+                  {nodes.map((n) => {
+                    if (n.type === "line" || n.shapeType === "line" || n.shapeType === "arrow") {
+                      const { x1, y1, x2, y2 } = getLineEndpoints(n);
+                      const mx1 = mmOffsetX + (x1 - mmMinX) * mmScale;
+                      const my1 = mmOffsetY + (y1 - mmMinY) * mmScale;
+                      const mx2 = mmOffsetX + (x2 - mmMinX) * mmScale;
+                      const my2 = mmOffsetY + (y2 - mmMinY) * mmScale;
+                      return (
+                        <line
+                          key={`mm-${n.id}`}
+                          x1={mx1}
+                          y1={my1}
+                          x2={mx2}
+                          y2={my2}
+                          stroke={n.color || "#60A5FA"}
+                          strokeWidth="1.5"
+                          opacity={0.85}
+                        />
+                      );
+                    }
+
+                    const mx = mmOffsetX + (n.x - mmMinX) * mmScale;
+                    const my = mmOffsetY + (n.y - mmMinY) * mmScale;
+                    const mw = Math.max(3, (n.width || 60) * mmScale);
+                    const mh = Math.max(2, (n.height || 40) * mmScale);
+                    const isSel = selectedNodeIds.includes(n.id) || selectedNodeId === n.id;
+
                     return (
-                      <line
+                      <rect
                         key={`mm-${n.id}`}
-                        x1={mx1}
-                        y1={my1}
-                        x2={mx2}
-                        y2={my2}
-                        stroke={n.color || "#60A5FA"}
-                        strokeWidth="1.5"
-                        opacity={0.85}
+                        x={mx}
+                        y={my}
+                        width={mw}
+                        height={mh}
+                        rx={1}
+                        fill={isSel ? "#38BDF8" : n.color || "#EC4899"}
+                        stroke={isSel ? "#FFFFFF" : "transparent"}
+                        strokeWidth="0.5"
+                        opacity={isSel ? 1 : 0.75}
                       />
                     );
-                  }
+                  })}
 
-                  const mx = mmOffsetX + (n.x - mmMinX) * mmScale;
-                  const my = mmOffsetY + (n.y - mmMinY) * mmScale;
-                  const mw = Math.max(3, (n.width || 60) * mmScale);
-                  const mh = Math.max(2, (n.height || 40) * mmScale);
-                  const isSel = selectedNodeIds.includes(n.id) || selectedNodeId === n.id;
+                  {/* Viewport Camera Highlight Box */}
+                  <rect
+                    x={vpBoxX}
+                    y={vpBoxY}
+                    width={vpBoxW}
+                    height={vpBoxH}
+                    rx={2}
+                    fill="rgba(56, 189, 248, 0.16)"
+                    stroke="#38BDF8"
+                    strokeWidth="1.5"
+                    strokeDasharray="4,2"
+                    className="pointer-events-none"
+                  />
+                </svg>
+              </div>
 
-                  return (
-                    <rect
-                      key={`mm-${n.id}`}
-                      x={mx}
-                      y={my}
-                      width={mw}
-                      height={mh}
-                      rx={1}
-                      fill={isSel ? "#38BDF8" : n.color || "#EC4899"}
-                      stroke={isSel ? "#FFFFFF" : "transparent"}
-                      strokeWidth="0.5"
-                      opacity={isSel ? 1 : 0.75}
-                    />
-                  );
-                })}
-
-                {/* Viewport Camera Highlight Box */}
-                <rect
-                  x={vpBoxX}
-                  y={vpBoxY}
-                  width={vpBoxW}
-                  height={vpBoxH}
-                  rx={2}
-                  fill="rgba(56, 189, 248, 0.16)"
-                  stroke="#38BDF8"
-                  strokeWidth="1.5"
-                  strokeDasharray="4,2"
-                  className="pointer-events-none"
-                />
-              </svg>
+              {/* Minimap Status Footer */}
+              <div className="mt-1.5 pt-1 border-t border-[#22242D] text-[9px] text-gray-500 flex items-center justify-between">
+                <span>Zoom: {Math.round(zoom * 100)}%</span>
+                <span className="text-cyan-400/80 font-medium">Click / drag to pan</span>
+              </div>
             </div>
-
-            {/* Minimap Status Footer */}
-            <div className="mt-1.5 pt-1 border-t border-[#22242D] text-[9px] text-gray-500 flex items-center justify-between">
-              <span>Zoom: {Math.round(zoom * 100)}%</span>
-              <span className="text-cyan-400/80 font-medium">Click / drag to pan</span>
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => setShowMinimap(true)}
-            className="px-2.5 py-1.5 rounded-xl bg-[#14151B]/95 backdrop-blur-md border border-[#262832] text-gray-300 hover:text-white hover:border-cyan-500/50 shadow-xl transition-all flex items-center gap-1.5 text-xs font-semibold cursor-pointer group"
-            title="Open Canvas Navigator Minimap"
-          >
-            <Compass className="w-4 h-4 text-cyan-400 group-hover:rotate-45 transition-transform" />
-            <span>Navigator</span>
-          </button>
+          ) : (
+            <button
+              onClick={() => setShowMinimap(true)}
+              className="px-2.5 py-1.5 rounded-xl bg-[#14151B]/95 backdrop-blur-md border border-[#262832] text-gray-300 hover:text-white hover:border-cyan-500/50 shadow-xl transition-all flex items-center gap-1.5 text-xs font-semibold cursor-pointer group"
+              title="Open Canvas Navigator Minimap"
+            >
+              <Compass className="w-4 h-4 text-cyan-400 group-hover:rotate-45 transition-transform" />
+              <span>Navigator</span>
+            </button>
+          )
         )}
       </div>
 
