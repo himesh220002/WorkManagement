@@ -311,7 +311,11 @@ function TextColorPicker({
     <div className="relative" ref={popoverRef}>
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
         className={`flex flex-col items-center justify-center w-6 h-6 rounded hover:bg-[#282A33] px-1 py-0.5 cursor-pointer transition-colors group ${isOpen ? "bg-[#282A33]" : ""
           }`}
         title={`Text Color (${currentColor})`}
@@ -328,6 +332,7 @@ function TextColorPicker({
 
       {isOpen && (
         <div
+          onMouseDown={(e) => e.stopPropagation()}
           className="absolute top-full left-0 mt-2 p-2.5 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl z-50 flex flex-col gap-2 min-w-[190px]"
           onClick={(e) => e.stopPropagation()}
         >
@@ -345,11 +350,13 @@ function TextColorPicker({
               <button
                 key={c.name}
                 type="button"
-                onClick={() => {
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
                   onChange(c.value);
                   setIsOpen(false);
                 }}
-                className={`w-5 h-5 rounded-full hover:scale-110 transition-transform border ${currentColor.toLowerCase() === c.value.toLowerCase()
+                className={`w-5 h-5 rounded-full hover:scale-110 transition-transform border cursor-pointer ${currentColor.toLowerCase() === c.value.toLowerCase()
                   ? "ring-2 ring-blue-500 border-white scale-105"
                   : "border-white/20"
                   }`}
@@ -365,6 +372,7 @@ function TextColorPicker({
               <input
                 type="color"
                 value={currentColor.startsWith("#") ? currentColor : "#FFFFFF"}
+                onMouseDown={(e) => e.stopPropagation()}
                 onChange={(e) => onChange(e.target.value)}
                 className="w-4 h-4 rounded cursor-pointer border-0 bg-transparent p-0"
                 title="Choose custom hex color"
@@ -581,6 +589,7 @@ export default function WhiteboardCanvas({
 
   // Shape switcher popover for selected shape node
   const [showShapeSwitcher, setShowShapeSwitcher] = useState(false);
+  const shapeSwitcherRef = useRef<HTMLDivElement>(null);
   // Multi-selection link options dropdown menu
   const [showLinkMenu, setShowLinkMenu] = useState(false);
 
@@ -848,7 +857,10 @@ export default function WhiteboardCanvas({
         setShowBgColorPicker(false);
       }
       if (stylePaletteRef.current && !stylePaletteRef.current.contains(target)) {
-        setShowStylePalette(false);
+        const inFormatBarPalette = (target as HTMLElement).closest?.("[data-palette-container='true']");
+        if (!inFormatBarPalette) {
+          setShowStylePalette(false);
+        }
       }
       if (shapePaletteRef.current && !shapePaletteRef.current.contains(target)) {
         setShowShapePalette(false);
@@ -856,12 +868,27 @@ export default function WhiteboardCanvas({
       if (templateSelectorRef.current && !templateSelectorRef.current.contains(target)) {
         setShowTemplateSelector(false);
       }
+      if (shapeSwitcherRef.current && !shapeSwitcherRef.current.contains(target)) {
+        setShowShapeSwitcher(false);
+      }
     }
-    if (showBgColorPicker || showStylePalette || showShapePalette || showTemplateSelector) {
+    if (
+      showBgColorPicker ||
+      showStylePalette ||
+      showShapePalette ||
+      showTemplateSelector ||
+      showShapeSwitcher
+    ) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [showBgColorPicker, showStylePalette, showShapePalette, showTemplateSelector]);
+  }, [
+    showBgColorPicker,
+    showStylePalette,
+    showShapePalette,
+    showTemplateSelector,
+    showShapeSwitcher,
+  ]);
 
   // Push history state with deep clone & boundary checks
   const pushHistory = useCallback(
@@ -4026,7 +4053,7 @@ export default function WhiteboardCanvas({
       {selectedNode && selectedNodeIds.length <= 1 && (
         <div
           onMouseDown={(e) => e.stopPropagation()}
-          className="absolute z-40 bg-[#1A1C22] border border-[#2D3039] rounded-lg shadow-2xl px-2.5 py-1.5 flex items-center gap-2 text-xs text-gray-300 animate-in fade-in-50 max-w-[calc(100vw-32px)] overflow-x-auto scrollbar-none"
+          className="absolute z-40 bg-[#1A1C22] border border-[#2D3039] rounded-lg shadow-2xl px-2.5 py-1.5 flex items-center gap-2 text-xs text-gray-300 animate-in fade-in-50"
           style={{
             left: Math.max(20, Math.min(window.innerWidth - 760, selectedNode.x * zoom + pan.x)),
             top: Math.max(60, selectedNode.y * zoom + pan.y - 48),
@@ -4056,10 +4083,15 @@ export default function WhiteboardCanvas({
           {selectedNode.type === "shape" && (
             <>
               {/* Shape Type Switcher */}
-              <div className="relative">
+              <div className="relative" ref={shapeSwitcherRef}>
                 <button
-                  onClick={() => setShowShapeSwitcher(!showShapeSwitcher)}
-                  className="p-1 rounded hover:bg-[#282A33] text-gray-300 hover:text-white flex items-center gap-1"
+                  type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowShapeSwitcher(!showShapeSwitcher);
+                  }}
+                  className="p-1 rounded hover:bg-[#282A33] text-gray-300 hover:text-white flex items-center gap-1 cursor-pointer"
                   title="Switch Shape Geometry"
                 >
                   {selectedNode.shapeType === "circle" ? (
@@ -4078,7 +4110,11 @@ export default function WhiteboardCanvas({
                 </button>
 
                 {showShapeSwitcher && (
-                  <div className="absolute top-full left-0 mt-2 p-1.5 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl grid grid-cols-4 gap-1 z-50 w-36">
+                  <div
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-full left-0 mt-2 p-1.5 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl grid grid-cols-4 gap-1 z-50 w-36"
+                  >
                     {[
                       { type: "rectangle", icon: Square, label: "Rectangle" },
                       { type: "rounded", icon: Square, label: "Rounded" },
@@ -4092,11 +4128,14 @@ export default function WhiteboardCanvas({
                       return (
                         <button
                           key={st.type}
-                          onClick={() => {
+                          type="button"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
                             updateSelectedNode({ shapeType: st.type as any });
                             setShowShapeSwitcher(false);
                           }}
-                          className={`p-1.5 rounded hover:bg-[#282A33] flex items-center justify-center ${selectedNode.shapeType === st.type ? "bg-blue-600 text-white" : "text-gray-300"
+                          className={`p-1.5 rounded hover:bg-[#282A33] flex items-center justify-center cursor-pointer ${selectedNode.shapeType === st.type ? "bg-blue-600 text-white" : "text-gray-300"
                             }`}
                           title={st.label}
                         >
@@ -4166,7 +4205,7 @@ export default function WhiteboardCanvas({
               </div>
 
               {/* Color Swatch */}
-              <div className="relative">
+              <div className="relative" data-palette-container="true">
                 <button
                   type="button"
                   onMouseDown={(e) => e.stopPropagation()}
@@ -4222,7 +4261,7 @@ export default function WhiteboardCanvas({
           {selectedNode.type === "task" && (
             <>
               {/* Box Color Swatch - Placed first so it is immediately prominent and never cut off */}
-              <div className="relative shrink-0">
+              <div className="relative shrink-0" data-palette-container="true">
                 <button
                   type="button"
                   onMouseDown={(e) => e.stopPropagation()}
