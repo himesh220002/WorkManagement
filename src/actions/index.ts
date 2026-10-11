@@ -1,7 +1,7 @@
 "use server";
 
 import connectToDatabase from "@/lib/mongodb";
-import { Pipeline, TaskNode, Lead, Campaign, Deal, Target, Goal, Team, User, Project, ResourceAllocation, Cycle } from "@/models";
+import { Pipeline, TaskNode, Lead, Campaign, Deal, Target, Goal, Team, User, Project, ResourceAllocation, Cycle, PipelineProgressSnapshot } from "@/models";
 import { revalidatePath as nextRevalidatePath } from "next/cache";
 import { getCurrentSession } from "@/server/auth/session";
 import { invalidateAllAppCaches } from "@/lib/cache";
@@ -835,10 +835,33 @@ export async function deletePipeline(formData: FormData) {
   assertNotGuest(session);
   const pipelineId = formData.get("pipelineId") as string;
   if (!pipelineId) return;
+  // mode=unlink (default, option 1): keep tasks, set them to No Pipeline.
+  // mode=cascade (option 2): also delete linked tasks + branches (discard completely).
+  const rawMode = String(formData.get("mode") || formData.get("cascade") || "unlink").toLowerCase();
+  const cascade = rawMode === "cascade" || rawMode === "true" || rawMode === "yes" || rawMode === "discard";
   await connectToDatabase();
+  const linked = await TaskNode.find({ pipelineId }).select("_id").lean() as any[];
+  const linkedIds = linked.map((t) => String(t._id));
+  if (cascade && linkedIds.length > 0) {
+    await TaskNode.deleteMany({ _id: { $in: linkedIds } });
+    for (const id of linkedIds) {
+      await syncTenantWrite("TaskNode", "delete", id, undefined, session.companyCode);
+    }
+  } else if (linkedIds.length > 0) {
+    await TaskNode.updateMany({ pipelineId }, { $set: { pipelineId: null, stageRef: "" } });
+    for (const id of linkedIds) {
+      await syncTenantWrite("TaskNode", "update", id, { pipelineId: null, stageRef: "" }, session.companyCode);
+    }
+  }
   await Pipeline.findByIdAndDelete(pipelineId);
   await syncTenantWrite("Pipeline", "delete", pipelineId, undefined, session.companyCode);
-  revalidatePath("/dev/timeline");
+  // Drop daily snapshots for this pipeline so dead rows never distort triples.
+  try {
+    await PipelineProgressSnapshot.deleteMany({ pipelineId });
+  } catch {}
+  revalidatePipelineSurfaces();
+  revalidatePath("/projects");
+  revalidatePath("/my-work");
 }
 
 export async function addResourceAllocation(formData: FormData) {

@@ -206,6 +206,7 @@ export default async function DevDashboardPage(
     severity: t.severity,
     estimatedHours: t.estimatedHours || 0,
     actualHours: t.actualHours || 0,
+    progress: Number(t.progress || 0),
     projectId: t.projectId ? t.projectId.toString() : null,
     pipelineId: t.pipelineId ? t.pipelineId.toString() : null,
     cycleId: t.cycleId ? t.cycleId.toString() : null,
@@ -215,6 +216,8 @@ export default async function DevDashboardPage(
       ? t.subtasks.map((s: any) => ({
           title: String(s.title || ""),
           status: s.status || "Open",
+          progress: Math.max(0, Math.min(100, Math.round(Number(s.progress || 0)))),
+          stage: String(s.stage || ""),
           assignees: Array.isArray(s.assignees)
             ? s.assignees.map((a: any) => ({
                 userId: String(a.userId || ""),

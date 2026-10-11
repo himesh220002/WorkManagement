@@ -638,7 +638,12 @@ export default function DevDashboardClient({
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pipelines.map((p) => (
-            <PipelineCard key={p._id} pipeline={p} currentRole={isGuest ? "viewer" : "manager"} />
+            <PipelineCard
+              key={p._id}
+              pipeline={p}
+              currentRole={isGuest ? "viewer" : "manager"}
+              linkedTasks={tasks.filter((t) => String(t.pipelineId || "") === String(p._id))}
+            />
           ))}
           {pipelines.length === 0 && (
             <div className="col-span-full py-12 text-center text-xs text-[#A19F9D] border border-dashed border-[#E1DFDD] dark:border-[#3B3A39] rounded-[8px]">

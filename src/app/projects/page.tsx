@@ -1,5 +1,5 @@
 import connectToDatabase from "@/lib/mongodb";
-import { Project, Team, Pipeline, Task, User } from "@/models";
+import { Project, Team, Pipeline, Task, User, Cycle, PipelineProgressSnapshot } from "@/models";
 import ProjectHierarchyDiagram from "@/app/projects/ProjectHierarchyDiagram";
 import ProjectRbacController from "@/app/projects/ProjectRbacController";
 import { getCurrentSession, getTenantQueryFilter } from "@/server/auth/session";
@@ -10,10 +10,10 @@ import { StatusBadge, Badge } from "@/components/ui/Badge";
 import { Stat } from "@/components/ui/Stat";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { addProject } from "@/actions";
-import { fetchWithCache, invalidateCachePrefix } from "@/lib/cache";
+import { fetchWithCache, invalidateCachePrefix, invalidateAllAppCaches } from "@/lib/cache";
+import { syncTenantWrite } from "@/lib/tenantDb";
 import { computePipelineProgress } from "@/utils/pipelineProgress";
 import { tripleFromSnapshots } from "@/lib/progressHistory";
-import { PipelineProgressSnapshot } from "@/models/pipelineSnapshot";
 import ParallelPipelineTrackViewer from "@/components/pipelines/ParallelPipelineTrackViewer";
 import {
   FolderKanban,
@@ -38,15 +38,56 @@ async function deleteProjectAction(formData: FormData) {
     return;
   }
   await connectToDatabase();
-  const id = formData.get("projectId");
-
-  if (id) {
-    await Project.findByIdAndDelete(id);
-    invalidateCachePrefix("projects_");
-    invalidateCachePrefix("exec_");
-    revalidatePath("/projects");
-    revalidatePath("/exec/dashboard");
+  const id = String(formData.get("projectId") || "");
+  // Explicit opt-in (option 2): the discard checkbox must be ticked so a
+  // project is only ever removed together with ALL of its work.
+  const confirmed = String(formData.get("confirmDiscard") || "").toLowerCase();
+  const ok = ["yes", "true", "on", "discard", "cascade"].includes(confirmed);
+  if (!id || !ok) {
+    return;
   }
+
+  // Cascade: pipelines -> tasks (branches die with their task doc) ->
+  // sprints/cycles -> snapshots. Then detach teams and drop the project.
+  const [pipeDocs, taskDocs] = await Promise.all([
+    Pipeline.find({ projectId: id }).select("_id").lean() as Promise<any[]>,
+    Task.find({ projectId: id }).select("_id").lean() as Promise<any[]>,
+  ]);
+  const pipeIds = pipeDocs.map((p) => String(p._id));
+  const taskIds = taskDocs.map((t) => String(t._id));
+
+  await Task.deleteMany({ projectId: id });
+  await Pipeline.deleteMany({ projectId: id });
+  await Cycle.deleteMany({ project: id });
+  try {
+    await PipelineProgressSnapshot.deleteMany({
+      $or: [{ projectId: id }, ...(pipeIds.length > 0 ? [{ pipelineId: { $in: pipeIds } }] : [])],
+    });
+  } catch {}
+  await Team.updateMany({ projectIds: id }, { $pull: { projectIds: id } } as any);
+  await Project.findByIdAndDelete(id);
+
+  // Mirror every delete into the tenant-isolated DB so both stores stay aligned.
+  for (const tid of taskIds) {
+    await syncTenantWrite("TaskNode", "delete", tid, undefined, session.companyCode);
+  }
+  for (const pid of pipeIds) {
+    await syncTenantWrite("Pipeline", "delete", pid, undefined, session.companyCode);
+  }
+  await syncTenantWrite("Project", "delete", id, undefined, session.companyCode);
+
+  // The old code only cleared projects_/exec_ caches, so deleted work kept
+  // showing on dev/timeline surfaces from stale dev_*/timeline_* entries.
+  invalidateAllAppCaches();
+  invalidateCachePrefix("projects_");
+  invalidateCachePrefix("exec_");
+  revalidatePath("/projects");
+  revalidatePath("/dev/dashboard");
+  revalidatePath("/dev/timeline");
+  revalidatePath("/dev");
+  revalidatePath("/exec/dashboard");
+  revalidatePath("/my-work");
+  revalidatePath("/diagrams");
 }
 
 export default async function ProjectsPage() {
@@ -337,12 +378,21 @@ export default async function ProjectsPage() {
                     Status: {p.status || "Active"}
                   </span>
                   {canDeleteProject && (
-                    <form action={deleteProjectAction}>
+                    <form action={deleteProjectAction} className="flex items-center gap-2">
                       <input type="hidden" name="projectId" value={p._id} />
+                      <label
+                        className="flex items-center gap-1.5 text-[11px] font-medium text-[#605E5C] dark:text-[#C8C6C4] cursor-pointer"
+                        title={`Discard completely: deletes ${p.pipelines.length} pipeline(s), ${p.tasksCount} task(s) with all branches, and related sprints/snapshots under "${p.name}". Tick to enable delete.`}
+                      >
+                        <input type="checkbox" name="confirmDiscard" value="yes" required className="cursor-pointer" />
+                        <span className="hidden lg:inline">
+                          Discard {p.pipelines.length} pipe(s) + {p.tasksCount} task(s)?
+                        </span>
+                      </label>
                       <button
                         type="submit"
                         className="p-1.5 rounded hover:bg-[#FDE7E9] text-[#A19F9D] hover:text-[#D13438] transition-colors cursor-pointer"
-                        title="Delete Project"
+                        title={`Delete project "${p.name}" WITH all ${p.pipelines.length} pipeline(s) and ${p.tasksCount} task(s). This cannot be undone.`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

@@ -63,6 +63,10 @@ export default function PipelineCard({
   const [isSavingDates, setIsSavingDates] = useState(false);
   const [datesFeedback, setDatesFeedback] = useState<string | null>(null);
 
+  // Delete mode (option 1 vs option 2): unlink keeps tasks as No Pipeline,
+  // cascade discards linked tasks + branches completely.
+  const [cascadeDelete, setCascadeDelete] = useState(false);
+
   // Daily-delta triple: day-before -> yesterday -> today (lazy-loaded on open)
   const [history, setHistory] = useState<{ points: { date: string; value: number }[]; deltas: number[] } | null>(null);
   useEffect(() => {
@@ -825,12 +829,29 @@ export default function PipelineCard({
                     <form
                       action={deletePipeline}
                       onSubmit={(e) => {
-                        if (!window.confirm(`Are you sure you want to delete pipeline "${pipeline.name}"?`)) {
+                        const msg = cascadeDelete
+                          ? `DISCARD pipeline "${pipeline.name}" COMPLETELY?\n\nThis deletes ${linkedTasks.length} linked task(s) with ALL their branches. This cannot be undone.`
+                          : `Delete pipeline "${pipeline.name}"?\n\nIts ${linkedTasks.length} linked task(s) will be KEPT and set to No Pipeline.`;
+                        if (!window.confirm(msg)) {
                           e.preventDefault();
                         }
                       }}
+                      className="flex flex-col gap-1.5"
                     >
                       <input type="hidden" name="pipelineId" value={pipeline._id.toString()} />
+                      <input type="hidden" name="mode" value={cascadeDelete ? "cascade" : "unlink"} />
+                      <label
+                        className="flex items-center gap-1.5 text-[11px] font-medium text-[#605E5C] dark:text-[#C8C6C4] cursor-pointer"
+                        title="Tick to ALSO delete linked tasks + branches (discard completely). Unticked = keep tasks as No Pipeline."
+                      >
+                        <input
+                          type="checkbox"
+                          checked={cascadeDelete}
+                          onChange={(e) => setCascadeDelete(e.target.checked)}
+                          className="cursor-pointer"
+                        />
+                        <span>Also delete {linkedTasks.length} linked task(s)?</span>
+                      </label>
                       <button
                         type="submit"
                         className="text-xs text-[#D13438] hover:underline flex items-center gap-1 font-medium cursor-pointer"

@@ -42,4 +42,9 @@ the table should show line projects [pipeline name[inside this all the stages [s
 |           [ Drop sub-branches here to update stage & pipeline progress...                                                                             ] |
 +---------------------------------------------------------------------------------------------------------------------------------------------------------+
 | [>] TASK/PROJECT: Frontend Component Development   STATUS: [Todo v]        EST: 0     ACTUAL: 0   PIPELINE: [devpipe1 v]   TOTAL: [--------  0%] [+ Branch] |
-+---------------------------------------------------------------------------------------------------------------------------------------------------------+  [Image 1] ,, i have increased the bar but it reverted back to 0  check if the db is accepting such ,,, 
++---------------------------------------------------------------------------------------------------------------------------------------------------------+  [Image 1] 
+,, i have increased the bar but it reverted back to 0  check if the db is accepting such ,,, 
+
+ , the branched sub task is not saving the slider percentage and its just resets itself i guess 
+ the db is not accepting yet these so the design will look like Project1[p1[T1,T2{branched subtask1,2,3,4..}, task,T3{branched subtask1,2,..},...],p2,p3,..]  ,,,
+ Names are project->P(pipeline) ->T(projects_pipelines_task) -> branch(projects_pipelines_task_subtasks)
