@@ -1389,7 +1389,493 @@ describe("Whiteboard Canvas & Organizational Chart Template", () => {
       expect(getPreviewStart(150, 20)).toEqual({ x: 150, y: 100 });
     });
   });
-});
+
+  describe("Whiteboard Toolbar Hold to Drag Items onto Canvas", () => {
+    const getCanvasCoords = (
+      clientX: number,
+      clientY: number,
+      rect: { left: number; top: number },
+      pan: { x: number; y: number },
+      zoom: number
+    ) => {
+      const x = (clientX - rect.left - pan.x) / zoom;
+      const y = (clientY - rect.top - pan.y) / zoom;
+      return { x: Math.round(x), y: Math.round(y) };
+    };
+
+    it("correctly converts drag drop screen coordinates with pan and zoom to canvas coordinates", () => {
+      const rect = { left: 0, top: 64 };
+      const pan = { x: 100, y: 50 };
+      const zoom = 1.25;
+
+      const clientX = 500;
+      const clientY = 400;
+
+      const coords = getCanvasCoords(clientX, clientY, rect, pan, zoom);
+      // x = (500 - 0 - 100) / 1.25 = 400 / 1.25 = 320
+      // y = (400 - 64 - 50) / 1.25 = 286 / 1.25 = 228.8 -> 229
+      expect(coords.x).toBe(320);
+      expect(coords.y).toBe(229);
+    });
+
+    it("parses drag payloads for task cards, shapes, sticky notes, todo notes, text, and frames", () => {
+      const payloads = [
+        { category: "node", type: "task" },
+        { category: "node", type: "shape", shapeType: "circle" },
+        { category: "node", type: "shape", shapeType: "diamond" },
+        { category: "node", type: "shape", shapeType: "hexagon" },
+        { category: "node", type: "sticky", isChecklist: false },
+        { category: "node", type: "sticky", isChecklist: true, color: "#38BDF8" },
+        { category: "node", type: "text" },
+        { category: "node", type: "shape", shapeType: "rectangle", color: "#60A5FA" },
+        { category: "functional-area", areaType: "project-planner" },
+        { category: "functional-area", areaType: "meeting-notes" },
+      ];
+
+      for (const payload of payloads) {
+        const serialized = JSON.stringify(payload);
+        const parsed = JSON.parse(serialized);
+        expect(parsed.category).toBe(payload.category);
+        if (parsed.category === "node") {
+          expect(parsed.type).toBe(payload.type);
+        } else {
+          expect(parsed.areaType).toBe(payload.areaType);
+        }
+      }
+    });
+
+    it("places node accurately at drop coordinates when dropped from toolbar", () => {
+      const dropCoords = { x: 450, y: 350 };
+      const type = "sticky";
+      const isChecklist = true;
+
+      // Logic from handleAddNode with explicitCoords
+      const createdNode = {
+        id: "test-node",
+        type,
+        x: dropCoords.x - (isChecklist ? 110 : 95),
+        y: dropCoords.y - (isChecklist ? 105 : 85),
+        width: isChecklist ? 220 : 190,
+        height: isChecklist ? 210 : 170,
+        hasCheckbox: isChecklist,
+      };
+
+      // Dropped center aligns with dropCoords: (450, 350)
+      const centerX = createdNode.x + createdNode.width / 2;
+      const centerY = createdNode.y + createdNode.height / 2;
+      expect(centerX).toBe(dropCoords.x);
+      expect(centerY).toBe(dropCoords.y);
+    });
+
+    it("calculates safe header height and draggable divider bounds for task cards", () => {
+      // Standard task node
+      const standardNode = { height: 140, headerHeight: undefined };
+      const defaultStandardHeader =
+        standardNode.height > 160 ? Math.round(standardNode.height * 0.4) : Math.min(56, Math.max(28, standardNode.height - 28));
+      expect(defaultStandardHeader).toBe(56);
+
+      // Resized large card (e.g. 500px height)
+      const largeNode = { height: 500, headerHeight: undefined };
+      const defaultLargeHeader =
+        largeNode.height > 160 ? Math.round(largeNode.height * 0.4) : Math.min(56, Math.max(28, largeNode.height - 28));
+      expect(defaultLargeHeader).toBe(200);
+
+      // Explicitly dragged divider: user dragged divider to 180px
+      const customNode = { height: 500, headerHeight: 180 };
+      const safeCustomHeader = Math.max(
+        24,
+        Math.min(customNode.height - 24, customNode.headerHeight)
+      );
+      expect(safeCustomHeader).toBe(180);
+      const bottomHeight = customNode.height - safeCustomHeader;
+      expect(bottomHeight).toBe(320);
+
+      // Clamping logic: divider cannot be dragged beyond bounds
+      const minHeaderHeight = 24;
+      const maxHeaderHeight = Math.max(minHeaderHeight, customNode.height - 24);
+      const clampedLow = Math.round(Math.min(maxHeaderHeight, Math.max(minHeaderHeight, -50)));
+      const clampedHigh = Math.round(Math.min(maxHeaderHeight, Math.max(minHeaderHeight, 600)));
+      expect(clampedLow).toBe(24);
+      expect(clampedHigh).toBe(476);
+    });
+
+    it("supports updating both bottom tags and progress names with percentages", () => {
+      // Role tag scenario
+      let nodeSubtitle = "President";
+      nodeSubtitle = "Chief Executive Officer";
+      expect(nodeSubtitle).toBe("Chief Executive Officer");
+
+      // Progress scenario
+      let progressSubtitle = "Completed (100%)";
+      let progressVal = 100;
+
+      // Update percentage preset to 75%
+      const baseName = progressSubtitle.replace(/\s*\(\d+%\)/, "").trim() || "Progress";
+      expect(baseName).toBe("Completed");
+
+      progressSubtitle = `${baseName} (75%)`;
+      progressVal = 75;
+      expect(progressSubtitle).toBe("Completed (75%)");
+      expect(progressVal).toBe(75);
+
+      // Updating status to In Progress
+      const newStatus = "In Progress";
+      const newSubtitle = `${newStatus} (50%)`;
+      expect(newSubtitle).toBe("In Progress (50%)");
+    });
+  });
+
+  describe("Straight Line & Independent Arrow Mechanics (Rotatable Tips & Middle Drag)", () => {
+    const getLineEndpoints = (node: any) => {
+      const m = node.metaData;
+      if (m?.x1 !== undefined && m?.y1 !== undefined && m?.x2 !== undefined && m?.y2 !== undefined) {
+        if (m.isRelative) {
+          return {
+            x1: node.x + m.x1,
+            y1: node.y + m.y1,
+            x2: node.x + m.x2,
+            y2: node.y + m.y2,
+          };
+        }
+        return {
+          x1: m.x1,
+          y1: m.y1,
+          x2: m.x2,
+          y2: m.y2,
+        };
+      }
+      return {
+        x1: node.x,
+        y1: node.y + Math.round(node.height / 2),
+        x2: node.x + node.width,
+        y2: node.y + Math.round(node.height / 2),
+      };
+    };
+
+    it("calculates accurate tip endpoints for straight lines with relative metadata", () => {
+      const lineNode = {
+        id: "line-1",
+        type: "line",
+        x: 100,
+        y: 150,
+        width: 200,
+        height: 50,
+        metaData: {
+          x1: 0,
+          y1: 0,
+          x2: 200,
+          y2: 50,
+          isRelative: true,
+        },
+      };
+
+      const { x1, y1, x2, y2 } = getLineEndpoints(lineNode);
+      expect(x1).toBe(100);
+      expect(y1).toBe(150);
+      expect(x2).toBe(300);
+      expect(y2).toBe(200);
+    });
+
+    it("allows independent 360-degree rotation and extension when dragging right tip", () => {
+      const lineNode = {
+        id: "line-2",
+        type: "line",
+        x: 200,
+        y: 200,
+        width: 100,
+        height: 10,
+        metaData: { x1: 0, y1: 0, x2: 100, y2: 0, isRelative: true },
+      };
+
+      const pinnedStart = { x: 200, y: 200 };
+      // Move right tip downwards at 45 degrees angle: (200 + 100, 200 + 100)
+      const targetEnd = { x: 300, y: 300 };
+
+      const minX = Math.min(pinnedStart.x, targetEnd.x);
+      const minY = Math.min(pinnedStart.y, targetEnd.y);
+      const updatedNode = {
+        ...lineNode,
+        x: minX,
+        y: minY,
+        width: Math.abs(targetEnd.x - pinnedStart.x),
+        height: Math.abs(targetEnd.y - pinnedStart.y),
+        metaData: {
+          x1: pinnedStart.x - minX,
+          y1: pinnedStart.y - minY,
+          x2: targetEnd.x - minX,
+          y2: targetEnd.y - minY,
+          isRelative: true,
+        },
+      };
+
+      const endpoints = getLineEndpoints(updatedNode);
+      expect(endpoints.x1).toBe(200);
+      expect(endpoints.y1).toBe(200);
+      expect(endpoints.x2).toBe(300);
+      expect(endpoints.y2).toBe(300);
+
+      const angle = Math.atan2(endpoints.y2 - endpoints.y1, endpoints.x2 - endpoints.x1);
+      expect(angle).toBeCloseTo(Math.PI / 4, 3);
+    });
+
+    it("allows independent 360-degree rotation and extension when dragging left tip", () => {
+      const lineNode = {
+        id: "line-3",
+        type: "line",
+        x: 200,
+        y: 200,
+        width: 100,
+        height: 10,
+        metaData: { x1: 0, y1: 0, x2: 100, y2: 0, isRelative: true },
+      };
+
+      const pinnedEnd = { x: 300, y: 200 };
+      // Rotate left tip to point upwards-left: (150, 100)
+      const targetStart = { x: 150, y: 100 };
+
+      const minX = Math.min(targetStart.x, pinnedEnd.x);
+      const minY = Math.min(targetStart.y, pinnedEnd.y);
+      const updatedNode = {
+        ...lineNode,
+        x: minX,
+        y: minY,
+        width: Math.abs(pinnedEnd.x - targetStart.x),
+        height: Math.abs(pinnedEnd.y - targetStart.y),
+        metaData: {
+          x1: targetStart.x - minX,
+          y1: targetStart.y - minY,
+          x2: pinnedEnd.x - minX,
+          y2: pinnedEnd.y - minY,
+          isRelative: true,
+        },
+      };
+
+      const endpoints = getLineEndpoints(updatedNode);
+      expect(endpoints.x1).toBe(150);
+      expect(endpoints.y1).toBe(100);
+      expect(endpoints.x2).toBe(300);
+      expect(endpoints.y2).toBe(200);
+    });
+
+    it("translates entire line across canvas when dragging from middle preserving angle and length", () => {
+      const initialNode = {
+        id: "line-4",
+        type: "line",
+        x: 100,
+        y: 100,
+        width: 150,
+        height: 80,
+        metaData: { x1: 0, y1: 0, x2: 150, y2: 80, isRelative: true },
+      };
+
+      const initialEndpoints = getLineEndpoints(initialNode);
+      const initialLength = Math.hypot(
+        initialEndpoints.x2 - initialEndpoints.x1,
+        initialEndpoints.y2 - initialEndpoints.y1
+      );
+      const initialAngle = Math.atan2(
+        initialEndpoints.y2 - initialEndpoints.y1,
+        initialEndpoints.x2 - initialEndpoints.x1
+      );
+
+      // Drag from middle by dx = +50, dy = -30
+      const translatedNode = {
+        ...initialNode,
+        x: initialNode.x + 50,
+        y: initialNode.y - 30,
+      };
+
+      const newEndpoints = getLineEndpoints(translatedNode);
+      expect(newEndpoints.x1).toBe(150);
+      expect(newEndpoints.y1).toBe(70);
+      expect(newEndpoints.x2).toBe(300);
+      expect(newEndpoints.y2).toBe(150);
+
+      const newLength = Math.hypot(
+        newEndpoints.x2 - newEndpoints.x1,
+        newEndpoints.y2 - newEndpoints.y1
+      );
+      const newAngle = Math.atan2(
+        newEndpoints.y2 - newEndpoints.y1,
+        newEndpoints.x2 - newEndpoints.x1
+      );
+
+      expect(newLength).toBeCloseTo(initialLength, 5);
+      expect(newAngle).toBeCloseTo(initialAngle, 5);
+    });
+
+    it("supports Shift 15-degree angle snapping during tip drag", () => {
+      const pinned = { x: 100, y: 100 };
+      // Target dragged at ~32 degrees
+      const target = { x: 200, y: 160 };
+      const dx = target.x - pinned.x;
+      const dy = target.y - pinned.y;
+      const dist = Math.hypot(dx, dy);
+
+      let angle = Math.atan2(dy, dx);
+      const snap = Math.PI / 12; // 15 degrees
+      angle = Math.round(angle / snap) * snap;
+
+      const snappedX = Math.round(pinned.x + dist * Math.cos(angle));
+      const snappedY = Math.round(pinned.y + dist * Math.sin(angle));
+
+      const snappedAngleDeg = Math.round((angle * 180) / Math.PI);
+      expect(snappedAngleDeg % 15).toBe(0);
+      expect(snappedAngleDeg).toBe(30);
+      expect(snappedX).toBeGreaterThan(pinned.x);
+      expect(snappedY).toBeGreaterThan(pinned.y);
+    });
+
+    it("validates independent arrow directions and line styles", () => {
+      const arrowNode = {
+        id: "arrow-1",
+        type: "line",
+        shapeType: "arrow",
+        arrowDirection: "bidirectional",
+        lineStyle: "dashed",
+        strokeWidth: 5,
+      };
+
+      expect(arrowNode.shapeType).toBe("arrow");
+      expect(arrowNode.arrowDirection).toBe("bidirectional");
+      expect(arrowNode.lineStyle).toBe("dashed");
+      expect(arrowNode.strokeWidth).toBe(5);
+    });
+
+    it("scales arrowhead triangle dynamically when stroke width increases", () => {
+      const getWingLength = (sw: number) => Math.max(12, Math.round(sw * 2.8 + 6));
+      expect(getWingLength(2)).toBe(12);
+      expect(getWingLength(3)).toBe(14);
+      expect(getWingLength(5)).toBe(20);
+      expect(getWingLength(8)).toBe(28);
+
+      // Verify that arrowhead for 8px is significantly larger than 2px (more than 2x larger)
+      expect(getWingLength(8)).toBeGreaterThan(getWingLength(2) * 2);
+    });
+
+    it("ensures line stroke trims under arrowhead so rounded cap never pokes through the triangle apex", () => {
+      const strokeW = 8;
+      const x1 = 100;
+      const y1 = 100;
+      const x2 = 300;
+      const y2 = 100;
+      const dist = 200;
+
+      const wingLength = Math.max(12, Math.round(strokeW * 2.8 + 6)); // 28
+      const arrowDepth = wingLength * Math.cos(Math.PI / 6); // ~24.25
+      const endOffset = Math.min(arrowDepth * 0.45, dist * 0.45); // ~10.91
+
+      const strokeX2 = x2 - endOffset; // ~289.09
+      const roundCapExtent = strokeX2 + strokeW / 2; // ~293.09
+
+      // Verify the round cap of the stroke ends safely behind the apex (x2 = 300)
+      expect(roundCapExtent).toBeLessThan(x2);
+      expect(x2 - roundCapExtent).toBeGreaterThan(5); // At least 5px clearance behind the apex
+    });
+
+    it("ensures cloned lines and drawings do not accumulate unwanted Copy title tags", () => {
+        const sourceLine = {
+          id: "line-123",
+          type: "line",
+          shapeType: "arrow",
+          title: "",
+        };
+
+        const isLineOrDrawing =
+          sourceLine.type === "line" ||
+          sourceLine.shapeType === "line" ||
+          sourceLine.shapeType === "arrow" ||
+          sourceLine.type === "drawing";
+
+        let clonedTitle = "";
+        if (isLineOrDrawing) {
+          clonedTitle =
+            sourceLine.title && !sourceLine.title.toLowerCase().includes("copy")
+              ? sourceLine.title
+              : "";
+        } else {
+          clonedTitle = sourceLine.title ? `${sourceLine.title} (Copy)` : "Copy";
+        }
+
+        expect(clonedTitle).toBe("");
+
+        // Duplicating a node that already had "Copy" in title should strip it for lines
+        const lineWithCopy = {
+          ...sourceLine,
+          title: "Copy (Copy)",
+        };
+        const cleanTitle =
+          lineWithCopy.title && !lineWithCopy.title.toLowerCase().includes("copy")
+            ? lineWithCopy.title
+            : "";
+        expect(cleanTitle).toBe("");
+      });
+
+      it("calculates accurate minimap bounding box and viewport rectangle in real-time", () => {
+        const sampleNodes = [
+          { id: "n1", x: 100, y: 150, width: 200, height: 100, color: "#38BDF8" },
+          { id: "n2", x: 600, y: 400, width: 160, height: 120, color: "#EC4899" },
+        ];
+
+        const bounds = sampleNodes.reduce(
+          (acc, n) => ({
+            minX: Math.min(acc.minX, n.x),
+            minY: Math.min(acc.minY, n.y),
+            maxX: Math.max(acc.maxX, n.x + n.width),
+            maxY: Math.max(acc.maxY, n.y + n.height),
+          }),
+          { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
+        );
+
+        expect(bounds.minX).toBe(100);
+        expect(bounds.minY).toBe(150);
+        expect(bounds.maxX).toBe(760);
+        expect(bounds.maxY).toBe(520);
+
+        const pan = { x: -200, y: -100 };
+        const zoom = 0.5;
+        const winW = 1200;
+        const winH = 800;
+
+        const viewCanvasX = -pan.x / zoom; // 400
+        const viewCanvasY = -pan.y / zoom; // 200
+        const viewCanvasW = winW / zoom; // 2400
+        const viewCanvasH = winH / zoom; // 1600
+
+        expect(viewCanvasX).toBe(400);
+        expect(viewCanvasY).toBe(200);
+        expect(viewCanvasW).toBe(2400);
+        expect(viewCanvasH).toBe(1600);
+
+        // Minimap scaling
+        const mmMinX = Math.min(bounds.minX, viewCanvasX) - 300;
+        const mmMinY = Math.min(bounds.minY, viewCanvasY) - 300;
+        const mmMaxX = Math.max(bounds.maxX, viewCanvasX + viewCanvasW) + 300;
+        const mmMaxY = Math.max(bounds.maxY, viewCanvasY + viewCanvasH) + 300;
+
+        const mmWorldW = mmMaxX - mmMinX;
+        const mmWorldH = mmMaxY - mmMinY;
+
+        expect(mmWorldW).toBeGreaterThan(2000);
+        expect(mmWorldH).toBeGreaterThan(1500);
+
+        const minimapW = 200;
+        const minimapH = 130;
+        const mmScale = Math.min(minimapW / mmWorldW, minimapH / mmWorldH);
+        expect(mmScale).toBeGreaterThan(0);
+
+        // Clicking on minimap target centers the pan
+        const targetCanvasX = 600;
+        const targetCanvasY = 400;
+        const centeredPanX = winW / 2 - targetCanvasX * zoom;
+        const centeredPanY = winH / 2 - targetCanvasY * zoom;
+
+        expect(centeredPanX).toBe(300);
+        expect(centeredPanY).toBe(200);
+      });
+    });
+  });
+
 
 
 

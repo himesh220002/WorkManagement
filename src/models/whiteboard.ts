@@ -14,7 +14,8 @@ export type WhiteboardNodeType =
   | "pdf"
   | "markdown"
   | "json"
-  | "graphml";
+  | "graphml"
+  | "line";
 
 export interface IChecklistItem {
   id: string;
@@ -38,7 +39,9 @@ export interface IWhiteboardNode {
   color?: string;
   textColor?: string;
   fillType?: "solid" | "tint" | "pattern" | "none";
-  shapeType?: "rectangle" | "rounded" | "circle" | "diamond" | "triangle" | "star" | "heart" | "arrow-right" | "hexagon";
+  shapeType?: "rectangle" | "rounded" | "circle" | "diamond" | "triangle" | "star" | "heart" | "arrow-right" | "hexagon" | "line" | "arrow";
+  lineStyle?: "solid" | "dashed";
+  arrowDirection?: "forward" | "backward" | "bidirectional" | "none";
   fontSize?: string;
   fontWeight?: string;
   textAlign?: "left" | "center" | "right";
@@ -55,6 +58,7 @@ export interface IWhiteboardNode {
   fileExtension?: string;
   s3Key?: string;
   previewText?: string;
+  headerHeight?: number;
   metaData?: Record<string, any>;
 }
 
@@ -140,6 +144,7 @@ const whiteboardSchema = new Schema<IWhiteboard>(
             "markdown",
             "json",
             "graphml",
+            "line",
           ],
           default: "shape",
         },
@@ -152,6 +157,7 @@ const whiteboardSchema = new Schema<IWhiteboard>(
         previewText: { type: String, default: "" },
         metaData: { type: Schema.Types.Mixed, default: {} },
         progress: { type: Number, default: 0 },
+        headerHeight: { type: Number },
         x: { type: Number, required: true },
         y: { type: Number, required: true },
         width: { type: Number, required: true },
@@ -187,8 +193,20 @@ const whiteboardSchema = new Schema<IWhiteboard>(
             "heart",
             "arrow-right",
             "hexagon",
+            "line",
+            "arrow",
           ],
           default: "rectangle",
+        },
+        lineStyle: {
+          type: String,
+          enum: ["solid", "dashed"],
+          default: "solid",
+        },
+        arrowDirection: {
+          type: String,
+          enum: ["forward", "backward", "bidirectional", "none"],
+          default: "none",
         },
         fontSize: { type: String, default: "Medium" },
         fontWeight: { type: String, default: "normal" },

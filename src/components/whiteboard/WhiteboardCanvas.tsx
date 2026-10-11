@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -23,6 +23,8 @@ import {
   MoveRight,
   MoveLeft,
   ArrowLeftRight,
+  Minus,
+  ArrowUpRight,
   StickyNote,
   Type,
   Maximize,
@@ -63,6 +65,8 @@ import {
   Network,
   File,
   ListTodo,
+  Compass,
+  RefreshCcwIcon,
 } from "lucide-react";
 import { IWhiteboardNode, IWhiteboardEdge } from "@/models/whiteboard";
 import { WHITEBOARD_TEMPLATES, createFunctionalArea } from "@/lib/whiteboardTemplates";
@@ -76,6 +80,7 @@ import {
   deleteChecklistItem,
   getStickyTextColor,
 } from "@/lib/whiteboardChecklist";
+import { RxReset } from "react-icons/rx";
 
 interface WhiteboardCanvasProps {
   initialBoard: {
@@ -290,9 +295,8 @@ function TextColorPicker({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex flex-col items-center justify-center w-6 h-6 rounded hover:bg-[#282A33] px-1 py-0.5 cursor-pointer transition-colors group ${
-          isOpen ? "bg-[#282A33]" : ""
-        }`}
+        className={`flex flex-col items-center justify-center w-6 h-6 rounded hover:bg-[#282A33] px-1 py-0.5 cursor-pointer transition-colors group ${isOpen ? "bg-[#282A33]" : ""
+          }`}
         title={`Text Color (${currentColor})`}
         aria-label="Text Color"
       >
@@ -328,11 +332,10 @@ function TextColorPicker({
                   onChange(c.value);
                   setIsOpen(false);
                 }}
-                className={`w-5 h-5 rounded-full hover:scale-110 transition-transform border ${
-                  currentColor.toLowerCase() === c.value.toLowerCase()
-                    ? "ring-2 ring-blue-500 border-white scale-105"
-                    : "border-white/20"
-                }`}
+                className={`w-5 h-5 rounded-full hover:scale-110 transition-transform border ${currentColor.toLowerCase() === c.value.toLowerCase()
+                  ? "ring-2 ring-blue-500 border-white scale-105"
+                  : "border-white/20"
+                  }`}
                 style={{ backgroundColor: c.value }}
                 title={c.name}
               />
@@ -417,18 +420,43 @@ export default function WhiteboardCanvas({
   const [canRedo, setCanRedo] = useState<boolean>(false);
 
   // Pan & Zoom
-  const [zoom, setZoom] = useState<number>(0.3); // Default 30% matching screenshot 3
+  const [zoom, setZoom] = useState<number>(0.5); // Default 30% matching screenshot 3
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 50, y: 50 });
   const [isPanning, setIsPanning] = useState(false);
   const [startPanMouse, setStartPanMouse] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Tools & Selection
   const [activeTool, setActiveTool] = useState<
-    "select" | "hand" | "task" | "draw" | "shape" | "arrow" | "sticky" | "text" | "frame"
+    "select" | "hand" | "task" | "draw" | "shape" | "arrow" | "sticky" | "text" | "frame" | "line" | "arrow-line"
   >("select");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [editingField, setEditingField] = useState<"title" | "subtitle" | null>(null);
+
+  // Interactive Line Drawing on Canvas (Straight Line & Independent Arrow)
+  const [interactiveLineDrawing, setInteractiveLineDrawing] = useState<{
+    tool: "line" | "arrow-line";
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+  } | null>(null);
+
+  // Interactive Line Tip Dragging State (Left tip vs Right tip rotatable drag)
+  const [draggingLineTip, setDraggingLineTip] = useState<{
+    nodeId: string;
+    tip: "start" | "end";
+    pinnedPoint: { x: number; y: number };
+  } | null>(null);
+
+  // Interactive Line Middle Dragging State (Drag from middle to move entire line/arrow)
+  const [draggingLineMiddle, setDraggingLineMiddle] = useState<{
+    nodeId: string;
+    startX: number;
+    startY: number;
+    initialNode: { x: number; y: number };
+  } | null>(null);
 
   // Dragging Node & Temporary Group
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
@@ -474,6 +502,11 @@ export default function WhiteboardCanvas({
   const shapePaletteRef = useRef<HTMLDivElement>(null);
   const templateSelectorRef = useRef<HTMLDivElement>(null);
 
+  // Minimap / Navigator Radar State in bottom-right corner ("small section at right corner which displays position ontime")
+  const [showMinimap, setShowMinimap] = useState(true);
+  const minimapSvgRef = useRef<SVGSVGElement | null>(null);
+  const [isDraggingMinimap, setIsDraggingMinimap] = useState(false);
+
   // Double Click Creation Popover (Prompt requirement: "functions double left click opens")
   const [doubleClickMenu, setDoubleClickMenu] = useState<{
     x: number;
@@ -498,12 +531,21 @@ export default function WhiteboardCanvas({
     initialNode: { x: number; y: number; width: number; height: number };
   } | null>(null);
 
+  // Interactive Task Card Divider Resizing State (Header vs Bottom height split)
+  const [resizingDivider, setResizingDivider] = useState<{
+    nodeId: string;
+    startY: number;
+    initialHeaderHeight: number;
+    nodeHeight: number;
+  } | null>(null);
+
   // Shape switcher popover for selected shape node
   const [showShapeSwitcher, setShowShapeSwitcher] = useState(false);
 
   // Direct file upload ref for images, SVGs, graphs, diagrams
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDraggingFileOver, setIsDraggingFileOver] = useState(false);
+  const [isDraggingItemOver, setIsDraggingItemOver] = useState(false);
 
   // S3 object deletion modal & notification state ("Delete from here" vs "Delete here + S3")
   const [s3DeleteModal, setS3DeleteModal] = useState<{
@@ -608,7 +650,7 @@ export default function WhiteboardCanvas({
                       })
                     );
                   }
-                } catch {}
+                } catch { }
               }
             }
             setSaveStatus("saved");
@@ -654,7 +696,7 @@ export default function WhiteboardCanvas({
                 cached = parsed;
                 break;
               }
-            } catch {}
+            } catch { }
           }
         }
 
@@ -735,9 +777,9 @@ export default function WhiteboardCanvas({
               backgroundColor: canvasBgColorRef.current,
             }),
             keepalive: true,
-          }).catch(() => {});
+          }).catch(() => { });
         }
-      } catch {}
+      } catch { }
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -888,16 +930,16 @@ export default function WhiteboardCanvas({
       setIsFullscreen(true);
       try {
         if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(() => {});
+          document.documentElement.requestFullscreen().catch(() => { });
         }
-      } catch {}
+      } catch { }
     } else {
       setIsFullscreen(false);
       try {
         if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch(() => { });
         }
-      } catch {}
+      } catch { }
     }
   };
 
@@ -1070,9 +1112,9 @@ export default function WhiteboardCanvas({
                 const j = JSON.parse(rawText);
                 localMetaData.keyCount = typeof j === "object" && j !== null ? Object.keys(j).length : 0;
                 localMetaData.isArray = Array.isArray(j);
-              } catch {}
+              } catch { }
             }
-          } catch {}
+          } catch { }
         }
 
         const initialW = isImage ? 320 : isPdf ? 300 : isGraphml ? 340 : isJson ? 340 : isMarkdown ? 340 : 280;
@@ -1143,9 +1185,9 @@ export default function WhiteboardCanvas({
               const updated = prev.map((n) =>
                 n.id === tempId
                   ? {
-                      ...n,
-                      metaData: { ...n.metaData, isUploadingToS3: false, s3Error: json.error || "Upload warning" },
-                    }
+                    ...n,
+                    metaData: { ...n.metaData, isUploadingToS3: false, s3Error: json.error || "Upload warning" },
+                  }
                   : n
               );
               pushHistory(updated, edges);
@@ -1188,12 +1230,29 @@ export default function WhiteboardCanvas({
     if (!sourceNode) return;
 
     const newId = `${sourceNode.type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const isLineOrDrawing =
+      sourceNode.type === "line" ||
+      sourceNode.shapeType === "line" ||
+      sourceNode.shapeType === "arrow" ||
+      sourceNode.type === "drawing";
+
+    let clonedTitle = "";
+    if (isLineOrDrawing) {
+      // Lines, arrows, and drawings do not auto-generate unwanted "Copy" tags
+      clonedTitle =
+        sourceNode.title && !sourceNode.title.toLowerCase().includes("copy")
+          ? sourceNode.title
+          : "";
+    } else {
+      clonedTitle = sourceNode.title ? `${sourceNode.title} (Copy)` : "Copy";
+    }
+
     const clonedNode: IWhiteboardNode = {
       ...sourceNode,
       id: newId,
       x: sourceNode.x + 35,
       y: sourceNode.y + 35,
-      title: sourceNode.title ? `${sourceNode.title} (Copy)` : "Copy",
+      title: clonedTitle,
       zIndex: nodes.length + 2,
     };
 
@@ -1221,6 +1280,85 @@ export default function WhiteboardCanvas({
     });
   };
 
+  // Interactive Task Card Divider Resizing Mouse Down
+  const handleDividerMouseDown = (
+    node: IWhiteboardNode,
+    currentHeaderHeight: number,
+    e: React.MouseEvent
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setSelectedNodeId(node.id);
+    setSelectedNodeIds([node.id]);
+    setResizingDivider({
+      nodeId: node.id,
+      startY: e.clientY,
+      initialHeaderHeight: currentHeaderHeight,
+      nodeHeight: node.height,
+    });
+  };
+
+  // Calculate Start & End Tips for Straight Lines & Independent Arrows
+  const getLineEndpoints = useCallback(
+    (node: IWhiteboardNode): { x1: number; y1: number; x2: number; y2: number } => {
+      const m = node.metaData;
+      if (m?.x1 !== undefined && m?.y1 !== undefined && m?.x2 !== undefined && m?.y2 !== undefined) {
+        if (m.isRelative) {
+          return {
+            x1: node.x + m.x1,
+            y1: node.y + m.y1,
+            x2: node.x + m.x2,
+            y2: node.y + m.y2,
+          };
+        }
+        return {
+          x1: m.x1,
+          y1: m.y1,
+          x2: m.x2,
+          y2: m.y2,
+        };
+      }
+      return {
+        x1: node.x,
+        y1: node.y + Math.round(node.height / 2),
+        x2: node.x + node.width,
+        y2: node.y + Math.round(node.height / 2),
+      };
+    },
+    []
+  );
+
+  // Interactive Line Tip Drag (Rotatable & Extensible independent tip drag)
+  const handleLineTipMouseDown = (
+    node: IWhiteboardNode,
+    tip: "start" | "end",
+    e: React.MouseEvent
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setSelectedNodeId(node.id);
+    setSelectedNodeIds([node.id]);
+    const { x1, y1, x2, y2 } = getLineEndpoints(node);
+    setDraggingLineTip({
+      nodeId: node.id,
+      tip,
+      pinnedPoint: tip === "start" ? { x: x2, y: y2 } : { x: x1, y: y1 },
+    });
+  };
+
+  // Interactive Line Middle Drag (Move whole line by dragging from middle or stroke)
+  const handleLineMiddleMouseDown = (node: IWhiteboardNode, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedNodeId(node.id);
+    setSelectedNodeIds([node.id]);
+    setDraggingLineMiddle({
+      nodeId: node.id,
+      startX: e.clientX,
+      startY: e.clientY,
+      initialNode: { x: node.x, y: node.y },
+    });
+  };
+
   // Node Double Click -> Enter inline editing & format bar
   const handleNodeDoubleClick = (node: IWhiteboardNode, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1229,16 +1367,125 @@ export default function WhiteboardCanvas({
     setDoubleClickMenu(null);
   };
 
+  // Toolbar Item Drag Start (Hold to drag options onto whiteboard canvas)
+  const handleItemDragStart = (e: React.DragEvent, itemData: any) => {
+    e.dataTransfer.setData("application/taskflow-item", JSON.stringify(itemData));
+    e.dataTransfer.setData("text/plain", JSON.stringify(itemData));
+    e.dataTransfer.effectAllowed = "copy";
+  };
+
+  // --- MINIMAP / NAVIGATOR RADAR LOGIC ("small section at right corner which displays position ontime") ---
+  const minimapW = 200;
+  const minimapH = 130;
+
+  const mmContentBounds = useMemo(() => {
+    if (nodes.length === 0) {
+      return { minX: 0, minY: 0, maxX: 1800, maxY: 1200 };
+    }
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const n of nodes) {
+      minX = Math.min(minX, n.x);
+      minY = Math.min(minY, n.y);
+      maxX = Math.max(maxX, n.x + (n.width || 100));
+      maxY = Math.max(maxY, n.y + (n.height || 60));
+    }
+    return {
+      minX: Math.min(minX, 0),
+      minY: Math.min(minY, 0),
+      maxX: Math.max(maxX, 1600),
+      maxY: Math.max(maxY, 1000),
+    };
+  }, [nodes]);
+
+  const winWidth = typeof window !== "undefined" ? window.innerWidth : 1400;
+  const winHeight = typeof window !== "undefined" ? window.innerHeight : 900;
+  const viewCanvasX = -pan.x / zoom;
+  const viewCanvasY = -pan.y / zoom;
+  const viewCanvasW = winWidth / zoom;
+  const viewCanvasH = winHeight / zoom;
+
+  const mmMinX = Math.min(mmContentBounds.minX, viewCanvasX) - 300;
+  const mmMinY = Math.min(mmContentBounds.minY, viewCanvasY) - 300;
+  const mmMaxX = Math.max(mmContentBounds.maxX, viewCanvasX + viewCanvasW) + 300;
+  const mmMaxY = Math.max(mmContentBounds.maxY, viewCanvasY + viewCanvasH) + 300;
+
+  const mmWorldW = Math.max(mmMaxX - mmMinX, 1000);
+  const mmWorldH = Math.max(mmMaxY - mmMinY, 650);
+
+  const mmScale = Math.min(minimapW / mmWorldW, minimapH / mmWorldH);
+  const mmOffsetX = (minimapW - mmWorldW * mmScale) / 2;
+  const mmOffsetY = (minimapH - mmWorldH * mmScale) / 2;
+
+  const vpBoxX = mmOffsetX + (viewCanvasX - mmMinX) * mmScale;
+  const vpBoxY = mmOffsetY + (viewCanvasY - mmMinY) * mmScale;
+  const vpBoxW = Math.max(6, viewCanvasW * mmScale);
+  const vpBoxH = Math.max(4, viewCanvasH * mmScale);
+
+  const handleMinimapNav = useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      if (!minimapSvgRef.current) return;
+      const rect = minimapSvgRef.current.getBoundingClientRect();
+      const clickX = e.clientX - rect.left - mmOffsetX;
+      const clickY = e.clientY - rect.top - mmOffsetY;
+
+      const targetWorldX = mmMinX + clickX / mmScale;
+      const targetWorldY = mmMinY + clickY / mmScale;
+
+      const wW = typeof window !== "undefined" ? window.innerWidth : 1400;
+      const wH = typeof window !== "undefined" ? window.innerHeight : 900;
+
+      setPan({
+        x: Math.round(wW / 2 - targetWorldX * zoom),
+        y: Math.round(wH / 2 - targetWorldY * zoom),
+      });
+    },
+    [mmOffsetX, mmOffsetY, mmMinX, mmMinY, mmScale, zoom]
+  );
+
+  const handleFitAllToScreen = useCallback(() => {
+    if (nodes.length === 0) {
+      setPan({ x: 50, y: 50 });
+      setZoom(0.8);
+      return;
+    }
+    const margin = 120;
+    const contentW = mmContentBounds.maxX - mmContentBounds.minX + margin * 2;
+    const contentH = mmContentBounds.maxY - mmContentBounds.minY + margin * 2;
+    const wW = typeof window !== "undefined" ? window.innerWidth : 1400;
+    const wH = typeof window !== "undefined" ? window.innerHeight : 900;
+
+    const fitZoom = Math.min(
+      Math.max(wW / contentW, 0.15),
+      Math.max(wH / contentH, 0.15),
+      1.5
+    );
+    const newZoom = Number(fitZoom.toFixed(2));
+    const centerX = (mmContentBounds.minX + mmContentBounds.maxX) / 2;
+    const centerY = (mmContentBounds.minY + mmContentBounds.maxY) / 2;
+
+    setZoom(newZoom);
+    setPan({
+      x: Math.round(wW / 2 - centerX * newZoom),
+      y: Math.round(wH / 2 - centerY * newZoom),
+    });
+  }, [nodes, mmContentBounds]);
+
   // Add a node at specific canvas position
   const handleAddNode = (
     type: IWhiteboardNode["type"],
     shapeType: string = "rectangle",
     customColor?: string,
-    isChecklist?: boolean
+    isChecklist?: boolean,
+    explicitCoords?: { x: number; y: number }
   ) => {
-    const coords = doubleClickMenu
-      ? { x: doubleClickMenu.canvasX, y: doubleClickMenu.canvasY }
-      : { x: Math.round(-pan.x / zoom + 400), y: Math.round(-pan.y / zoom + 300) };
+    const coords = explicitCoords
+      ? explicitCoords
+      : doubleClickMenu
+        ? { x: doubleClickMenu.canvasX, y: doubleClickMenu.canvasY }
+        : { x: Math.round(-pan.x / zoom + 400), y: Math.round(-pan.y / zoom + 300) };
 
     const newId = `node-${Date.now()}`;
     let newNode: IWhiteboardNode;
@@ -1246,17 +1493,17 @@ export default function WhiteboardCanvas({
     if (type === "sticky") {
       const defaultChecklist = isChecklist
         ? [
-            { id: `c-${Date.now()}-1`, text: "Review milestone goals", completed: false },
-            { id: `c-${Date.now()}-2`, text: "Update project whiteboard", completed: false },
-            { id: `c-${Date.now()}-3`, text: "Sync with team squad", completed: false },
-          ]
+          { id: `c-${Date.now()}-1`, text: "Review milestone goals", completed: false },
+          { id: `c-${Date.now()}-2`, text: "Update project whiteboard", completed: false },
+          { id: `c-${Date.now()}-3`, text: "Sync with team squad", completed: false },
+        ]
         : undefined;
 
       newNode = {
         id: newId,
         type: "sticky",
-        x: coords.x - (isChecklist ? 110 : 90),
-        y: coords.y - (isChecklist ? 100 : 80),
+        x: coords.x - (isChecklist ? 110 : 95),
+        y: coords.y - (isChecklist ? 105 : 85),
         width: isChecklist ? 220 : 190,
         height: isChecklist ? 210 : 170,
         title: isChecklist ? "Action Items" : "Note",
@@ -1309,6 +1556,35 @@ export default function WhiteboardCanvas({
         imageUrl: "",
         zIndex: nodes.length + 1,
       };
+    } else if (type === "line" || shapeType === "line" || shapeType === "arrow") {
+      const isArrow = shapeType === "arrow";
+      const lineLen = 180;
+      const x1 = coords.x - Math.round(lineLen / 2);
+      const y1 = coords.y;
+      const x2 = coords.x + Math.round(lineLen / 2);
+      const y2 = coords.y;
+      newNode = {
+        id: newId,
+        type: "line",
+        shapeType: isArrow ? "arrow" : "line",
+        x: x1,
+        y: y1,
+        width: lineLen,
+        height: 20,
+        color: customColor || "#60A5FA",
+        strokeWidth: 3,
+        lineStyle: "solid",
+        arrowDirection: isArrow ? "forward" : "none",
+        title: "",
+        zIndex: nodes.length + 1,
+        metaData: {
+          x1: 0,
+          y1: 0,
+          x2: lineLen,
+          y2: 0,
+          isRelative: true,
+        },
+      };
     } else {
       newNode = {
         id: newId,
@@ -1331,15 +1607,19 @@ export default function WhiteboardCanvas({
     pushHistory(updated, edges);
     setSelectedNodeId(newId);
     setShowShapePalette(false);
+    triggerAutoSave(updated, edges);
   };
 
   // Insert complete functional area (Meeting Notes, Notes, Diagram, Project Planner)
   const handleInsertFunctionalArea = (
-    areaType: "meeting-notes" | "notes" | "diagram" | "project-planner" | "org-chart"
+    areaType: "meeting-notes" | "notes" | "diagram" | "project-planner" | "org-chart",
+    explicitCoords?: { x: number; y: number }
   ) => {
-    const coords = doubleClickMenu
-      ? { x: doubleClickMenu.canvasX, y: doubleClickMenu.canvasY }
-      : { x: Math.round(-pan.x / zoom + 200), y: Math.round(-pan.y / zoom + 150) };
+    const coords = explicitCoords
+      ? explicitCoords
+      : doubleClickMenu
+        ? { x: doubleClickMenu.canvasX, y: doubleClickMenu.canvasY }
+        : { x: Math.round(-pan.x / zoom + 200), y: Math.round(-pan.y / zoom + 150) };
 
     const { nodes: newNodes, edges: newEdges } = createFunctionalArea(areaType, coords.x, coords.y);
     const mergedNodes = [...nodes, ...newNodes];
@@ -1350,6 +1630,7 @@ export default function WhiteboardCanvas({
     pushHistory(mergedNodes, mergedEdges);
     setDoubleClickMenu(null);
     setShowTemplateSelector(false);
+    triggerAutoSave(mergedNodes, mergedEdges);
   };
 
   // Branching: Add a new branch node connected to edge parent alongside target
@@ -1567,6 +1848,19 @@ export default function WhiteboardCanvas({
         return;
       }
 
+      // Interactive Straight Line & Independent Arrow Drawing
+      if (activeTool === "line" || activeTool === "arrow-line") {
+        const coords = getCanvasCoords(e.clientX, e.clientY);
+        setInteractiveLineDrawing({
+          tool: activeTool,
+          startX: coords.x,
+          startY: coords.y,
+          currentX: coords.x,
+          currentY: coords.y,
+        });
+        return;
+      }
+
       // If in arrow connection mode, clicking empty canvas cancels active first node selection
       if (activeTool === "arrow") {
         if (connectingFromNodeId) {
@@ -1650,7 +1944,119 @@ export default function WhiteboardCanvas({
         setNodes((prev) =>
           prev.map((n) =>
             n.id === resizing.nodeId
-              ? { ...n, x: newX, y: newY, width: newW, height: newH }
+              ? {
+                ...n,
+                x: newX,
+                y: newY,
+                width: newW,
+                height: newH,
+                ...(n.headerHeight ? { headerHeight: Math.min(n.headerHeight, Math.max(24, newH - 24)) } : {}),
+              }
+              : n
+          )
+        );
+      });
+      return;
+    }
+
+    // 0.1 Resizing Task Card Divider Line (Header vs Bottom Height Split)
+    if (resizingDivider) {
+      const dy = (e.clientY - resizingDivider.startY) / zoom;
+      const minHeaderHeight = 24;
+      const maxHeaderHeight = Math.max(minHeaderHeight, resizingDivider.nodeHeight - 24);
+      const newHeaderHeight = Math.round(
+        Math.min(maxHeaderHeight, Math.max(minHeaderHeight, resizingDivider.initialHeaderHeight + dy))
+      );
+
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = requestAnimationFrame(() => {
+        setNodes((prev) =>
+          prev.map((n) =>
+            n.id === resizingDivider.nodeId
+              ? { ...n, headerHeight: newHeaderHeight }
+              : n
+          )
+        );
+      });
+      return;
+    }
+
+    // 0.2 Interactive Line / Arrow Drawing in Progress
+    if (interactiveLineDrawing) {
+      setInteractiveLineDrawing((prev) =>
+        prev ? { ...prev, currentX: coords.x, currentY: coords.y } : null
+      );
+      return;
+    }
+
+    // 0.3 Dragging Line Tip (Start or End Tip - Rotatable & Extensible independent tip drag)
+    if (draggingLineTip) {
+      let targetX = coords.x;
+      let targetY = coords.y;
+
+      if (e.shiftKey) {
+        const dx = targetX - draggingLineTip.pinnedPoint.x;
+        const dy = targetY - draggingLineTip.pinnedPoint.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        let angle = Math.atan2(dy, dx);
+        const snap = Math.PI / 12; // 15 degrees snap with Shift
+        angle = Math.round(angle / snap) * snap;
+        targetX = Math.round(draggingLineTip.pinnedPoint.x + dist * Math.cos(angle));
+        targetY = Math.round(draggingLineTip.pinnedPoint.y + dist * Math.sin(angle));
+      }
+
+      const pX = draggingLineTip.pinnedPoint.x;
+      const pY = draggingLineTip.pinnedPoint.y;
+      const newX1 = draggingLineTip.tip === "start" ? targetX : pX;
+      const newY1 = draggingLineTip.tip === "start" ? targetY : pY;
+      const newX2 = draggingLineTip.tip === "end" ? targetX : pX;
+      const newY2 = draggingLineTip.tip === "end" ? targetY : pY;
+
+      const minX = Math.min(newX1, newX2);
+      const minY = Math.min(newY1, newY2);
+      const w = Math.max(Math.abs(newX2 - newX1), 10);
+      const h = Math.max(Math.abs(newY2 - newY1), 10);
+
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = requestAnimationFrame(() => {
+        setNodes((prev) =>
+          prev.map((n) =>
+            n.id === draggingLineTip.nodeId
+              ? {
+                ...n,
+                x: minX,
+                y: minY,
+                width: w,
+                height: h,
+                metaData: {
+                  ...n.metaData,
+                  x1: newX1 - minX,
+                  y1: newY1 - minY,
+                  x2: newX2 - minX,
+                  y2: newY2 - minY,
+                  isRelative: true,
+                },
+              }
+              : n
+          )
+        );
+      });
+      return;
+    }
+
+    // 0.4 Dragging Line Middle (Move whole line by dragging middle or stroke)
+    if (draggingLineMiddle) {
+      const dx = (e.clientX - draggingLineMiddle.startX) / zoom;
+      const dy = (e.clientY - draggingLineMiddle.startY) / zoom;
+      const newX = Math.round(draggingLineMiddle.initialNode.x + dx);
+      const newY = Math.round(draggingLineMiddle.initialNode.y + dy);
+
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = requestAnimationFrame(() => {
+        setNodes((prev) =>
+          prev.map((n) =>
+            n.id === draggingLineMiddle.nodeId
+              ? { ...n, x: newX, y: newY }
               : n
           )
         );
@@ -1764,6 +2170,75 @@ export default function WhiteboardCanvas({
     if (resizing) {
       setResizing(null);
       pushHistory(nodesRef.current, edgesRef.current);
+    }
+
+    if (resizingDivider) {
+      setResizingDivider(null);
+      pushHistory(nodesRef.current, edgesRef.current);
+      triggerAutoSave(nodesRef.current, edgesRef.current);
+    }
+
+    // Finalize interactive straight line / independent arrow drawing
+    if (interactiveLineDrawing) {
+      const isArrow = interactiveLineDrawing.tool === "arrow-line";
+      const dx = interactiveLineDrawing.currentX - interactiveLineDrawing.startX;
+      const dy = interactiveLineDrawing.currentY - interactiveLineDrawing.startY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const endX = dist < 8 ? interactiveLineDrawing.startX + 180 : interactiveLineDrawing.currentX;
+      const endY = dist < 8 ? interactiveLineDrawing.startY : interactiveLineDrawing.currentY;
+
+      const x1 = interactiveLineDrawing.startX;
+      const y1 = interactiveLineDrawing.startY;
+      const x2 = endX;
+      const y2 = endY;
+      const minX = Math.min(x1, x2);
+      const minY = Math.min(y1, y2);
+      const w = Math.max(Math.abs(x2 - x1), 10);
+      const h = Math.max(Math.abs(y2 - y1), 10);
+      const newId = `line-${Date.now()}`;
+      const newLineNode: IWhiteboardNode = {
+        id: newId,
+        type: "line",
+        shapeType: isArrow ? "arrow" : "line",
+        x: minX,
+        y: minY,
+        width: w,
+        height: h,
+        color: activeColor || "#60A5FA",
+        strokeWidth: 3,
+        lineStyle: "solid",
+        arrowDirection: isArrow ? "forward" : "none",
+        title: "",
+        zIndex: nodes.length + 1,
+        metaData: {
+          x1: x1 - minX,
+          y1: y1 - minY,
+          x2: x2 - minX,
+          y2: y2 - minY,
+          isRelative: true,
+        },
+      };
+
+      const updated = [...nodes, newLineNode];
+      setNodes(updated);
+      pushHistory(updated, edges);
+      setSelectedNodeId(newId);
+      setSelectedNodeIds([newId]);
+      setActiveTool("select");
+      setInteractiveLineDrawing(null);
+      triggerAutoSave(updated, edges);
+    }
+
+    if (draggingLineTip) {
+      setDraggingLineTip(null);
+      pushHistory(nodesRef.current, edgesRef.current);
+      triggerAutoSave(nodesRef.current, edgesRef.current);
+    }
+
+    if (draggingLineMiddle) {
+      setDraggingLineMiddle(null);
+      pushHistory(nodesRef.current, edgesRef.current);
+      triggerAutoSave(nodesRef.current, edgesRef.current);
     }
 
     if (isDraggingGroup) {
@@ -1894,9 +2369,9 @@ export default function WhiteboardCanvas({
         Boolean(editingNodeId) ||
         Boolean(
           document.activeElement &&
-            (document.activeElement.tagName === "INPUT" ||
-              document.activeElement.tagName === "TEXTAREA" ||
-              (document.activeElement as HTMLElement).isContentEditable)
+          (document.activeElement.tagName === "INPUT" ||
+            document.activeElement.tagName === "TEXTAREA" ||
+            (document.activeElement as HTMLElement).isContentEditable)
         );
 
       // 2. Undo & Redo Shortcuts (Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z, Cmd+Z, Cmd+Shift+Z)
@@ -1948,6 +2423,8 @@ export default function WhiteboardCanvas({
         setActiveTool("arrow");
       } else if (e.key === "p" || e.key === "P" || e.key === "d" || e.key === "D") {
         setActiveTool("draw");
+      } else if (e.key === "l" || e.key === "L") {
+        setActiveTool("line");
       } else if (e.key === "n" || e.key === "N") {
         setActiveTool("sticky");
         if (e.shiftKey) {
@@ -2082,10 +2559,10 @@ export default function WhiteboardCanvas({
         selectedNodeIds.length > 0
           ? selectedNodeIds
           : selectedNodeId
-          ? [selectedNodeId]
-          : fallbackNodeId
-          ? [fallbackNodeId]
-          : [];
+            ? [selectedNodeId]
+            : fallbackNodeId
+              ? [fallbackNodeId]
+              : [];
 
       if (targetIds.length === 0 && editingNodeId) {
         targetIds = [editingNodeId];
@@ -2114,11 +2591,11 @@ export default function WhiteboardCanvas({
       const updatedNodes = nodes.map((n) =>
         n.id === nodeId
           ? {
-              ...n,
-              hasCheckbox: true,
-              checklist: updatedList,
-              body: updatedBody,
-            }
+            ...n,
+            hasCheckbox: true,
+            checklist: updatedList,
+            body: updatedBody,
+          }
           : n
       );
       setNodes(updatedNodes);
@@ -2138,11 +2615,11 @@ export default function WhiteboardCanvas({
       const updatedNodes = nodesRef.current.map((n) =>
         n.id === nodeId
           ? {
-              ...n,
-              hasCheckbox: true,
-              checklist: updatedList,
-              body: updatedBody,
-            }
+            ...n,
+            hasCheckbox: true,
+            checklist: updatedList,
+            body: updatedBody,
+          }
           : n
       );
       nodesRef.current = updatedNodes;
@@ -2163,12 +2640,12 @@ export default function WhiteboardCanvas({
       const updatedNodes = nodes.map((n) =>
         n.id === nodeId
           ? {
-              ...n,
-              hasCheckbox: true,
-              checklist: updatedList,
-              body: updatedBody,
-              height: Math.max(n.height, Math.min(500, 80 + updatedList.length * 34)),
-            }
+            ...n,
+            hasCheckbox: true,
+            checklist: updatedList,
+            body: updatedBody,
+            height: Math.max(n.height, Math.min(500, 80 + updatedList.length * 34)),
+          }
           : n
       );
       setNodes(updatedNodes);
@@ -2190,12 +2667,12 @@ export default function WhiteboardCanvas({
       const updatedNodes = nodes.map((n) =>
         n.id === nodeId
           ? {
-              ...n,
-              hasCheckbox: true,
-              checklist: updatedList,
-              body: updatedBody,
-              height: Math.max(n.height, Math.min(500, 80 + updatedList.length * 34)),
-            }
+            ...n,
+            hasCheckbox: true,
+            checklist: updatedList,
+            body: updatedBody,
+            height: Math.max(n.height, Math.min(500, 80 + updatedList.length * 34)),
+          }
           : n
       );
       setNodes(updatedNodes);
@@ -2215,11 +2692,11 @@ export default function WhiteboardCanvas({
       const updatedNodes = nodes.map((n) =>
         n.id === nodeId
           ? {
-              ...n,
-              hasCheckbox: true,
-              checklist: updatedList,
-              body: updatedBody,
-            }
+            ...n,
+            hasCheckbox: true,
+            checklist: updatedList,
+            body: updatedBody,
+          }
           : n
       );
       setNodes(updatedNodes);
@@ -2291,8 +2768,8 @@ export default function WhiteboardCanvas({
       node.fillType === "solid"
         ? node.color || "#0078D4"
         : node.fillType === "tint"
-        ? `${node.color || "#0078D4"}33`
-        : "transparent";
+          ? `${node.color || "#0078D4"}33`
+          : "transparent";
     const stroke = node.color || "#0078D4";
     const strokeWidth = 2;
 
@@ -2456,11 +2933,13 @@ export default function WhiteboardCanvas({
     tipY: number,
     fromX: number,
     fromY: number,
-    color: string = "#60A5FA"
+    color: string = "#60A5FA",
+    strokeWidth: number = 3
   ) => {
     let angle = Math.atan2(tipY - fromY, tipX - fromX);
     if (isNaN(angle)) angle = 0;
-    const wingLength = 11;
+    // Dynamically scale triangle size with line width (User request: triangle increases when line width changes)
+    const wingLength = Math.max(12, Math.round(strokeWidth * 2.8 + 6));
     const wingAngle = Math.PI / 6; // 30 degrees
     const wing1X = tipX - wingLength * Math.cos(angle - wingAngle);
     const wing1Y = tipY - wingLength * Math.sin(angle - wingAngle);
@@ -2688,12 +3167,53 @@ export default function WhiteboardCanvas({
     });
   };
 
+  // Handle dropping draggable toolbar items or files onto canvas
+  const handleCanvasDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingFileOver(false);
+    setIsDraggingItemOver(false);
+
+    // Check if an item was dragged from bottom toolbar or palettes
+    const customData =
+      e.dataTransfer.getData("application/taskflow-item") ||
+      e.dataTransfer.getData("text/plain");
+
+    if (customData) {
+      try {
+        const parsed = JSON.parse(customData);
+        const dropCoords = getCanvasCoords(e.clientX, e.clientY);
+
+        if (parsed.category === "functional-area") {
+          handleInsertFunctionalArea(parsed.areaType, dropCoords);
+          setShowTemplateSelector(false);
+          return;
+        } else if (parsed.category === "node") {
+          handleAddNode(
+            parsed.type,
+            parsed.shapeType || "rectangle",
+            parsed.color,
+            parsed.isChecklist,
+            dropCoords
+          );
+          setShowShapePalette(false);
+          return;
+        }
+      } catch { }
+    }
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processUploadedFiles(e.dataTransfer.files, e.clientX, e.clientY);
+    }
+  };
+
   return (
     <div
       onDragEnter={(e) => {
         e.preventDefault();
         if (e.dataTransfer.types.includes("Files")) {
           setIsDraggingFileOver(true);
+        } else {
+          setIsDraggingItemOver(true);
         }
       }}
       onDragOver={(e) => {
@@ -2707,21 +3227,23 @@ export default function WhiteboardCanvas({
         e.preventDefault();
         if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) {
           setIsDraggingFileOver(false);
+          setIsDraggingItemOver(false);
         }
       }}
-      onDrop={(e) => {
-        e.preventDefault();
-        setIsDraggingFileOver(false);
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-          processUploadedFiles(e.dataTransfer.files, e.clientX, e.clientY);
-        }
-      }}
-      className={`${
-        isFullscreen
-          ? "fixed inset-0 z-[999999] w-screen h-screen m-0 p-0"
-          : "relative w-full h-[calc(100vh-64px)]"
-      } overflow-hidden bg-[#0D0E11] text-[#E1DFDD] select-none`}
+      onDrop={handleCanvasDrop}
+      className={`${isFullscreen
+        ? "fixed inset-0 z-[999999] w-screen h-screen m-0 p-0"
+        : "relative w-full h-[calc(100vh-64px)]"
+        } overflow-hidden bg-[#0D0E11] text-[#E1DFDD] select-none`}
     >
+      {/* Visual Drop Guide Pill when dragging toolbar items */}
+      {isDraggingItemOver && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none bg-blue-600/95 backdrop-blur-md text-white text-xs font-semibold px-4 py-2 rounded-full shadow-2xl border border-blue-400/50 animate-in fade-in-50 flex items-center gap-2">
+          <MousePointer className="w-3.5 h-3.5 text-blue-200 animate-pulse" />
+          <span>Release to place item at cursor position</span>
+        </div>
+      )}
+
       {/* Drag & Drop Visual Drop Zone Overlay */}
       {isDraggingFileOver && (
         <div className="absolute inset-0 z-50 pointer-events-none bg-blue-500/10 backdrop-blur-[2px] border-2 border-dashed border-blue-400/60 rounded-xl flex items-center justify-center m-4 animate-in fade-in-50">
@@ -2829,9 +3351,8 @@ export default function WhiteboardCanvas({
           {/* Edge-to-Edge True Fullscreen Maximize Toggle */}
           <button
             onClick={toggleFullscreen}
-            className={`p-1.5 rounded-md hover:bg-[#202228] transition-colors ${
-              isFullscreen ? "text-cyan-400 bg-[#202228]" : "text-gray-400 hover:text-white"
-            }`}
+            className={`p-1.5 rounded-md hover:bg-[#202228] transition-colors ${isFullscreen ? "text-cyan-400 bg-[#202228]" : "text-gray-400 hover:text-white"
+              }`}
             title={isFullscreen ? "Exit Fullscreen (Esc)" : "Full Screen (Zero Spaces)"}
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -2898,9 +3419,8 @@ export default function WhiteboardCanvas({
                             updateSelectedNode({ shapeType: st.type as any });
                             setShowShapeSwitcher(false);
                           }}
-                          className={`p-1.5 rounded hover:bg-[#282A33] flex items-center justify-center ${
-                            selectedNode.shapeType === st.type ? "bg-blue-600 text-white" : "text-gray-300"
-                          }`}
+                          className={`p-1.5 rounded hover:bg-[#282A33] flex items-center justify-center ${selectedNode.shapeType === st.type ? "bg-blue-600 text-white" : "text-gray-300"
+                            }`}
                           title={st.label}
                         >
                           <Icon className="w-3.5 h-3.5" />
@@ -2918,9 +3438,8 @@ export default function WhiteboardCanvas({
                     fontWeight: selectedNode.fontWeight === "bold" ? "normal" : "bold",
                   })
                 }
-                className={`p-1 rounded hover:bg-[#282A33] ${
-                  selectedNode.fontWeight === "bold" ? "text-blue-400 bg-[#282A33]" : ""
-                }`}
+                className={`p-1 rounded hover:bg-[#282A33] ${selectedNode.fontWeight === "bold" ? "text-blue-400 bg-[#282A33]" : ""
+                  }`}
                 title="Bold text"
               >
                 <Bold className="w-3.5 h-3.5" />
@@ -2959,11 +3478,10 @@ export default function WhiteboardCanvas({
                       setActiveFillType(ft);
                       updateSelectedNode({ fillType: ft });
                     }}
-                    className={`px-1.5 py-0.5 rounded text-[10px] capitalize ${
-                      selectedNode.fillType === ft
-                        ? "bg-blue-600 text-white font-bold"
-                        : "text-gray-400 hover:text-white"
-                    }`}
+                    className={`px-1.5 py-0.5 rounded text-[10px] capitalize ${selectedNode.fillType === ft
+                      ? "bg-blue-600 text-white font-bold"
+                      : "text-gray-400 hover:text-white"
+                      }`}
                   >
                     {ft}
                   </button>
@@ -3012,19 +3530,78 @@ export default function WhiteboardCanvas({
           {/* B. TASK CONTROLS */}
           {selectedNode.type === "task" && (
             <>
-              {/* Status pills */}
+              {/* Status pills with smart progress presets */}
               <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33]">
-                {(["Active", "In Progress", "Completed", "Backlog"] as const).map((st) => (
-                  <button
-                    key={st}
-                    onClick={() => updateSelectedNode({ status: st, subtitle: st })}
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all ${
-                      (selectedNode.status || "Active").toLowerCase() === st.toLowerCase()
+                {(["Active", "In Progress", "Completed", "Backlog"] as const).map((st) => {
+                  const isCurrent = (selectedNode.status || "").toLowerCase() === st.toLowerCase();
+                  return (
+                    <button
+                      key={st}
+                      onClick={() => {
+                        let newSubtitle = st as string;
+                        let prog = 0;
+                        if (st === "Completed") {
+                          newSubtitle = "Completed (100%)";
+                          prog = 100;
+                        } else if (st === "In Progress") {
+                          const match = (selectedNode.subtitle || "").match(/\((\d+)%\)/);
+                          prog = match ? parseInt(match[1], 10) : 50;
+                          newSubtitle = `In Progress (${prog}%)`;
+                        } else if (st === "Active") {
+                          const match = (selectedNode.subtitle || "").match(/\((\d+)%\)/);
+                          prog = match ? parseInt(match[1], 10) : 100;
+                          newSubtitle = `Active (${prog}%)`;
+                        } else if (st === "Backlog") {
+                          newSubtitle = "Planned (0%)";
+                          prog = 0;
+                        }
+                        handleLiveTextChange(selectedNode.id, { status: st, subtitle: newSubtitle, progress: prog });
+                        updateSelectedNode({ status: st, subtitle: newSubtitle, progress: prog });
+                      }}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all ${isCurrent
                         ? "bg-blue-600 text-white font-bold"
                         : "text-gray-400 hover:text-white"
-                    }`}
+                        }`}
+                    >
+                      {st}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Tag / Progress Name & Percentage Input */}
+              <div className="flex items-center gap-1 bg-[#121316] px-1.5 py-0.5 rounded border border-[#282B33]">
+                <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Tag / Progress:</span>
+                <input
+                  type="text"
+                  value={selectedNode.subtitle || ""}
+                  placeholder="e.g. Completed (100%) or President"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    handleLiveTextChange(selectedNode.id, { subtitle: val });
+                    updateSelectedNode({ subtitle: val });
+                  }}
+                  className="bg-[#1A1C22] text-xs text-blue-200 border border-blue-500/30 focus:border-blue-400 px-1.5 py-0.5 rounded w-32 md:w-40 focus:outline-none font-bold placeholder:text-gray-500"
+                  title="Edit bottom tag or progress name & percentage"
+                />
+              </div>
+
+              {/* Quick Percentage Presets */}
+              <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33]">
+                {[0, 25, 50, 75, 90, 100].map((pct) => (
+                  <button
+                    key={pct}
+                    onClick={() => {
+                      const curr = selectedNode.subtitle || selectedNode.status || "In Progress";
+                      const base = curr.replace(/\s*\(\d+%\)/, "").trim() || "Progress";
+                      const newSub = `${base} (${pct}%)`;
+                      handleLiveTextChange(selectedNode.id, { subtitle: newSub, progress: pct });
+                      updateSelectedNode({ subtitle: newSub, progress: pct });
+                    }}
+                    className="px-1 py-0.5 rounded text-[9px] font-bold text-blue-300 hover:text-white hover:bg-blue-600/40 transition-colors"
+                    title={`Set progress to ${pct}%`}
                   >
-                    {st}
+                    {pct}%
                   </button>
                 ))}
               </div>
@@ -3086,11 +3663,10 @@ export default function WhiteboardCanvas({
               {/* Checklist / Todo Mode Toggle */}
               <button
                 onClick={() => handleToggleStickyChecklist(selectedNode)}
-                className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                  selectedNode.hasCheckbox || (selectedNode.checklist && selectedNode.checklist.length > 0)
-                    ? "bg-blue-600/30 text-blue-300 ring-1 ring-blue-500/50"
-                    : "text-gray-300 hover:text-white hover:bg-[#282A33]"
-                }`}
+                className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${selectedNode.hasCheckbox || (selectedNode.checklist && selectedNode.checklist.length > 0)
+                  ? "bg-blue-600/30 text-blue-300 ring-1 ring-blue-500/50"
+                  : "text-gray-300 hover:text-white hover:bg-[#282A33]"
+                  }`}
                 title={
                   selectedNode.hasCheckbox || (selectedNode.checklist && selectedNode.checklist.length > 0)
                     ? "Switch to Plain Text Note"
@@ -3131,9 +3707,8 @@ export default function WhiteboardCanvas({
                   <button
                     key={c.name}
                     onClick={() => updateSelectedNode({ color: c.color })}
-                    className={`w-4 h-4 rounded-full transition-transform ${
-                      selectedNode.color === c.color ? "ring-2 ring-white scale-110" : "hover:scale-110"
-                    }`}
+                    className={`w-4 h-4 rounded-full transition-transform ${selectedNode.color === c.color ? "ring-2 ring-white scale-110" : "hover:scale-110"
+                      }`}
                     style={{ backgroundColor: c.color }}
                     title={c.name}
                   />
@@ -3144,27 +3719,24 @@ export default function WhiteboardCanvas({
 
               <button
                 onClick={() => updateSelectedNode({ textAlign: "left" })}
-                className={`p-1 rounded hover:bg-[#282A33] ${
-                  selectedNode.textAlign === "left" || !selectedNode.textAlign ? "text-blue-400 bg-[#282A33]" : ""
-                }`}
+                className={`p-1 rounded hover:bg-[#282A33] ${selectedNode.textAlign === "left" || !selectedNode.textAlign ? "text-blue-400 bg-[#282A33]" : ""
+                  }`}
                 title="Align Left"
               >
                 <AlignLeft className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => updateSelectedNode({ textAlign: "center" })}
-                className={`p-1 rounded hover:bg-[#282A33] ${
-                  selectedNode.textAlign === "center" ? "text-blue-400 bg-[#282A33]" : ""
-                }`}
+                className={`p-1 rounded hover:bg-[#282A33] ${selectedNode.textAlign === "center" ? "text-blue-400 bg-[#282A33]" : ""
+                  }`}
                 title="Align Center"
               >
                 <AlignCenter className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => updateSelectedNode({ textAlign: "right" })}
-                className={`p-1 rounded hover:bg-[#282A33] ${
-                  selectedNode.textAlign === "right" ? "text-blue-400 bg-[#282A33]" : ""
-                }`}
+                className={`p-1 rounded hover:bg-[#282A33] ${selectedNode.textAlign === "right" ? "text-blue-400 bg-[#282A33]" : ""
+                  }`}
                 title="Align Right"
               >
                 <AlignRight className="w-3.5 h-3.5" />
@@ -3193,11 +3765,10 @@ export default function WhiteboardCanvas({
                   <button
                     key={sz}
                     onClick={() => updateSelectedNode({ fontSize: sz })}
-                    className={`px-1.5 py-0.5 rounded text-[10px] ${
-                      (selectedNode.fontSize || "Medium") === sz
-                        ? "bg-blue-600 text-white font-bold"
-                        : "text-gray-400 hover:text-white"
-                    }`}
+                    className={`px-1.5 py-0.5 rounded text-[10px] ${(selectedNode.fontSize || "Medium") === sz
+                      ? "bg-blue-600 text-white font-bold"
+                      : "text-gray-400 hover:text-white"
+                      }`}
                   >
                     {sz[0]}
                   </button>
@@ -3216,9 +3787,8 @@ export default function WhiteboardCanvas({
                     fontWeight: selectedNode.fontWeight === "bold" ? "normal" : "bold",
                   })
                 }
-                className={`p-1 rounded hover:bg-[#282A33] ${
-                  selectedNode.fontWeight === "bold" ? "text-blue-400 bg-[#282A33]" : ""
-                }`}
+                className={`p-1 rounded hover:bg-[#282A33] ${selectedNode.fontWeight === "bold" ? "text-blue-400 bg-[#282A33]" : ""
+                  }`}
                 title="Bold"
               >
                 <Bold className="w-3.5 h-3.5" />
@@ -3226,27 +3796,24 @@ export default function WhiteboardCanvas({
 
               <button
                 onClick={() => updateSelectedNode({ textAlign: "left" })}
-                className={`p-1 rounded hover:bg-[#282A33] ${
-                  selectedNode.textAlign === "left" || !selectedNode.textAlign ? "text-blue-400 bg-[#282A33]" : ""
-                }`}
+                className={`p-1 rounded hover:bg-[#282A33] ${selectedNode.textAlign === "left" || !selectedNode.textAlign ? "text-blue-400 bg-[#282A33]" : ""
+                  }`}
                 title="Align Left"
               >
                 <AlignLeft className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => updateSelectedNode({ textAlign: "center" })}
-                className={`p-1 rounded hover:bg-[#282A33] ${
-                  selectedNode.textAlign === "center" ? "text-blue-400 bg-[#282A33]" : ""
-                }`}
+                className={`p-1 rounded hover:bg-[#282A33] ${selectedNode.textAlign === "center" ? "text-blue-400 bg-[#282A33]" : ""
+                  }`}
                 title="Align Center"
               >
                 <AlignCenter className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => updateSelectedNode({ textAlign: "right" })}
-                className={`p-1 rounded hover:bg-[#282A33] ${
-                  selectedNode.textAlign === "right" ? "text-blue-400 bg-[#282A33]" : ""
-                }`}
+                className={`p-1 rounded hover:bg-[#282A33] ${selectedNode.textAlign === "right" ? "text-blue-400 bg-[#282A33]" : ""
+                  }`}
                 title="Align Right"
               >
                 <AlignRight className="w-3.5 h-3.5" />
@@ -3279,31 +3846,31 @@ export default function WhiteboardCanvas({
             selectedNode.type === "json" ||
             selectedNode.type === "markdown" ||
             selectedNode.type === "file") && (
-            <>
-              {selectedNode.fileUrl && (
-                <a
-                  href={selectedNode.fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#252834] hover:bg-[#2E3242] text-white text-[11px] font-medium transition-colors"
-                  title="Open file from AWS S3"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Open S3 File</span>
-                </a>
-              )}
-              {selectedNode.type === "graphml" && selectedNode.previewText && (
-                <button
-                  onClick={() => handleImportGraphMLToCanvas(selectedNode)}
-                  className="flex items-center gap-1.5 px-2 py-1 rounded bg-indigo-600/40 hover:bg-indigo-600/60 text-indigo-200 text-[11px] font-medium transition-colors border border-indigo-500/30"
-                  title="Unpack GraphML topology into native canvas nodes & arrows"
-                >
-                  <Network className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Unpack Topology</span>
-                </button>
-              )}
-            </>
-          )}
+              <>
+                {selectedNode.fileUrl && (
+                  <a
+                    href={selectedNode.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#252834] hover:bg-[#2E3242] text-white text-[11px] font-medium transition-colors"
+                    title="Open file from AWS S3"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Open S3 File</span>
+                  </a>
+                )}
+                {selectedNode.type === "graphml" && selectedNode.previewText && (
+                  <button
+                    onClick={() => handleImportGraphMLToCanvas(selectedNode)}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded bg-indigo-600/40 hover:bg-indigo-600/60 text-indigo-200 text-[11px] font-medium transition-colors border border-indigo-500/30"
+                    title="Unpack GraphML topology into native canvas nodes & arrows"
+                  >
+                    <Network className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Unpack Topology</span>
+                  </button>
+                )}
+              </>
+            )}
 
           {/* F. DRAWING CONTROLS */}
           {selectedNode.type === "drawing" && (
@@ -3313,11 +3880,10 @@ export default function WhiteboardCanvas({
                   <button
                     key={sw}
                     onClick={() => updateSelectedNode({ strokeWidth: sw })}
-                    className={`px-1.5 py-0.5 rounded text-[10px] ${
-                      (selectedNode.strokeWidth || 3) === sw
-                        ? "bg-pink-600 text-white font-bold"
-                        : "text-gray-400 hover:text-white"
-                    }`}
+                    className={`px-1.5 py-0.5 rounded text-[10px] ${(selectedNode.strokeWidth || 3) === sw
+                      ? "bg-pink-600 text-white font-bold"
+                      : "text-gray-400 hover:text-white"
+                      }`}
                   >
                     {sw}px
                   </button>
@@ -3383,6 +3949,147 @@ export default function WhiteboardCanvas({
               </div>
             </>
           )}
+
+          {/* H. STRAIGHT LINE & INDEPENDENT ARROW CONTROLS */}
+          {(selectedNode.type === "line" ||
+            selectedNode.shapeType === "line" ||
+            selectedNode.shapeType === "arrow") && (
+              <>
+                {/* Arrow Direction switch: None, Forward ->, Backward <-, Bidirectional <-> */}
+                <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33]">
+                  <button
+                    onClick={() =>
+                      updateSelectedNode({
+                        shapeType: "line",
+                        arrowDirection: "none",
+                      })
+                    }
+                    className={`p-1 rounded text-xs transition-colors ${(selectedNode.arrowDirection === "none" || !selectedNode.arrowDirection) &&
+                      selectedNode.shapeType !== "arrow"
+                      ? "bg-blue-600 text-white font-bold"
+                      : "text-gray-400 hover:text-white"
+                      }`}
+                    title="Plain Line"
+                  >
+                    <Minus className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() =>
+                      updateSelectedNode({
+                        shapeType: "arrow",
+                        arrowDirection: "forward",
+                      })
+                    }
+                    className={`p-1 rounded text-xs transition-colors ${selectedNode.arrowDirection === "forward" ||
+                      (selectedNode.shapeType === "arrow" && !selectedNode.arrowDirection)
+                      ? "bg-blue-600 text-white font-bold"
+                      : "text-gray-400 hover:text-white"
+                      }`}
+                    title="Forward Arrow (->)"
+                  >
+                    <MoveRight className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() =>
+                      updateSelectedNode({
+                        shapeType: "arrow",
+                        arrowDirection: "backward",
+                      })
+                    }
+                    className={`p-1 rounded text-xs transition-colors ${selectedNode.arrowDirection === "backward"
+                      ? "bg-blue-600 text-white font-bold"
+                      : "text-gray-400 hover:text-white"
+                      }`}
+                    title="Backward Arrow (<-)"
+                  >
+                    <MoveLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() =>
+                      updateSelectedNode({
+                        shapeType: "arrow",
+                        arrowDirection: "bidirectional",
+                      })
+                    }
+                    className={`p-1 rounded text-xs transition-colors ${selectedNode.arrowDirection === "bidirectional"
+                      ? "bg-blue-600 text-white font-bold"
+                      : "text-gray-400 hover:text-white"
+                      }`}
+                    title="Bidirectional Arrow (<->)"
+                  >
+                    <ArrowLeftRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Stroke Style: Solid vs Dashed */}
+                <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33]">
+                  <button
+                    onClick={() => updateSelectedNode({ lineStyle: "solid" })}
+                    className={`px-1.5 py-0.5 rounded text-[10px] ${selectedNode.lineStyle !== "dashed"
+                      ? "bg-blue-600 text-white font-bold"
+                      : "text-gray-400 hover:text-white"
+                      }`}
+                    title="Solid Line"
+                  >
+                    Solid
+                  </button>
+                  <button
+                    onClick={() => updateSelectedNode({ lineStyle: "dashed" })}
+                    className={`px-1.5 py-0.5 rounded text-[10px] ${selectedNode.lineStyle === "dashed"
+                      ? "bg-blue-600 text-white font-bold"
+                      : "text-gray-400 hover:text-white"
+                      }`}
+                    title="Dashed Line"
+                  >
+                    Dashed
+                  </button>
+                </div>
+
+                {/* Stroke Width Presets */}
+                <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33]">
+                  {[2, 3, 5, 8].map((sw) => (
+                    <button
+                      key={sw}
+                      onClick={() => updateSelectedNode({ strokeWidth: sw })}
+                      className={`px-1.5 py-0.5 rounded text-[10px] ${(selectedNode.strokeWidth || 3) === sw
+                        ? "bg-blue-600 text-white font-bold"
+                        : "text-gray-400 hover:text-white"
+                        }`}
+                    >
+                      {sw}px
+                    </button>
+                  ))}
+                </div>
+
+                {/* Stroke Color Swatch & Palette */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowStylePalette(!showStylePalette)}
+                    className="w-4 h-4 rounded-full border border-white/40 shadow-xs"
+                    style={{ backgroundColor: selectedNode.color || "#60A5FA" }}
+                    title="Change Stroke Color"
+                  />
+
+                  {showStylePalette && (
+                    <div className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50">
+                      {COLOR_PALETTE.map((c) => (
+                        <button
+                          key={c.name}
+                          onClick={() => {
+                            setActiveColor(c.value);
+                            updateSelectedNode({ color: c.value });
+                            setShowStylePalette(false);
+                          }}
+                          className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20"
+                          style={{ backgroundColor: c.value }}
+                          title={c.name}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
 
           <div className="h-4 w-px bg-[#30333D]" />
 
@@ -3489,9 +4196,8 @@ export default function WhiteboardCanvas({
                       setEdges(updated);
                       pushHistory(nodes, updated);
                     }}
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
-                      edge.style !== "dashed" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
-                    }`}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${edge.style !== "dashed" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
+                      }`}
                   >
                     Solid
                   </button>
@@ -3501,9 +4207,8 @@ export default function WhiteboardCanvas({
                       setEdges(updated);
                       pushHistory(nodes, updated);
                     }}
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
-                      edge.style === "dashed" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
-                    }`}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${edge.style === "dashed" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
+                      }`}
                   >
                     Dashed
                   </button>
@@ -3522,9 +4227,8 @@ export default function WhiteboardCanvas({
                         setEdges(updated);
                         pushHistory(nodes, updated);
                       }}
-                      className={`w-5 h-5 rounded-full transition-transform hover:scale-110 border cursor-pointer ${
-                        edge.color === c ? "ring-2 ring-white scale-110" : "border-white/20"
-                      }`}
+                      className={`w-5 h-5 rounded-full transition-transform hover:scale-110 border cursor-pointer ${edge.color === c ? "ring-2 ring-white scale-110" : "border-white/20"
+                        }`}
                       style={{ backgroundColor: c }}
                     />
                   ))}
@@ -3544,11 +4248,10 @@ export default function WhiteboardCanvas({
                       pushHistory(nodes, updated);
                       triggerAutoSave(nodes, updated);
                     }}
-                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
-                      edge.arrowDirection === "backward"
-                        ? "bg-blue-600 text-white shadow"
-                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
-                    }`}
+                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${edge.arrowDirection === "backward"
+                      ? "bg-blue-600 text-white shadow"
+                      : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                      }`}
                     title="Backward arrow: Target points to Source (<-)"
                   >
                     <MoveLeft className="w-3.5 h-3.5" />
@@ -3563,11 +4266,10 @@ export default function WhiteboardCanvas({
                       pushHistory(nodes, updated);
                       triggerAutoSave(nodes, updated);
                     }}
-                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
-                      edge.arrowDirection === "forward" || !edge.arrowDirection
-                        ? "bg-blue-600 text-white shadow"
-                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
-                    }`}
+                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${edge.arrowDirection === "forward" || !edge.arrowDirection
+                      ? "bg-blue-600 text-white shadow"
+                      : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                      }`}
                     title="Forward arrow: Source points to Target (->)"
                   >
                     <span>-&gt;</span>
@@ -3582,11 +4284,10 @@ export default function WhiteboardCanvas({
                       pushHistory(nodes, updated);
                       triggerAutoSave(nodes, updated);
                     }}
-                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
-                      edge.arrowDirection === "bidirectional"
-                        ? "bg-blue-600 text-white shadow"
-                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
-                    }`}
+                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${edge.arrowDirection === "bidirectional"
+                      ? "bg-blue-600 text-white shadow"
+                      : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                      }`}
                     title="Bidirectional arrow: Double-ended (<->)"
                   >
                     <ArrowLeftRight className="w-3.5 h-3.5" />
@@ -3638,8 +4339,15 @@ export default function WhiteboardCanvas({
           {/* 4 Functional Areas requested by user */}
           <div className="space-y-1 mb-2">
             <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "functional-area",
+                  areaType: "meeting-notes",
+                })
+              }
               onClick={() => handleInsertFunctionalArea("meeting-notes")}
-              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#22242D] hover:text-white transition-colors"
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#22242D] hover:text-white transition-colors cursor-grab active:cursor-grabbing"
             >
               <Calendar className="w-4 h-4 text-blue-400 shrink-0" />
               <div className="text-left">
@@ -3649,8 +4357,15 @@ export default function WhiteboardCanvas({
             </button>
 
             <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "functional-area",
+                  areaType: "notes",
+                })
+              }
               onClick={() => handleInsertFunctionalArea("notes")}
-              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#22242D] hover:text-white transition-colors"
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#22242D] hover:text-white transition-colors cursor-grab active:cursor-grabbing"
             >
               <StickyNote className="w-4 h-4 text-amber-400 shrink-0" />
               <div className="text-left">
@@ -3660,8 +4375,15 @@ export default function WhiteboardCanvas({
             </button>
 
             <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "functional-area",
+                  areaType: "diagram",
+                })
+              }
               onClick={() => handleInsertFunctionalArea("diagram")}
-              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#22242D] hover:text-white transition-colors"
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#22242D] hover:text-white transition-colors cursor-grab active:cursor-grabbing"
             >
               <GitFork className="w-4 h-4 text-cyan-400 shrink-0" />
               <div className="text-left">
@@ -3671,8 +4393,15 @@ export default function WhiteboardCanvas({
             </button>
 
             <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "functional-area",
+                  areaType: "project-planner",
+                })
+              }
               onClick={() => handleInsertFunctionalArea("project-planner")}
-              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#22242D] hover:text-white transition-colors"
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#22242D] hover:text-white transition-colors cursor-grab active:cursor-grabbing"
             >
               <Kanban className="w-4 h-4 text-purple-400 shrink-0" />
               <div className="text-left">
@@ -3688,40 +4417,111 @@ export default function WhiteboardCanvas({
 
           <div className="grid grid-cols-2 gap-1">
             <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "node",
+                  type: "sticky",
+                  isChecklist: false,
+                  color: "#EC4899",
+                })
+              }
               onClick={() => handleAddNode("sticky", "rectangle", "#EC4899")}
-              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-gray-200 hover:bg-[#22242D] hover:text-white cursor-pointer"
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-gray-200 hover:bg-[#22242D] hover:text-white cursor-grab active:cursor-grabbing"
             >
               <StickyNote className="w-3.5 h-3.5 text-pink-400" />
               <span>Sticky</span>
             </button>
             <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "node",
+                  type: "sticky",
+                  isChecklist: true,
+                  color: "#38BDF8",
+                })
+              }
               onClick={() => handleAddNode("sticky", "rectangle", "#38BDF8", true)}
-              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-cyan-300 hover:bg-[#22242D] hover:text-white cursor-pointer"
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-cyan-300 hover:bg-[#22242D] hover:text-white cursor-grab active:cursor-grabbing"
               title="Sticky Note with Interactive Todo Checkboxes"
             >
               <ListTodo className="w-3.5 h-3.5 text-cyan-400" />
               <span>Todo Note</span>
             </button>
             <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "node",
+                  type: "task",
+                  color: "#0078D4",
+                })
+              }
               onClick={() => handleAddNode("task", "rectangle", "#0078D4")}
-              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-gray-200 hover:bg-[#22242D] hover:text-white"
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-gray-200 hover:bg-[#22242D] hover:text-white cursor-grab active:cursor-grabbing"
             >
               <CheckSquare className="w-3.5 h-3.5 text-blue-400" />
               <span>Org Card</span>
             </button>
             <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "node",
+                  type: "shape",
+                  shapeType: "rectangle",
+                  color: "#06B6D4",
+                })
+              }
               onClick={() => handleAddNode("shape", "rectangle", "#06B6D4")}
-              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-gray-200 hover:bg-[#22242D] hover:text-white"
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-gray-200 hover:bg-[#22242D] hover:text-white cursor-grab active:cursor-grabbing"
             >
               <Square className="w-3.5 h-3.5 text-cyan-400" />
               <span>Shape</span>
             </button>
             <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, { category: "node", type: "text" })
+              }
               onClick={() => handleAddNode("text")}
-              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-gray-200 hover:bg-[#22242D] hover:text-white"
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-gray-200 hover:bg-[#22242D] hover:text-white cursor-grab active:cursor-grabbing"
             >
               <Type className="w-3.5 h-3.5 text-gray-400" />
               <span>Text</span>
+            </button>
+            <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "node",
+                  type: "line",
+                  shapeType: "line",
+                })
+              }
+              onClick={() => handleAddNode("line", "line")}
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-gray-200 hover:bg-[#22242D] hover:text-white cursor-grab active:cursor-grabbing"
+              title="Straight Line (Click or Hold & Drag)"
+            >
+              <Minus className="w-3.5 h-3.5 text-blue-400" />
+              <span>Line</span>
+            </button>
+            <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "node",
+                  type: "line",
+                  shapeType: "arrow",
+                })
+              }
+              onClick={() => handleAddNode("line", "arrow")}
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-gray-200 hover:bg-[#22242D] hover:text-white cursor-grab active:cursor-grabbing"
+              title="Independent Arrow (Click or Hold & Drag)"
+            >
+              <ArrowUpRight className="w-3.5 h-3.5 text-blue-400" />
+              <span>Arrow</span>
             </button>
             <button
               onClick={() => {
@@ -3745,13 +4545,17 @@ export default function WhiteboardCanvas({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onDoubleClick={handleCanvasDoubleClick}
-        className={`w-full h-full relative overflow-hidden ${
-          activeTool === "hand" || isPanning
-            ? "cursor-grab active:cursor-grabbing"
-            : activeTool === "draw" || activeTool === "arrow"
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }}
+        onDrop={handleCanvasDrop}
+        className={`w-full h-full relative overflow-hidden ${activeTool === "hand" || isPanning
+          ? "cursor-grab active:cursor-grabbing"
+          : activeTool === "draw" || activeTool === "arrow" || activeTool === "line" || activeTool === "arrow-line"
             ? "cursor-crosshair"
             : "cursor-default"
-        }`}
+          }`}
         style={{
           backgroundColor: canvasBgColor,
         }}
@@ -3894,6 +4698,56 @@ export default function WhiteboardCanvas({
             </svg>
           )}
 
+          {/* Live active preview while drawing straight line or independent arrow */}
+          {interactiveLineDrawing && (() => {
+            const isArrow = interactiveLineDrawing.tool === "arrow-line";
+            const x1 = interactiveLineDrawing.startX;
+            const y1 = interactiveLineDrawing.startY;
+            const x2 = interactiveLineDrawing.currentX;
+            const y2 = interactiveLineDrawing.currentY;
+            const strokeColor = activeColor || "#60A5FA";
+            const strokeW = 3;
+
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const dist = Math.hypot(dx, dy);
+            const ux = dist > 0.001 ? dx / dist : 1;
+            const uy = dist > 0.001 ? dy / dist : 0;
+            const wingLength = Math.max(12, Math.round(strokeW * 2.8 + 6));
+            const arrowDepth = wingLength * Math.cos(Math.PI / 6);
+            const endOffset = isArrow ? Math.min(arrowDepth * 0.45, dist * 0.45) : 0;
+
+            const strokeX2 = x2 - endOffset * ux;
+            const strokeY2 = y2 - endOffset * uy;
+
+            return (
+              <svg
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                  overflow: "visible",
+                }}
+                className="pointer-events-none z-40"
+              >
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={strokeX2}
+                  y2={strokeY2}
+                  stroke={strokeColor}
+                  strokeWidth={strokeW}
+                  strokeLinecap="round"
+                />
+                {isArrow && renderArrowhead(x2, y2, x1, y1, strokeColor, strokeW)}
+                <circle cx={x1} cy={y1} r={4} fill={strokeColor} />
+                <circle cx={x2} cy={y2} r={4} fill={strokeColor} />
+              </svg>
+            );
+          })()}
+
           {/* Rectangular Drag-to-Select Marquee Box */}
           {isSelectingBox && selectionBox && (
             <div
@@ -3959,15 +4813,14 @@ export default function WhiteboardCanvas({
                     height: `${node.height}px`,
                     pointerEvents: activeTool === "draw" ? "none" : "auto",
                   }}
-                  className={`group/drawing cursor-pointer transition-all ${
-                    isConnectingSource
-                      ? "ring-4 ring-cyan-400 ring-offset-2 ring-offset-[#0D0E11] shadow-[0_0_20px_rgba(6,182,212,0.8)]"
-                      : isConnectingTargetCandidate
+                  className={`group/drawing cursor-pointer transition-all ${isConnectingSource
+                    ? "ring-4 ring-cyan-400 ring-offset-2 ring-offset-[#0D0E11] shadow-[0_0_20px_rgba(6,182,212,0.8)]"
+                    : isConnectingTargetCandidate
                       ? "hover:ring-2 hover:ring-cyan-300 hover:scale-[1.01]"
                       : isSelected
-                      ? "ring-2 ring-pink-400 ring-offset-2 ring-offset-transparent rounded-sm"
-                      : ""
-                  }`}
+                        ? "ring-2 ring-pink-400 ring-offset-2 ring-offset-transparent rounded-sm"
+                        : ""
+                    }`}
                 >
                   <svg
                     style={{
@@ -4014,9 +4867,8 @@ export default function WhiteboardCanvas({
                     width: `${node.width}px`,
                     height: `${node.height}px`,
                   }}
-                  className={`flex flex-col items-center justify-center cursor-pointer transition-all ${
-                    isSelected ? "ring-2 ring-blue-500 rounded-full" : ""
-                  }`}
+                  className={`flex flex-col items-center justify-center cursor-pointer transition-all ${isSelected ? "ring-2 ring-blue-500 rounded-full" : ""
+                    }`}
                 >
                   <div className="relative w-28 h-28 rounded-full border-2 border-cyan-400/80 shadow-[0_0_25px_rgba(6,182,212,0.6)] flex items-center justify-center bg-[#0D0E11]/90">
                     {/* Inner glowing ring */}
@@ -4051,9 +4903,8 @@ export default function WhiteboardCanvas({
                     width: `${node.width}px`,
                     height: `${node.height}px`,
                   }}
-                  className={`p-3.5 rounded-md border-2 border-white/80 bg-[#0D0E11]/80 backdrop-blur-sm cursor-pointer shadow-xl relative ${
-                    isSelected ? "ring-2 ring-blue-500" : ""
-                  }`}
+                  className={`p-3.5 rounded-md border-2 border-white/80 bg-[#0D0E11]/80 backdrop-blur-sm cursor-pointer shadow-xl relative ${isSelected ? "ring-2 ring-blue-500" : ""
+                    }`}
                 >
                   <div className="text-[11px] font-bold text-center tracking-widest text-white mb-3">
                     LEGEND
@@ -4108,9 +4959,8 @@ export default function WhiteboardCanvas({
                     backgroundColor: `${node.color || "#EC4899"}26`,
                     borderColor: node.color || "#EC4899",
                   }}
-                  className={`p-3.5 rounded-xl border-2 cursor-pointer shadow-lg flex flex-col justify-between transition-all relative overflow-hidden group/sticky ${
-                    isSelected ? "ring-2 ring-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.3)]" : ""
-                  }`}
+                  className={`p-3.5 rounded-xl border-2 cursor-pointer shadow-lg flex flex-col justify-between transition-all relative overflow-hidden group/sticky ${isSelected ? "ring-2 ring-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.3)]" : ""
+                    }`}
                 >
                   {isChecklist ? (
                     <div className="w-full h-full flex flex-col overflow-hidden">
@@ -4151,11 +5001,10 @@ export default function WhiteboardCanvas({
                         {/* Progress Badge */}
                         <div className="flex items-center gap-1 shrink-0">
                           <span
-                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-colors ${
-                              completedCount === totalCount && totalCount > 0
-                                ? "bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
-                                : "bg-black/25 text-gray-300 border border-white/10"
-                            }`}
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-colors ${completedCount === totalCount && totalCount > 0
+                              ? "bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
+                              : "bg-black/25 text-gray-300 border border-white/10"
+                              }`}
                           >
                             {completedCount}/{totalCount}
                           </span>
@@ -4191,17 +5040,15 @@ export default function WhiteboardCanvas({
                                 e.stopPropagation();
                                 handleToggleChecklistItem(node.id, item.id);
                               }}
-                              className={`w-4 h-4 rounded mt-0.5 shrink-0 flex items-center justify-center transition-all cursor-pointer border ${
-                                item.completed
-                                  ? "bg-emerald-500 border-emerald-400 text-white shadow-sm"
-                                  : "bg-black/20 hover:bg-black/40 border-white/40 hover:border-white/80 text-transparent"
-                              }`}
+                              className={`w-4 h-4 rounded mt-0.5 shrink-0 flex items-center justify-center transition-all cursor-pointer border ${item.completed
+                                ? "bg-emerald-500 border-emerald-400 text-white shadow-sm"
+                                : "bg-black/20 hover:bg-black/40 border-white/40 hover:border-white/80 text-transparent"
+                                }`}
                               title={item.completed ? "Mark incomplete" : "Mark completed"}
                             >
                               <Check
-                                className={`w-3 h-3 stroke-[3] transition-transform ${
-                                  item.completed ? "opacity-100 scale-100" : "opacity-0 scale-75"
-                                }`}
+                                className={`w-3 h-3 stroke-[3] transition-transform ${item.completed ? "opacity-100 scale-100" : "opacity-0 scale-75"
+                                  }`}
                               />
                             </button>
 
@@ -4251,11 +5098,10 @@ export default function WhiteboardCanvas({
                                   e.stopPropagation();
                                   setEditingNodeId(node.id);
                                 }}
-                                className={`text-xs leading-relaxed flex-1 select-none transition-all break-words ${
-                                  item.completed
-                                    ? "line-through opacity-60 italic"
-                                    : "opacity-95 font-medium"
-                                }`}
+                                className={`text-xs leading-relaxed flex-1 select-none transition-all break-words ${item.completed
+                                  ? "line-through opacity-60 italic"
+                                  : "opacity-95 font-medium"
+                                  }`}
                                 style={{
                                   textAlign: node.textAlign || "left",
                                   fontSize: `${parseFontSizePx(node.fontSize, 12)}px`,
@@ -4323,6 +5169,17 @@ export default function WhiteboardCanvas({
 
             // 4. TASK CARD / ORG CHART POSITION NODE (Gold Task Header + Blue Position Box)
             if (node.type === "task") {
+              const defaultHeaderHeight =
+                node.height > 160 ? Math.round(node.height * 0.4) : Math.min(56, Math.max(28, node.height - 28));
+              const safeHeaderHeight = Math.max(
+                24,
+                Math.min(
+                  node.height - 24,
+                  node.headerHeight !== undefined && node.headerHeight !== null ? node.headerHeight : defaultHeaderHeight
+                )
+              );
+              const bottomHeight = node.height - safeHeaderHeight;
+
               return (
                 <div
                   key={node.id}
@@ -4335,36 +5192,59 @@ export default function WhiteboardCanvas({
                     width: `${node.width}px`,
                     height: `${node.height}px`,
                   }}
-                  className={`rounded-md cursor-pointer shadow-2xl transition-all relative group/node ${
-                    isSelected ? "ring-2 ring-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.4)]" : ""
-                  }`}
+                  className={`rounded-md cursor-pointer shadow-2xl transition-all relative group/node select-none ${isSelected ? "ring-2 ring-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.4)]" : ""
+                    }`}
                 >
-                  <div className="w-full h-full flex flex-col rounded-md overflow-hidden">
+                  <div
+                    className="w-full h-full flex flex-col rounded-md overflow-hidden"
+                    onBlur={(e) => {
+                      // Only clear editing state if focus completely left this card
+                      if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                        setEditingNodeId(null);
+                        setEditingField(null);
+                      }
+                    }}
+                  >
                     {/* Top Task Banner (Gold bordered) */}
-                    <div className="h-14 p-2 bg-[#1A1813] border-2 border-amber-500/80 rounded-t-md flex items-center justify-center text-center">
-                      {isEditing ? (
-                        <input
-                          type="text"
+                    <div
+                      style={{ height: `${safeHeaderHeight}px` }}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedNodeId(node.id);
+                        setSelectedNodeIds([node.id]);
+                        setEditingNodeId(node.id);
+                        setEditingField("title");
+                      }}
+                      className="p-2 bg-[#1A1813] border-2 border-amber-500/80 rounded-t-md flex items-center justify-center text-center overflow-hidden relative group/header"
+                    >
+                      {isEditing && (editingField === "title" || !editingField) ? (
+                        <textarea
                           defaultValue={node.title}
-                          autoFocus
+                          autoFocus={editingField === "title" || !editingField}
+                          rows={safeHeaderHeight > 70 ? 3 : 2}
                           onMouseDown={(e) => e.stopPropagation()}
                           onChange={(e) => handleLiveTextChange(node.id, { title: e.target.value })}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter") e.currentTarget.blur();
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              updateNode(node.id, { title: e.currentTarget.value });
+                              setEditingField("subtitle");
+                            }
                           }}
                           onBlur={(e) => {
                             updateNode(node.id, { title: e.target.value });
-                            setEditingNodeId(null);
                           }}
-                          className="bg-transparent text-center w-full focus:outline-none font-medium"
+                          className="bg-transparent text-center w-full h-full resize-none focus:outline-none font-medium leading-tight scrollbar-none"
                           style={{
                             fontSize: `${parseFontSizePx(node.fontSize, 10)}px`,
                             color: node.textColor || "#FDE68A",
                           }}
+                          placeholder="Task title..."
                         />
                       ) : (
                         <span
-                          className="font-medium leading-tight line-clamp-2"
+                          className={`font-medium leading-tight ${safeHeaderHeight <= 60 ? "line-clamp-2" : "line-clamp-none max-h-full overflow-y-auto"
+                            }`}
                           style={{
                             fontSize: `${parseFontSizePx(node.fontSize, 10)}px`,
                             color: node.textColor || "#FDE68A",
@@ -4375,27 +5255,71 @@ export default function WhiteboardCanvas({
                       )}
                     </div>
 
-                    {/* Bottom Position Box (Blue bordered) */}
-                    <div className="flex-1 min-h-[36px] bg-[#0F1E36] border-2 border-t-0 border-blue-500/80 rounded-b-md flex items-center justify-center text-center">
-                      {isEditing ? (
+                    {/* Draggable Divider Line (Horizontal split handle) */}
+                    <div
+                      onMouseDown={(e) => handleDividerMouseDown(node, safeHeaderHeight, e)}
+                      className="relative w-full h-2.5 -my-1 z-30 cursor-row-resize group/divider flex items-center justify-center select-none"
+                      title="Drag up or down to adjust header and bottom height"
+                    >
+                      <div
+                        className={`w-full transition-all ${resizingDivider?.nodeId === node.id
+                          ? "h-[3px] bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]"
+                          : "h-[2px] bg-amber-500/50 group-hover/divider:bg-cyan-400 group-hover/divider:h-[3px]"
+                          }`}
+                      />
+                      <div
+                        className={`absolute w-7 h-2 rounded-full bg-[#1A1C22] border transition-all flex items-center justify-center shadow-md ${resizingDivider?.nodeId === node.id || isSelected
+                          ? "border-cyan-400 bg-cyan-950/90 opacity-100"
+                          : "border-amber-500/60 opacity-0 group-hover/divider:opacity-100 group-hover/divider:border-cyan-400"
+                          }`}
+                      >
+                        <div className="w-3.5 h-0.5 bg-amber-400 group-hover/divider:bg-cyan-300 rounded-full" />
+                      </div>
+                    </div>
+
+                    {/* Bottom Position / Progress Box (Blue bordered) */}
+                    <div
+                      style={{ height: `${bottomHeight}px` }}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedNodeId(node.id);
+                        setSelectedNodeIds([node.id]);
+                        setEditingNodeId(node.id);
+                        setEditingField("subtitle");
+                      }}
+                      className="p-2 bg-[#0F1E36] border-2 border-t-0 border-blue-500/80 rounded-b-md flex flex-col items-center justify-center text-center overflow-hidden relative group/bottom"
+                    >
+                      {isEditing && (editingField === "subtitle" || !editingField) ? (
                         <input
                           type="text"
                           defaultValue={node.subtitle}
+                          autoFocus={editingField === "subtitle"}
                           onMouseDown={(e) => e.stopPropagation()}
                           onChange={(e) => handleLiveTextChange(node.id, { subtitle: e.target.value })}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter") e.currentTarget.blur();
+                            if (e.key === "Enter") {
+                              e.currentTarget.blur();
+                              setEditingNodeId(null);
+                              setEditingField(null);
+                            }
                           }}
                           onBlur={(e) => {
                             updateNode(node.id, { subtitle: e.target.value });
-                            setEditingNodeId(null);
                           }}
-                          className="bg-transparent text-xs text-blue-200 text-center w-full focus:outline-none font-bold"
+                          placeholder="e.g. Completed (100%) or President"
+                          className="bg-transparent text-xs text-blue-200 text-center w-full focus:outline-none font-bold placeholder:text-blue-400/50"
                         />
                       ) : (
-                        <span className="text-xs font-bold text-blue-200">
-                          {node.subtitle || "Position"}
-                        </span>
+                        <div className="flex flex-col items-center justify-center gap-1 w-full">
+                          <span className="text-xs font-bold text-blue-200 leading-snug">
+                            {node.subtitle || "Position"}
+                          </span>
+                          {node.body && bottomHeight > 70 && (
+                            <p className="text-[10px] text-blue-300/80 line-clamp-3 leading-tight mt-1 whitespace-pre-wrap">
+                              {node.body}
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -4407,9 +5331,8 @@ export default function WhiteboardCanvas({
                       e.stopPropagation();
                       handleAddBranchFromNode(node.id);
                     }}
-                    className={`absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-[#121316] border border-blue-400 text-white flex items-center justify-center text-xs font-bold shadow-md cursor-pointer hover:scale-125 hover:bg-blue-600 transition-all z-20 ${
-                      isSelected ? "opacity-100" : "opacity-0 group-hover/node:opacity-100"
-                    }`}
+                    className={`absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-[#121316] border border-blue-400 text-white flex items-center justify-center text-xs font-bold shadow-md cursor-pointer hover:scale-125 hover:bg-blue-600 transition-all z-20 ${isSelected ? "opacity-100" : "opacity-0 group-hover/node:opacity-100"
+                      }`}
                     title="Add connected branch node below (+)"
                   >
                     +
@@ -4435,11 +5358,10 @@ export default function WhiteboardCanvas({
                     width: `${node.width}px`,
                     height: `${node.height}px`,
                   }}
-                  className={`group/img cursor-pointer rounded-lg overflow-hidden transition-all relative ${
-                    isSelected
-                      ? "ring-2 ring-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.3)]"
-                      : "shadow-xl border border-[#2D3039]"
-                  }`}
+                  className={`group/img cursor-pointer rounded-lg overflow-hidden transition-all relative ${isSelected
+                    ? "ring-2 ring-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.3)]"
+                    : "shadow-xl border border-[#2D3039]"
+                    }`}
                 >
                   {node.imageUrl ? (
                     <img
@@ -4508,11 +5430,10 @@ export default function WhiteboardCanvas({
                     width: `${node.width}px`,
                     height: `${node.height}px`,
                   }}
-                  className={`group/pdf cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#1A1517] border border-red-500/30 ${
-                    isSelected
-                      ? "ring-2 ring-red-400 shadow-[0_0_20px_rgba(239,68,68,0.3)]"
-                      : "shadow-xl hover:border-red-500/50"
-                  }`}
+                  className={`group/pdf cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#1A1517] border border-red-500/30 ${isSelected
+                    ? "ring-2 ring-red-400 shadow-[0_0_20px_rgba(239,68,68,0.3)]"
+                    : "shadow-xl hover:border-red-500/50"
+                    }`}
                 >
                   {/* PDF Header */}
                   <div className="px-3 py-2 bg-gradient-to-r from-red-950/80 to-[#2A181C] border-b border-red-500/30 flex items-center justify-between gap-2 shrink-0">
@@ -4560,9 +5481,8 @@ export default function WhiteboardCanvas({
                         if (!node.fileUrl) e.preventDefault();
                         e.stopPropagation();
                       }}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-300 text-[11px] font-semibold transition-colors border border-red-500/30 ${
-                        !node.fileUrl ? "opacity-50 pointer-events-none" : ""
-                      }`}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-300 text-[11px] font-semibold transition-colors border border-red-500/30 ${!node.fileUrl ? "opacity-50 pointer-events-none" : ""
+                        }`}
                     >
                       <ExternalLink className="w-3 h-3" />
                       <span>Open PDF</span>
@@ -4602,11 +5522,10 @@ export default function WhiteboardCanvas({
                     width: `${node.width}px`,
                     height: `${node.height}px`,
                   }}
-                  className={`group/graphml cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#161424] border border-purple-500/40 ${
-                    isSelected
-                      ? "ring-2 ring-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.3)]"
-                      : "shadow-xl hover:border-purple-500/60"
-                  }`}
+                  className={`group/graphml cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#161424] border border-purple-500/40 ${isSelected
+                    ? "ring-2 ring-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.3)]"
+                    : "shadow-xl hover:border-purple-500/60"
+                    }`}
                 >
                   {/* GraphML Header */}
                   <div className="px-3 py-2 bg-gradient-to-r from-purple-950/80 to-[#221838] border-b border-purple-500/30 flex items-center justify-between gap-2 shrink-0">
@@ -4701,11 +5620,10 @@ export default function WhiteboardCanvas({
                     width: `${node.width}px`,
                     height: `${node.height}px`,
                   }}
-                  className={`group/json cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#171614] border border-amber-500/30 ${
-                    isSelected
-                      ? "ring-2 ring-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.3)]"
-                      : "shadow-xl hover:border-amber-500/50"
-                  }`}
+                  className={`group/json cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#171614] border border-amber-500/30 ${isSelected
+                    ? "ring-2 ring-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.3)]"
+                    : "shadow-xl hover:border-amber-500/50"
+                    }`}
                 >
                   {/* JSON Header */}
                   <div className="px-3 py-2 bg-gradient-to-r from-amber-950/80 to-[#262016] border-b border-amber-500/30 flex items-center justify-between gap-2 shrink-0">
@@ -4789,11 +5707,10 @@ export default function WhiteboardCanvas({
                     width: `${node.width}px`,
                     height: `${node.height}px`,
                   }}
-                  className={`group/md cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#131722] border border-blue-500/30 ${
-                    isSelected
-                      ? "ring-2 ring-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.3)]"
-                      : "shadow-xl hover:border-blue-500/50"
-                  }`}
+                  className={`group/md cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#131722] border border-blue-500/30 ${isSelected
+                    ? "ring-2 ring-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.3)]"
+                    : "shadow-xl hover:border-blue-500/50"
+                    }`}
                 >
                   {/* Markdown Header */}
                   <div className="px-3 py-2 bg-gradient-to-r from-blue-950/80 to-[#182035] border-b border-blue-500/30 flex items-center justify-between gap-2 shrink-0">
@@ -4874,11 +5791,10 @@ export default function WhiteboardCanvas({
                     width: `${node.width}px`,
                     height: `${node.height}px`,
                   }}
-                  className={`group/file cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#181A22] border border-gray-700 ${
-                    isSelected
-                      ? "ring-2 ring-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.3)]"
-                      : "shadow-xl hover:border-gray-600"
-                  }`}
+                  className={`group/file cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#181A22] border border-gray-700 ${isSelected
+                    ? "ring-2 ring-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.3)]"
+                    : "shadow-xl hover:border-gray-600"
+                    }`}
                 >
                   {/* File Header */}
                   <div className="px-3 py-2 bg-[#20222C] border-b border-gray-700 flex items-center justify-between gap-2 shrink-0">
@@ -4948,9 +5864,8 @@ export default function WhiteboardCanvas({
                     width: `${node.width}px`,
                     height: `${node.height}px`,
                   }}
-                  className={`cursor-pointer p-2 flex items-center transition-all relative ${
-                    isSelected ? "ring-2 ring-blue-400 rounded-md bg-blue-500/10" : "hover:bg-white/5 rounded-md"
-                  }`}
+                  className={`cursor-pointer p-2 flex items-center transition-all relative ${isSelected ? "ring-2 ring-blue-400 rounded-md bg-blue-500/10" : "hover:bg-white/5 rounded-md"
+                    }`}
                 >
                   {isEditing ? (
                     <textarea
@@ -4981,8 +5896,8 @@ export default function WhiteboardCanvas({
                           node.textAlign === "center"
                             ? "center"
                             : node.textAlign === "right"
-                            ? "flex-end"
-                            : "flex-start",
+                              ? "flex-end"
+                              : "flex-start",
                       }}
                     >
                       <span
@@ -5004,6 +5919,200 @@ export default function WhiteboardCanvas({
               );
             }
 
+            // 6.5 STRAIGHT LINE & INDEPENDENT ARROW NODE (360° Rotatable & Extensible Tips, Middle Drag)
+            if (node.type === "line" || node.shapeType === "line" || node.shapeType === "arrow") {
+              const { x1, y1, x2, y2 } = getLineEndpoints(node);
+              const strokeColor = node.color || "#60A5FA";
+              const strokeW = node.strokeWidth || 3;
+              const isDashed = node.lineStyle === "dashed";
+              const isArrow =
+                node.shapeType === "arrow" || (node.arrowDirection && node.arrowDirection !== "none");
+              const arrowDir = node.arrowDirection || (isArrow ? "forward" : "none");
+              const midX = (x1 + x2) / 2;
+              const midY = (y1 + y2) / 2;
+
+              const hasEndArrow = arrowDir === "forward" || arrowDir === "bidirectional";
+              const hasStartArrow = arrowDir === "backward" || arrowDir === "bidirectional";
+
+              const dx = x2 - x1;
+              const dy = y2 - y1;
+              const dist = Math.hypot(dx, dy);
+              const ux = dist > 0.001 ? dx / dist : 1;
+              const uy = dist > 0.001 ? dy / dist : 0;
+
+              // Wing length and arrow depth dynamically scaling with stroke width
+              const wingLength = Math.max(12, Math.round(strokeW * 2.8 + 6));
+              const arrowDepth = wingLength * Math.cos(Math.PI / 6);
+
+              // Trim line stroke ends under arrowheads so rounded cap never pokes through the triangle apex
+              const startOffset = hasStartArrow ? Math.min(arrowDepth * 0.45, dist * 0.45) : 0;
+              const endOffset = hasEndArrow ? Math.min(arrowDepth * 0.45, dist * 0.45) : 0;
+
+              const strokeX1 = x1 + startOffset * ux;
+              const strokeY1 = y1 + startOffset * uy;
+              const strokeX2 = x2 - endOffset * ux;
+              const strokeY2 = y2 - endOffset * uy;
+
+              return (
+                <div
+                  key={node.id}
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    width: 0,
+                    height: 0,
+                    overflow: "visible",
+                  }}
+                  className="select-none"
+                >
+                  <svg
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      top: 0,
+                      width: 1,
+                      height: 1,
+                      overflow: "visible",
+                    }}
+                    className="pointer-events-none"
+                  >
+                    {/* Wide invisible hit target line for selecting & middle/stroke drag */}
+                    <line
+                      x1={x1}
+                      y1={y1}
+                      x2={x2}
+                      y2={y2}
+                      stroke="transparent"
+                      strokeWidth={Math.max(strokeW + 22, 26)}
+                      strokeLinecap="round"
+                      className="pointer-events-auto cursor-move"
+                      onMouseDown={(e) => handleLineMiddleMouseDown(node, e)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedNodeId(node.id);
+                        setSelectedNodeIds([node.id]);
+                      }}
+                      onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
+                    />
+
+                    {/* Visible line with trimmed ends under arrowheads to prevent rounded cap from protruding */}
+                    <line
+                      x1={strokeX1}
+                      y1={strokeY1}
+                      x2={strokeX2}
+                      y2={strokeY2}
+                      stroke={isSelected ? "#38BDF8" : strokeColor}
+                      strokeWidth={strokeW}
+                      strokeDasharray={isDashed ? "8,6" : undefined}
+                      strokeLinecap="round"
+                      className="pointer-events-none"
+                    />
+
+                    {/* Arrowheads - dynamically sized to stroke width, apex exactly at end tip */}
+                    {hasEndArrow &&
+                      renderArrowhead(x2, y2, x1, y1, isSelected ? "#38BDF8" : strokeColor, strokeW)}
+                    {hasStartArrow &&
+                      renderArrowhead(x1, y1, x2, y2, isSelected ? "#38BDF8" : strokeColor, strokeW)}
+                  </svg>
+
+                  {/* Optional Title Label at midpoint */}
+                  {isEditing ? (
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: `${midX}px`,
+                        top: `${midY - 14}px`,
+                        transform: "translate(-50%, -100%)",
+                      }}
+                      className="z-40 pointer-events-auto"
+                    >
+                      <input
+                        type="text"
+                        autoFocus
+                        defaultValue={node.title || ""}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onChange={(e) => handleLiveTextChange(node.id, { title: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.currentTarget.blur();
+                        }}
+                        onBlur={(e) => {
+                          updateNode(node.id, { title: e.target.value });
+                          setEditingNodeId(null);
+                        }}
+                        className="bg-[#16171E] text-white text-xs border border-blue-400 px-2 py-0.5 rounded shadow-lg focus:outline-none"
+                        placeholder="Line label..."
+                      />
+                    </div>
+                  ) : (
+                    node.title && !node.title.toLowerCase().includes("copy") && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: `${midX}px`,
+                          top: `${midY - 14}px`,
+                          transform: "translate(-50%, -100%)",
+                        }}
+                        className="px-2 py-0.5 rounded bg-[#16171E]/90 border border-gray-700 text-[11px] font-semibold text-gray-200 pointer-events-none whitespace-nowrap shadow-md"
+                      >
+                        {node.title}
+                      </div>
+                    )
+                  )}
+
+                  {/* Selection Handles: Left Tip, Right Tip, and Middle Handle (NO 8-point bounding box handles!) */}
+                  {isSelected && (
+                    <>
+                      {/* Left Tip Handle (at x1, y1) - 360° Rotatable & Extensible independent tip */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: `${x1}px`,
+                          top: `${y1}px`,
+                          transform: "translate(-50%, -50%)",
+                        }}
+                        className="w-5 h-5 rounded-full bg-blue-500 border-2 border-white shadow-lg cursor-crosshair flex items-center justify-center hover:scale-125 hover:bg-blue-400 transition-transform pointer-events-auto z-30 group"
+                        onMouseDown={(e) => handleLineTipMouseDown(node, "start", e)}
+                        title="Left Tip: Drag in 360° to rotate or extend (Hold Shift for 15° snap)"
+                      >
+                        <div className="w-1.5 h-1.5 rounded-full bg-white pointer-events-none" />
+                      </div>
+
+                      {/* Right Tip Handle (at x2, y2) - 360° Rotatable & Extensible independent tip */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: `${x2}px`,
+                          top: `${y2}px`,
+                          transform: "translate(-50%, -50%)",
+                        }}
+                        className="w-5 h-5 rounded-full bg-blue-500 border-2 border-white shadow-lg cursor-crosshair flex items-center justify-center hover:scale-125 hover:bg-blue-400 transition-transform pointer-events-auto z-30 group"
+                        onMouseDown={(e) => handleLineTipMouseDown(node, "end", e)}
+                        title="Right Tip: Drag in 360° to rotate or extend (Hold Shift for 15° snap)"
+                      >
+                        <div className="w-1.5 h-1.5 rounded-full bg-white pointer-events-none" />
+                      </div>
+
+                      {/* Middle Handle (at midpoint) - Drag to move entire line/arrow */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: `${midX}px`,
+                          top: `${midY}px`,
+                          transform: "translate(-50%, -50%)",
+                        }}
+                        className="w-4 h-4 rounded-full bg-cyan-400 border-2 border-[#16171E] shadow-md cursor-move flex items-center justify-center hover:scale-125 hover:bg-cyan-300 transition-transform pointer-events-auto z-30"
+                        onMouseDown={(e) => handleLineMiddleMouseDown(node, e)}
+                        title="Middle: Drag to move line across canvas"
+                      >
+                        <div className="w-1 h-1 rounded-full bg-black pointer-events-none" />
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            }
+
             // 7. GEOMETRIC SHAPES (Square, Diamond, Circle, Triangle, Star, Hexagon, etc.)
             return (
               <div
@@ -5017,9 +6126,8 @@ export default function WhiteboardCanvas({
                   width: `${node.width}px`,
                   height: `${node.height}px`,
                 }}
-                className={`relative cursor-pointer transition-all ${
-                  isSelected ? "ring-2 ring-blue-400 ring-offset-2 ring-offset-[#0D0E11]" : ""
-                }`}
+                className={`relative cursor-pointer transition-all ${isSelected ? "ring-2 ring-blue-400 ring-offset-2 ring-offset-[#0D0E11]" : ""
+                  }`}
               >
                 {/* Vector Shape Geometry */}
                 <div className="absolute inset-0 pointer-events-none">
@@ -5074,13 +6182,13 @@ export default function WhiteboardCanvas({
       <div className="absolute bottom-5 left-5 z-40 bg-[#14151B]/95 backdrop-blur-md border border-[#262832] rounded-lg shadow-xl px-2 py-1 flex items-center gap-1.5 text-xs text-gray-300">
         <button
           onClick={() => {
-            setZoom(0.3);
+            setZoom(0.5);
             setPan({ x: 50, y: 50 });
           }}
           className="p-1 hover:bg-[#23252E] rounded text-gray-400 hover:text-white"
           title="Fit to screen"
         >
-          ^
+          <RefreshCcwIcon className="w-3.5 h-3.5" />
         </button>
         <button
           onClick={() => setZoom((prev) => Math.max(0.1, Number((prev - 0.05).toFixed(2))))}
@@ -5142,11 +6250,10 @@ export default function WhiteboardCanvas({
                       setShowBgColorPicker(false);
                       triggerAutoSave(nodesRef.current, edgesRef.current, undefined, theme.value, true);
                     }}
-                    className={`flex flex-col items-center gap-1 p-1.5 rounded-md border text-[10px] transition-all cursor-pointer ${
-                      canvasBgColor.toLowerCase() === theme.value.toLowerCase()
-                        ? "border-blue-500 bg-blue-500/15 text-white font-bold"
-                        : "border-[#2E313B] hover:border-gray-500 text-gray-400 hover:text-gray-200 hover:bg-[#23252E]"
-                    }`}
+                    className={`flex flex-col items-center gap-1 p-1.5 rounded-md border text-[10px] transition-all cursor-pointer ${canvasBgColor.toLowerCase() === theme.value.toLowerCase()
+                      ? "border-blue-500 bg-blue-500/15 text-white font-bold"
+                      : "border-[#2E313B] hover:border-gray-500 text-gray-400 hover:text-gray-200 hover:bg-[#23252E]"
+                      }`}
                     title={theme.name}
                   >
                     <div
@@ -5183,6 +6290,145 @@ export default function WhiteboardCanvas({
         </div>
       </div>
 
+      {/* 5a. BOTTOM-RIGHT CANVAS NAVIGATOR / MINIMAP RADAR ("small section at right corner which displays position ontime") */}
+      <div className="absolute bottom-3 right-3 z-40 select-none">
+        {showMinimap ? (
+          <div className="bg-[#14151B]/95 backdrop-blur-md border border-[#262832] rounded-xl shadow-2xl p-2 animate-in fade-in-50 duration-150">
+            {/* Navigator Header */}
+            <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[#242630] text-[10px] text-gray-400">
+              <div className="flex items-center gap-1.5 font-bold text-gray-200">
+                <Compass className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Navigator</span>
+                <span className="text-[9px] text-gray-500 font-normal">
+                  ({nodes.length})
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handleFitAllToScreen}
+                  className="p-1 hover:bg-[#22242D] rounded text-gray-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                  title="Fit all diagrams to screen"
+                >
+                  <Maximize2 className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={() => setShowMinimap(false)}
+                  className="p-1 hover:bg-[#22242D] rounded text-gray-400 hover:text-white transition-colors cursor-pointer"
+                  title="Minimize navigator"
+                >
+                  <Minimize2 className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+
+            {/* Interactive Minimap SVG */}
+            <div className="relative rounded-lg overflow-hidden border border-[#22242E] bg-[#0A0B0E]">
+              <svg
+                ref={minimapSvgRef}
+                width={minimapW}
+                height={minimapH}
+                className="cursor-crosshair block"
+                onMouseDown={(e) => {
+                  setIsDraggingMinimap(true);
+                  handleMinimapNav(e);
+                }}
+                onMouseMove={(e) => {
+                  if (isDraggingMinimap) {
+                    handleMinimapNav(e);
+                  }
+                }}
+                onMouseUp={() => setIsDraggingMinimap(false)}
+                onMouseLeave={() => setIsDraggingMinimap(false)}
+              >
+                {/* Subtle Grid Dots */}
+                <pattern
+                  id="minimap-grid"
+                  width="15"
+                  height="15"
+                  patternUnits="userSpaceOnUse"
+                >
+                  <circle cx="2" cy="2" r="0.7" fill="#1C1E26" />
+                </pattern>
+                <rect width={minimapW} height={minimapH} fill="url(#minimap-grid)" />
+
+                {/* Miniature Nodes & Lines */}
+                {nodes.map((n) => {
+                  if (n.type === "line" || n.shapeType === "line" || n.shapeType === "arrow") {
+                    const { x1, y1, x2, y2 } = getLineEndpoints(n);
+                    const mx1 = mmOffsetX + (x1 - mmMinX) * mmScale;
+                    const my1 = mmOffsetY + (y1 - mmMinY) * mmScale;
+                    const mx2 = mmOffsetX + (x2 - mmMinX) * mmScale;
+                    const my2 = mmOffsetY + (y2 - mmMinY) * mmScale;
+                    return (
+                      <line
+                        key={`mm-${n.id}`}
+                        x1={mx1}
+                        y1={my1}
+                        x2={mx2}
+                        y2={my2}
+                        stroke={n.color || "#60A5FA"}
+                        strokeWidth="1.5"
+                        opacity={0.85}
+                      />
+                    );
+                  }
+
+                  const mx = mmOffsetX + (n.x - mmMinX) * mmScale;
+                  const my = mmOffsetY + (n.y - mmMinY) * mmScale;
+                  const mw = Math.max(3, (n.width || 60) * mmScale);
+                  const mh = Math.max(2, (n.height || 40) * mmScale);
+                  const isSel = selectedNodeIds.includes(n.id) || selectedNodeId === n.id;
+
+                  return (
+                    <rect
+                      key={`mm-${n.id}`}
+                      x={mx}
+                      y={my}
+                      width={mw}
+                      height={mh}
+                      rx={1}
+                      fill={isSel ? "#38BDF8" : n.color || "#EC4899"}
+                      stroke={isSel ? "#FFFFFF" : "transparent"}
+                      strokeWidth="0.5"
+                      opacity={isSel ? 1 : 0.75}
+                    />
+                  );
+                })}
+
+                {/* Viewport Camera Highlight Box */}
+                <rect
+                  x={vpBoxX}
+                  y={vpBoxY}
+                  width={vpBoxW}
+                  height={vpBoxH}
+                  rx={2}
+                  fill="rgba(56, 189, 248, 0.16)"
+                  stroke="#38BDF8"
+                  strokeWidth="1.5"
+                  strokeDasharray="4,2"
+                  className="pointer-events-none"
+                />
+              </svg>
+            </div>
+
+            {/* Minimap Status Footer */}
+            <div className="mt-1.5 pt-1 border-t border-[#22242D] text-[9px] text-gray-500 flex items-center justify-between">
+              <span>Zoom: {Math.round(zoom * 100)}%</span>
+              <span className="text-cyan-400/80 font-medium">Click / drag to pan</span>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowMinimap(true)}
+            className="px-2.5 py-1.5 rounded-xl bg-[#14151B]/95 backdrop-blur-md border border-[#262832] text-gray-300 hover:text-white hover:border-cyan-500/50 shadow-xl transition-all flex items-center gap-1.5 text-xs font-semibold cursor-pointer group"
+            title="Open Canvas Navigator Minimap"
+          >
+            <Compass className="w-4 h-4 text-cyan-400 group-hover:rotate-45 transition-transform" />
+            <span>Navigator</span>
+          </button>
+        )}
+      </div>
+
       {/* 5b. FLOATING ARROW CONNECTION TOOLBAR ("connect two different nodes by arrows <- or -> or <->") */}
       {activeTool === "arrow" && (
         <div className="absolute bottom-18 left-1/2 -translate-x-1/2 z-40 bg-[#16171E]/95 backdrop-blur-md border border-blue-500/60 rounded-xl shadow-2xl px-3.5 py-2 flex items-center gap-3 text-xs animate-in slide-in-from-bottom-2 duration-150">
@@ -5195,11 +6441,10 @@ export default function WhiteboardCanvas({
           <div className="flex items-center gap-1 bg-[#101115] p-0.5 rounded-lg border border-[#262833]">
             <button
               onClick={() => setArrowConnectType("backward")}
-              className={`px-2.5 py-1 rounded flex items-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
-                arrowConnectType === "backward"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
-                  : "text-gray-400 hover:text-white hover:bg-[#1E2028]"
-              }`}
+              className={`px-2.5 py-1 rounded flex items-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${arrowConnectType === "backward"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                : "text-gray-400 hover:text-white hover:bg-[#1E2028]"
+                }`}
               title="Backward arrow: Target points to Source (<-)"
             >
               <MoveLeft className="w-3.5 h-3.5" />
@@ -5208,11 +6453,10 @@ export default function WhiteboardCanvas({
 
             <button
               onClick={() => setArrowConnectType("forward")}
-              className={`px-2.5 py-1 rounded flex items-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
-                arrowConnectType === "forward"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
-                  : "text-gray-400 hover:text-white hover:bg-[#1E2028]"
-              }`}
+              className={`px-2.5 py-1 rounded flex items-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${arrowConnectType === "forward"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                : "text-gray-400 hover:text-white hover:bg-[#1E2028]"
+                }`}
               title="Forward arrow: Source points to Target (->)"
             >
               <span>-&gt;</span>
@@ -5221,11 +6465,10 @@ export default function WhiteboardCanvas({
 
             <button
               onClick={() => setArrowConnectType("bidirectional")}
-              className={`px-2.5 py-1 rounded flex items-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
-                arrowConnectType === "bidirectional"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
-                  : "text-gray-400 hover:text-white hover:bg-[#1E2028]"
-              }`}
+              className={`px-2.5 py-1 rounded flex items-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${arrowConnectType === "bidirectional"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                : "text-gray-400 hover:text-white hover:bg-[#1E2028]"
+                }`}
               title="Bidirectional arrow: Double-ended (<->)"
             >
               <ArrowLeftRight className="w-3.5 h-3.5" />
@@ -5289,9 +6532,8 @@ export default function WhiteboardCanvas({
               <button
                 key={c.color}
                 onClick={() => setPenColor(c.color)}
-                className={`w-5 h-5 rounded-full transition-transform cursor-pointer ${
-                  penColor === c.color ? "ring-2 ring-white scale-125" : "border border-white/20 hover:scale-110"
-                }`}
+                className={`w-5 h-5 rounded-full transition-transform cursor-pointer ${penColor === c.color ? "ring-2 ring-white scale-125" : "border border-white/20 hover:scale-110"
+                  }`}
                 style={{ backgroundColor: c.color }}
                 title={c.name}
               />
@@ -5311,11 +6553,10 @@ export default function WhiteboardCanvas({
               <button
                 key={sw.width}
                 onClick={() => setPenStrokeWidth(sw.width)}
-                className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${
-                  penStrokeWidth === sw.width
-                    ? "bg-pink-600 text-white shadow-sm"
-                    : "text-gray-400 hover:text-white hover:bg-[#1E2028]"
-                }`}
+                className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${penStrokeWidth === sw.width
+                  ? "bg-pink-600 text-white shadow-sm"
+                  : "text-gray-400 hover:text-white hover:bg-[#1E2028]"
+                  }`}
               >
                 {sw.label}
               </button>
@@ -5340,11 +6581,10 @@ export default function WhiteboardCanvas({
         {/* V - Select Tool */}
         <button
           onClick={() => setActiveTool("select")}
-          className={`p-2 rounded-lg transition-colors ${
-            activeTool === "select"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-          }`}
+          className={`p-2 rounded-lg transition-colors ${activeTool === "select"
+            ? "bg-blue-600 text-white shadow-sm"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
           title="Select (V)"
         >
           <MousePointer className="w-4 h-4" />
@@ -5353,11 +6593,10 @@ export default function WhiteboardCanvas({
         {/* H - Hand Tool */}
         <button
           onClick={() => setActiveTool("hand")}
-          className={`p-2 rounded-lg transition-colors ${
-            activeTool === "hand"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-          }`}
+          className={`p-2 rounded-lg transition-colors ${activeTool === "hand"
+            ? "bg-blue-600 text-white shadow-sm"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
           title="Pan Hand (H)"
         >
           <Hand className="w-4 h-4" />
@@ -5365,16 +6604,19 @@ export default function WhiteboardCanvas({
 
         {/* Task Card Node Tool */}
         <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, { category: "node", type: "task" })
+          }
           onClick={() => {
             setActiveTool("task");
             handleAddNode("task");
           }}
-          className={`p-2 rounded-lg transition-colors ${
-            activeTool === "task"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-          }`}
-          title="Add Org Task Card"
+          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "task"
+            ? "bg-blue-600 text-white shadow-sm"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Add Org Task Card (Click or Hold & Drag onto canvas)"
         >
           <CheckSquare className="w-4 h-4" />
         </button>
@@ -5382,11 +6624,10 @@ export default function WhiteboardCanvas({
         {/* D - Pen / Draw Tool */}
         <button
           onClick={() => setActiveTool(activeTool === "draw" ? "select" : "draw")}
-          className={`p-2 rounded-lg transition-colors ${
-            activeTool === "draw"
-              ? "bg-pink-600 text-white shadow-sm ring-1 ring-pink-400"
-              : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-          }`}
+          className={`p-2 rounded-lg transition-colors ${activeTool === "draw"
+            ? "bg-pink-600 text-white shadow-sm ring-1 ring-pink-400"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
           title="Pen Draw Tool (P or D)"
         >
           <PenTool className="w-4 h-4" />
@@ -5395,13 +6636,20 @@ export default function WhiteboardCanvas({
         {/* R - Shapes Tool with Palette Popover (Matching Screenshot 4) */}
         <div className="relative" ref={shapePaletteRef}>
           <button
+            draggable={true}
+            onDragStart={(e) =>
+              handleItemDragStart(e, {
+                category: "node",
+                type: "shape",
+                shapeType: "rectangle",
+              })
+            }
             onClick={() => setShowShapePalette(!showShapePalette)}
-            className={`p-2 rounded-lg transition-colors ${
-              showShapePalette || activeTool === "shape"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-            }`}
-            title="Shapes (R)"
+            className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${showShapePalette || activeTool === "shape"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+              }`}
+            title="Shapes (Click or Hold & Drag onto canvas)"
           >
             <Square className="w-4 h-4" />
           </button>
@@ -5410,56 +6658,196 @@ export default function WhiteboardCanvas({
           {showShapePalette && (
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-3 grid grid-cols-3 gap-2 w-56 z-50 animate-in fade-in-50">
               <button
+                draggable={true}
+                onDragStart={(e) =>
+                  handleItemDragStart(e, {
+                    category: "node",
+                    type: "shape",
+                    shapeType: "rectangle",
+                  })
+                }
                 onClick={() => handleAddNode("shape", "rectangle")}
-                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-pointer"
-                title="Rectangle"
+                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+                title="Rectangle Box (Click or Hold & Drag onto canvas)"
               >
                 <Square className="w-4 h-4" />
                 <span className="text-[9px]">Box</span>
               </button>
               <button
+                draggable={true}
+                onDragStart={(e) =>
+                  handleItemDragStart(e, {
+                    category: "node",
+                    type: "shape",
+                    shapeType: "rounded",
+                  })
+                }
                 onClick={() => handleAddNode("shape", "rounded")}
-                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-pointer"
-                title="Rounded"
+                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+                title="Rounded Box (Click or Hold & Drag onto canvas)"
               >
                 <Square className="w-4 h-4 rounded-md" />
                 <span className="text-[9px]">Rounded</span>
               </button>
               <button
+                draggable={true}
+                onDragStart={(e) =>
+                  handleItemDragStart(e, {
+                    category: "node",
+                    type: "shape",
+                    shapeType: "circle",
+                  })
+                }
                 onClick={() => handleAddNode("shape", "circle")}
-                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-pointer"
-                title="Circle"
+                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+                title="Circle (Click or Hold & Drag onto canvas)"
               >
                 <Circle className="w-4 h-4" />
                 <span className="text-[9px]">Circle</span>
               </button>
               <button
+                draggable={true}
+                onDragStart={(e) =>
+                  handleItemDragStart(e, {
+                    category: "node",
+                    type: "shape",
+                    shapeType: "diamond",
+                  })
+                }
                 onClick={() => handleAddNode("shape", "diamond")}
-                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-pointer"
-                title="Diamond"
+                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+                title="Diamond (Click or Hold & Drag onto canvas)"
               >
                 <Diamond className="w-4 h-4" />
                 <span className="text-[9px]">Diamond</span>
               </button>
               <button
+                draggable={true}
+                onDragStart={(e) =>
+                  handleItemDragStart(e, {
+                    category: "node",
+                    type: "shape",
+                    shapeType: "triangle",
+                  })
+                }
                 onClick={() => handleAddNode("shape", "triangle")}
-                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-pointer"
-                title="Triangle"
+                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+                title="Triangle (Click or Hold & Drag onto canvas)"
               >
                 <Triangle className="w-4 h-4" />
                 <span className="text-[9px]">Triangle</span>
               </button>
               <button
+                draggable={true}
+                onDragStart={(e) =>
+                  handleItemDragStart(e, {
+                    category: "node",
+                    type: "shape",
+                    shapeType: "hexagon",
+                  })
+                }
                 onClick={() => handleAddNode("shape", "hexagon")}
-                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-pointer"
-                title="Hexagon"
+                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+                title="Hexagon (Click or Hold & Drag onto canvas)"
               >
                 <Hexagon className="w-4 h-4" />
                 <span className="text-[9px]">Hexagon</span>
               </button>
+              <button
+                draggable={true}
+                onDragStart={(e) =>
+                  handleItemDragStart(e, {
+                    category: "node",
+                    type: "line",
+                    shapeType: "line",
+                  })
+                }
+                onClick={() => handleAddNode("line", "line")}
+                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+                title="Straight Line (Click or Hold & Drag onto canvas)"
+              >
+                <Minus className="w-4 h-4 text-blue-400" />
+                <span className="text-[9px]">Line</span>
+              </button>
+              <button
+                draggable={true}
+                onDragStart={(e) =>
+                  handleItemDragStart(e, {
+                    category: "node",
+                    type: "line",
+                    shapeType: "arrow",
+                  })
+                }
+                onClick={() => handleAddNode("line", "arrow")}
+                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+                title="Independent Arrow (Click or Hold & Drag onto canvas)"
+              >
+                <ArrowUpRight className="w-4 h-4 text-blue-400" />
+                <span className="text-[9px]">Arrow</span>
+              </button>
+              <button
+                draggable={true}
+                onDragStart={(e) =>
+                  handleItemDragStart(e, {
+                    category: "node",
+                    type: "shape",
+                    shapeType: "star",
+                  })
+                }
+                onClick={() => handleAddNode("shape", "star")}
+                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+                title="Star (Click or Hold & Drag onto canvas)"
+              >
+                <Star className="w-4 h-4" />
+                <span className="text-[9px]">Star</span>
+              </button>
             </div>
           )}
         </div>
+
+        {/* L - Straight Line Tool */}
+        <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "node",
+              type: "line",
+              shapeType: "line",
+            })
+          }
+          onClick={() =>
+            setActiveTool(activeTool === "line" ? "select" : "line")
+          }
+          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "line"
+            ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-400"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Straight Line (L) - Click to draw or drag onto canvas"
+        >
+          <Minus className="w-4 h-4" />
+        </button>
+
+        {/* Independent Arrow Tool */}
+        <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "node",
+              type: "line",
+              shapeType: "arrow",
+            })
+          }
+          onClick={() =>
+            setActiveTool(activeTool === "arrow-line" ? "select" : "arrow-line")
+          }
+          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "arrow-line"
+            ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-400"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Independent Arrow - Click to draw or drag onto canvas"
+        >
+          <ArrowUpRight className="w-4 h-4" />
+        </button>
 
         {/* A - Arrow / Connector Tool */}
         <button
@@ -5472,11 +6860,10 @@ export default function WhiteboardCanvas({
               setActiveTool("arrow");
             }
           }}
-          className={`p-2 rounded-lg transition-colors ${
-            activeTool === "arrow"
-              ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-400"
-              : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-          }`}
+          className={`p-2 rounded-lg transition-colors ${activeTool === "arrow"
+            ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-400"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
           title="Arrow Connector <- -> <-> (A)"
         >
           <MoveRight className="w-4 h-4" />
@@ -5484,53 +6871,81 @@ export default function WhiteboardCanvas({
 
         {/* N - Sticky Note Tool */}
         <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "node",
+              type: "sticky",
+              isChecklist: false,
+            })
+          }
           onClick={() => {
             setActiveTool("sticky");
             handleAddNode("sticky");
           }}
-          className={`p-2 rounded-lg transition-colors ${
-            activeTool === "sticky"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-          }`}
-          title="Sticky Note (N)"
+          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "sticky"
+            ? "bg-blue-600 text-white shadow-sm"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Sticky Note (Click or Hold & Drag onto canvas)"
         >
           <StickyNote className="w-4 h-4" />
         </button>
 
         {/* Shift+N - Todo / Checklist Sticky Tool */}
         <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "node",
+              type: "sticky",
+              isChecklist: true,
+              color: "#38BDF8",
+            })
+          }
           onClick={() => {
             setActiveTool("sticky");
             handleAddNode("sticky", "rectangle", "#38BDF8", true);
           }}
-          className="p-2 rounded-lg text-cyan-400 hover:text-cyan-300 hover:bg-[#22242D] transition-colors cursor-pointer"
-          title="Todo / Checklist Note with Checkboxes (Shift+N)"
+          className="p-2 rounded-lg text-cyan-400 hover:text-cyan-300 hover:bg-[#22242D] transition-colors cursor-grab active:cursor-grabbing"
+          title="Todo / Checklist Note with Checkboxes (Click or Hold & Drag onto canvas)"
         >
           <ListTodo className="w-4 h-4" />
         </button>
 
         {/* T - Text Tool */}
         <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, { category: "node", type: "text" })
+          }
           onClick={() => {
             setActiveTool("text");
             handleAddNode("text");
           }}
-          className={`p-2 rounded-lg transition-colors ${
-            activeTool === "text"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-          }`}
-          title="Text (T)"
+          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "text"
+            ? "bg-blue-600 text-white shadow-sm"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Text (Click or Hold & Drag onto canvas)"
         >
           <Type className="w-4 h-4" />
         </button>
 
         {/* F - Frame Tool */}
         <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "node",
+              type: "shape",
+              shapeType: "rectangle",
+              color: "#60A5FA",
+            })
+          }
           onClick={() => handleAddNode("shape", "rectangle", "#60A5FA")}
-          className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#22242D] transition-colors"
-          title="Frame (F)"
+          className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#22242D] transition-colors cursor-grab active:cursor-grabbing"
+          title="Frame (Click or Hold & Drag onto canvas)"
         >
           <Maximize className="w-4 h-4" />
         </button>
@@ -5547,13 +6962,19 @@ export default function WhiteboardCanvas({
         {/* Templates & Functional Areas Drawer */}
         <div className="relative" ref={templateSelectorRef}>
           <button
+            draggable={true}
+            onDragStart={(e) =>
+              handleItemDragStart(e, {
+                category: "functional-area",
+                areaType: "project-planner",
+              })
+            }
             onClick={() => setShowTemplateSelector(!showTemplateSelector)}
-            className={`p-2 rounded-lg transition-colors ${
-              showTemplateSelector
-                ? "bg-purple-600 text-white shadow-sm"
-                : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-            }`}
-            title="Templates & Functional Areas"
+            className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${showTemplateSelector
+              ? "bg-purple-600 text-white shadow-sm"
+              : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+              }`}
+            title="Templates & Functional Areas (Click or Hold & Drag onto canvas)"
           >
             <LayoutGrid className="w-4 h-4 text-purple-400" />
           </button>
@@ -5572,8 +6993,16 @@ export default function WhiteboardCanvas({
 
               <div className="space-y-1">
                 <button
+                  draggable={true}
+                  onDragStart={(e) =>
+                    handleItemDragStart(e, {
+                      category: "functional-area",
+                      areaType: "meeting-notes",
+                    })
+                  }
                   onClick={() => handleInsertFunctionalArea("meeting-notes")}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors cursor-grab active:cursor-grabbing"
+                  title="Meeting Notes Area (Click or Hold & Drag onto canvas)"
                 >
                   <Calendar className="w-4 h-4 text-blue-400 shrink-0" />
                   <div>
@@ -5583,8 +7012,16 @@ export default function WhiteboardCanvas({
                 </button>
 
                 <button
+                  draggable={true}
+                  onDragStart={(e) =>
+                    handleItemDragStart(e, {
+                      category: "functional-area",
+                      areaType: "notes",
+                    })
+                  }
                   onClick={() => handleInsertFunctionalArea("notes")}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors cursor-grab active:cursor-grabbing"
+                  title="Notes & Brainstorm Area (Click or Hold & Drag onto canvas)"
                 >
                   <StickyNote className="w-4 h-4 text-amber-400 shrink-0" />
                   <div>
@@ -5594,8 +7031,16 @@ export default function WhiteboardCanvas({
                 </button>
 
                 <button
+                  draggable={true}
+                  onDragStart={(e) =>
+                    handleItemDragStart(e, {
+                      category: "functional-area",
+                      areaType: "diagram",
+                    })
+                  }
                   onClick={() => handleInsertFunctionalArea("diagram")}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors cursor-grab active:cursor-grabbing"
+                  title="System Diagram Area (Click or Hold & Drag onto canvas)"
                 >
                   <GitFork className="w-4 h-4 text-cyan-400 shrink-0" />
                   <div>
@@ -5605,8 +7050,16 @@ export default function WhiteboardCanvas({
                 </button>
 
                 <button
+                  draggable={true}
+                  onDragStart={(e) =>
+                    handleItemDragStart(e, {
+                      category: "functional-area",
+                      areaType: "project-planner",
+                    })
+                  }
                   onClick={() => handleInsertFunctionalArea("project-planner")}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors cursor-grab active:cursor-grabbing"
+                  title="Project Planner Area (Click or Hold & Drag onto canvas)"
                 >
                   <Kanban className="w-4 h-4 text-purple-400 shrink-0" />
                   <div>
@@ -5616,8 +7069,16 @@ export default function WhiteboardCanvas({
                 </button>
 
                 <button
+                  draggable={true}
+                  onDragStart={(e) =>
+                    handleItemDragStart(e, {
+                      category: "functional-area",
+                      areaType: "org-chart",
+                    })
+                  }
                   onClick={() => handleInsertFunctionalArea("org-chart")}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors cursor-grab active:cursor-grabbing"
+                  title="Organizational Chart Area (Click or Hold & Drag onto canvas)"
                 >
                   <CheckSquare className="w-4 h-4 text-blue-400 shrink-0" />
                   <div>
@@ -5673,11 +7134,10 @@ export default function WhiteboardCanvas({
                       setActiveFillType(ft);
                       if (selectedNodeId) updateSelectedNode({ fillType: ft });
                     }}
-                    className={`px-2 py-1 rounded text-xs capitalize ${
-                      activeFillType === ft
-                        ? "bg-blue-600 text-white font-semibold"
-                        : "bg-[#22242D] text-gray-300 hover:text-white"
-                    }`}
+                    className={`px-2 py-1 rounded text-xs capitalize ${activeFillType === ft
+                      ? "bg-blue-600 text-white font-semibold"
+                      : "bg-[#22242D] text-gray-300 hover:text-white"
+                      }`}
                   >
                     {ft}
                   </button>
@@ -5694,11 +7154,10 @@ export default function WhiteboardCanvas({
           type="button"
           onClick={handleUndo}
           disabled={!canUndo}
-          className={`p-2 rounded-lg transition-colors ${
-            canUndo
-              ? "text-gray-300 hover:text-white hover:bg-[#22242D] cursor-pointer"
-              : "text-gray-600 cursor-not-allowed opacity-40"
-          }`}
+          className={`p-2 rounded-lg transition-colors ${canUndo
+            ? "text-gray-300 hover:text-white hover:bg-[#22242D] cursor-pointer"
+            : "text-gray-600 cursor-not-allowed opacity-40"
+            }`}
           title="Undo (Ctrl+Z)"
           aria-label="Undo action"
         >
@@ -5708,11 +7167,10 @@ export default function WhiteboardCanvas({
           type="button"
           onClick={handleRedo}
           disabled={!canRedo}
-          className={`p-2 rounded-lg transition-colors ${
-            canRedo
-              ? "text-gray-300 hover:text-white hover:bg-[#22242D] cursor-pointer"
-              : "text-gray-600 cursor-not-allowed opacity-40"
-          }`}
+          className={`p-2 rounded-lg transition-colors ${canRedo
+            ? "text-gray-300 hover:text-white hover:bg-[#22242D] cursor-pointer"
+            : "text-gray-600 cursor-not-allowed opacity-40"
+            }`}
           title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
           aria-label="Redo action"
         >
