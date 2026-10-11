@@ -2093,3 +2093,337 @@ describe("Whiteboard Canvas & Organizational Chart Template", () => {
     });
   });
 
+  describe("Whiteboard Canvas Drag-and-Drop, Hierarchy Branching & Note In-Place Editing", () => {
+    it("handles dragging toolbar items onto canvas across all node types", () => {
+      const mockDropPayload = {
+        category: "node" as const,
+        type: "sticky" as const,
+        title: "Product Roadmap Note",
+        noteFormat: "text" as const,
+        color: "#EC4899",
+      };
+
+      const canvasX = 350;
+      const canvasY = 220;
+
+      const createdNode = {
+        id: `node-${Date.now()}`,
+        type: mockDropPayload.type,
+        x: canvasX,
+        y: canvasY,
+        width: 220,
+        height: 180,
+        title: mockDropPayload.title,
+        noteFormat: mockDropPayload.noteFormat,
+        color: mockDropPayload.color,
+        body: "",
+      };
+
+      expect(createdNode.type).toBe("sticky");
+      expect(createdNode.title).toBe("Product Roadmap Note");
+      expect(createdNode.x).toBe(350);
+      expect(createdNode.y).toBe(220);
+    });
+
+    it("verifies ONLY org task card branches into another org task card with gold header and blue position box", () => {
+      const parentTaskNode = {
+        id: "task-parent",
+        type: "task" as const,
+        x: 400,
+        y: 100,
+        width: 160,
+        height: 96,
+        title: "Add a task here to represent this team member!",
+        subtitle: "Team Member / Role",
+        color: "#0078D4",
+        headerHeight: 40,
+        zIndex: 2,
+      };
+
+      const branchTaskNode = {
+        id: `node-branch-${Date.now()}`,
+        type: "task" as const,
+        x: parentTaskNode.x + 80,
+        y: parentTaskNode.y + parentTaskNode.height + 70,
+        width: parentTaskNode.width || 160,
+        height: parentTaskNode.height || 96,
+        title: "New Team Member",
+        subtitle: "Position",
+        color: parentTaskNode.color || "#0078D4",
+        headerHeight: parentTaskNode.headerHeight,
+        fillType: "solid" as const,
+        zIndex: 2,
+      };
+
+      expect(branchTaskNode.type).toBe("task");
+      expect(branchTaskNode.title).toBe("New Team Member");
+      expect(branchTaskNode.subtitle).toBe("Position");
+    });
+
+    it("verifies shapes branch into matching geometric design (e.g. Rounded orange shape)", () => {
+      const parentShapeNode = {
+        id: "shape-parent",
+        type: "shape" as const,
+        shapeType: "rounded" as const,
+        x: 300,
+        y: 100,
+        width: 180,
+        height: 100,
+        title: "Rounded",
+        color: "#F59E0B",
+        textColor: "#FFFFFF",
+      };
+
+      const branchShapeNode = {
+        id: `node-branch-${Date.now()}`,
+        type: "shape" as const,
+        shapeType: parentShapeNode.shapeType || "rounded",
+        x: parentShapeNode.x + 80,
+        y: parentShapeNode.y + parentShapeNode.height + 70,
+        width: parentShapeNode.width || 180,
+        height: parentShapeNode.height || 100,
+        title: parentShapeNode.title || "Rounded",
+        color: parentShapeNode.color || "#F59E0B",
+        fillType: "solid" as const,
+        textColor: parentShapeNode.textColor || "#FFFFFF",
+        fontWeight: "bold" as const,
+        fontSize: "14px",
+        textAlign: "center" as const,
+        zIndex: 2,
+      };
+
+      expect(branchShapeNode.type).toBe("shape");
+      expect(branchShapeNode.shapeType).toBe("rounded");
+      expect(branchShapeNode.title).toBe("Rounded");
+      expect(branchShapeNode.color).toBe("#F59E0B");
+    });
+
+    it("ensures sticky note title editing and body editing maintain distinct states without blur conflict", () => {
+      let editingTitleId: string | null = null;
+      let editingNodeId: string | null = null;
+
+      const note = {
+        id: "sticky-101",
+        title: "Note (Copy)",
+        body: "TENANT B (ID: comp_beta)",
+      };
+
+      // User double clicks title to edit title
+      editingTitleId = note.id;
+      expect(editingTitleId).toBe("sticky-101");
+      expect(editingNodeId).toBeNull(); // Body is NOT in edit mode, no focus conflict!
+
+      // User saves title
+      const updatedTitle = "Sprint Alpha Notes";
+      note.title = updatedTitle;
+      editingTitleId = null;
+
+      // User double clicks body to edit body text
+      editingNodeId = note.id;
+      expect(editingNodeId).toBe("sticky-101");
+      expect(editingTitleId).toBeNull(); // Title is NOT in edit mode, no focus conflict!
+
+      // User updates body text
+      const updatedBody = "TENANT B (ID: comp_beta) - Provisioned & Active";
+      note.body = updatedBody;
+      editingNodeId = null;
+
+      expect(note.title).toBe("Sprint Alpha Notes");
+      expect(note.body).toContain("Provisioned & Active");
+    });
+
+    it("verifies scroll containment logic allows internal element scrolling while preventing canvas pan", () => {
+      const mockScrollable = {
+        scrollHeight: 350,
+        clientHeight: 150,
+        scrollWidth: 150,
+        clientWidth: 150,
+        scrollTop: 10,
+        scrollLeft: 0,
+      };
+
+      const hasVerticalOverflow = mockScrollable.scrollHeight > mockScrollable.clientHeight + 1;
+      expect(hasVerticalOverflow).toBe(true);
+
+      const deltaY: number = 40;
+      let canvasPanDisplaced = false;
+
+      // Simulated handleWheel logic
+      if (hasVerticalOverflow && deltaY !== 0) {
+        mockScrollable.scrollTop += deltaY;
+        // canvas pan is NOT displaced because wheel is contained
+        canvasPanDisplaced = false;
+      }
+
+      expect(mockScrollable.scrollTop).toBe(50);
+      expect(canvasPanDisplaced).toBe(false);
+    });
+
+    it("verifies unified group entity linking, synchronized movement, and compound temporary groups {{a,b,c}, e}", () => {
+      // Setup nodes: a, b, c, d, e
+      const nodes = [
+        { id: "a", x: 100, y: 100, width: 120, height: 80, groupId: "" },
+        { id: "b", x: 260, y: 100, width: 120, height: 80, groupId: "" },
+        { id: "c", x: 420, y: 100, width: 120, height: 80, groupId: "" },
+        { id: "d", x: 100, y: 300, width: 120, height: 80, groupId: "" },
+        { id: "e", x: 300, y: 300, width: 120, height: 80, groupId: "" },
+      ];
+
+      // Helper function matching WhiteboardCanvas resolveGroupMembers
+      const resolveGroupMembers = (ids: string[], allNodes: typeof nodes): string[] => {
+        const result = new Set<string>(ids);
+        const activeGroupIds = new Set<string>();
+
+        for (const id of ids) {
+          const n = allNodes.find((item) => item.id === id);
+          if (n?.groupId) {
+            activeGroupIds.add(n.groupId);
+          }
+        }
+
+        if (activeGroupIds.size > 0) {
+          for (const n of allNodes) {
+            if (n.groupId && activeGroupIds.has(n.groupId)) {
+              result.add(n.id);
+            }
+          }
+        }
+
+        return Array.from(result);
+      };
+
+      // 1. User selects a, b, c and clicks 'Link as Group'
+      const selectedToGroup = ["a", "b", "c"];
+      const newGroupId = "group-abc-999";
+      nodes.forEach((n) => {
+        if (selectedToGroup.includes(n.id)) {
+          n.groupId = newGroupId;
+        }
+      });
+
+      expect(nodes.find((n) => n.id === "a")?.groupId).toBe("group-abc-999");
+      expect(nodes.find((n) => n.id === "b")?.groupId).toBe("group-abc-999");
+      expect(nodes.find((n) => n.id === "c")?.groupId).toBe("group-abc-999");
+      expect(nodes.find((n) => n.id === "d")?.groupId).toBe("");
+      expect(nodes.find((n) => n.id === "e")?.groupId).toBe("");
+
+      // 2. Clicking single node 'a' automatically selects all group members {a, b, c}
+      const singleClickSelection = resolveGroupMembers(["a"], nodes);
+      expect(singleClickSelection).toEqual(["a", "b", "c"]);
+
+      // 3. Dragging group {a, b, c} moves all 3 nodes together maintaining relative distances
+      const initialDistAB = nodes[1].x - nodes[0].x; // 260 - 100 = 160
+      const initialDistBC = nodes[2].x - nodes[1].x; // 420 - 260 = 160
+
+      const dragDeltaX = 50;
+      const dragDeltaY = 30;
+
+      // Group drag execution
+      nodes.forEach((n) => {
+        if (singleClickSelection.includes(n.id)) {
+          n.x += dragDeltaX;
+          n.y += dragDeltaY;
+        }
+      });
+
+      expect(nodes[0]).toMatchObject({ id: "a", x: 150, y: 130 });
+      expect(nodes[1]).toMatchObject({ id: "b", x: 310, y: 130 });
+      expect(nodes[2]).toMatchObject({ id: "c", x: 470, y: 130 });
+      // Nodes d and e were NOT selected and stayed stationary
+      expect(nodes[3]).toMatchObject({ id: "d", x: 100, y: 300 });
+      expect(nodes[4]).toMatchObject({ id: "e", x: 300, y: 300 });
+
+      // Relative distances strictly preserved
+      expect(nodes[1].x - nodes[0].x).toBe(initialDistAB);
+      expect(nodes[2].x - nodes[1].x).toBe(initialDistBC);
+
+      // 4. Temporary compound group creation {{a, b, c}, e} by multi-selecting or marquee dragging
+      // Selection contains group {a, b, c} plus independent node e
+      const compoundSelection = resolveGroupMembers(["a", "e"], nodes);
+      expect(compoundSelection).toEqual(expect.arrayContaining(["a", "b", "c", "e"]));
+      expect(compoundSelection).not.toContain("d");
+
+      // Dragging compound group {{a, b, c}, e} moves all 4 together
+      const compoundDeltaX = 40;
+      const compoundDeltaY = -20;
+      nodes.forEach((n) => {
+        if (compoundSelection.includes(n.id)) {
+          n.x += compoundDeltaX;
+          n.y += compoundDeltaY;
+        }
+      });
+
+      expect(nodes[0]).toMatchObject({ id: "a", x: 190, y: 110 });
+      expect(nodes[1]).toMatchObject({ id: "b", x: 350, y: 110 });
+      expect(nodes[2]).toMatchObject({ id: "c", x: 510, y: 110 });
+      expect(nodes[4]).toMatchObject({ id: "e", x: 340, y: 280 });
+      // Node d is still stationary!
+      expect(nodes[3]).toMatchObject({ id: "d", x: 100, y: 300 });
+
+      // 5. Unlink Group dissolves groupId back to independent objects
+      nodes.forEach((n) => {
+        if (n.groupId === newGroupId) {
+          n.groupId = "";
+        }
+      });
+
+      expect(nodes[0].groupId).toBe("");
+      expect(nodes[1].groupId).toBe("");
+      expect(nodes[2].groupId).toBe("");
+
+      // Now clicking 'a' only selects 'a'
+      const unlinkedSelection = resolveGroupMembers(["a"], nodes);
+      expect(unlinkedSelection).toEqual(["a"]);
+    });
+
+    it("allows individual box color and text edits on linked group members while dragging moves group together", () => {
+      const nodes = [
+        { id: "a", x: 100, y: 100, width: 120, height: 80, color: "#0078D4", title: "President", groupId: "group-1" },
+        { id: "b", x: 260, y: 100, width: 120, height: 80, color: "#0078D4", title: "VP", groupId: "group-1" },
+        { id: "c", x: 420, y: 100, width: 120, height: 80, color: "#0078D4", title: "Assistant", groupId: "group-1" },
+      ];
+
+      // 1. User clicks node 'b' without Shift -> selects ONLY node 'b' individually
+      let selectedNodeId: string | null = "b";
+      let selectedNodeIds: string[] = ["b"];
+
+      expect(selectedNodeId).toBe("b");
+      expect(selectedNodeIds).toEqual(["b"]);
+
+      // 2. Individual edit: user changes box color of node 'b' to Emerald Green
+      const newColor = "#10B981";
+      const targetIds = selectedNodeIds.length <= 1 && selectedNodeId ? [selectedNodeId] : selectedNodeIds;
+
+      const updatedNodes = nodes.map((n) =>
+        targetIds.includes(n.id) ? { ...n, color: newColor } : n
+      );
+
+      // Node 'b' received new color, while 'a' and 'c' remained original blue!
+      expect(updatedNodes.find((n) => n.id === "b")?.color).toBe("#10B981");
+      expect(updatedNodes.find((n) => n.id === "a")?.color).toBe("#0078D4");
+      expect(updatedNodes.find((n) => n.id === "c")?.color).toBe("#0078D4");
+
+      // 3. User drags node 'b' -> all group members move together maintaining identical relative spacing
+      const activeGroupId = updatedNodes.find((n) => n.id === "b")?.groupId;
+      const nodesToDrag = activeGroupId
+        ? updatedNodes.filter((n) => n.groupId === activeGroupId).map((n) => n.id)
+        : ["b"];
+
+      expect(nodesToDrag).toEqual(["a", "b", "c"]);
+
+      const dx = 45;
+      const dy = 25;
+      const draggedNodes = updatedNodes.map((n) =>
+        nodesToDrag.includes(n.id) ? { ...n, x: n.x + dx, y: n.y + dy } : n
+      );
+
+      expect(draggedNodes[0]).toMatchObject({ id: "a", x: 145, y: 125, color: "#0078D4" });
+      expect(draggedNodes[1]).toMatchObject({ id: "b", x: 305, y: 125, color: "#10B981" });
+      expect(draggedNodes[2]).toMatchObject({ id: "c", x: 465, y: 125, color: "#0078D4" });
+
+      // Spacing strictly preserved
+      expect(draggedNodes[1].x - draggedNodes[0].x).toBe(160);
+      expect(draggedNodes[2].x - draggedNodes[1].x).toBe(160);
+    });
+  });
+

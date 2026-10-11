@@ -61,6 +61,7 @@ export interface IWhiteboardNode {
   previewText?: string;
   headerHeight?: number;
   metaData?: Record<string, any>;
+  groupId?: string;
 }
 
 export interface IWhiteboardEdge {
@@ -222,6 +223,7 @@ const whiteboardSchema = new Schema<IWhiteboard>(
         zIndex: { type: Number, default: 1 },
         pathData: { type: String, default: "" },
         strokeWidth: { type: Number, default: 3 },
+        groupId: { type: String, default: "" },
       },
     ],
     edges: [

@@ -449,6 +449,7 @@ export default function WhiteboardCanvas({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<"title" | "subtitle" | null>(null);
 
   // Interactive Line Drawing on Canvas (Straight Line & Independent Arrow)
@@ -553,6 +554,10 @@ export default function WhiteboardCanvas({
   // Styling properties for selected node
   const [activeFillType, setActiveFillType] = useState<"solid" | "tint" | "pattern" | "none">("solid");
   const [activeColor, setActiveColor] = useState<string>("#0078D4");
+
+  // Drag movement candidate tracking (allows dragging group entities while single-clicking selects individual nodes for editing)
+  const clickedCandidateNodeRef = useRef<{ node: IWhiteboardNode; wasMultiSelected: boolean } | null>(null);
+  const hasActuallyMovedDragRef = useRef(false);
 
   // Fullscreen state (True edge-to-edge full screen with zero borders/margins)
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -1289,6 +1294,7 @@ export default function WhiteboardCanvas({
     const clonedNode: IWhiteboardNode = {
       ...sourceNode,
       id: newId,
+      groupId: undefined,
       x: sourceNode.x + 35,
       y: sourceNode.y + 35,
       title: clonedTitle,
@@ -1402,6 +1408,7 @@ export default function WhiteboardCanvas({
   const handleNodeDoubleClick = (node: IWhiteboardNode, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedNodeId(node.id);
+    setSelectedNodeIds([node.id]);
     setEditingNodeId(node.id);
     setDoubleClickMenu(null);
   };
@@ -1715,32 +1722,94 @@ export default function WhiteboardCanvas({
     const siblingNode = nodes.find((n) => n.id === edge.to);
     if (!parentNode) return;
 
+    const templateNode = siblingNode || parentNode;
+
     // Calculate position: right next to siblingNode, or below parent
     const newX = siblingNode ? siblingNode.x + siblingNode.width + 40 : parentNode.x + 120;
     const newY = siblingNode ? siblingNode.y : parentNode.y + parentNode.height + 70;
 
     const newBranchId = `node-branch-${Date.now()}`;
-    const newBranchNode: IWhiteboardNode = {
-      id: newBranchId,
-      type: siblingNode ? siblingNode.type : "task",
-      x: newX,
-      y: newY,
-      width: siblingNode ? siblingNode.width : 160,
-      height: siblingNode ? siblingNode.height : 100,
-      title: "New Team Member",
-      subtitle: siblingNode?.subtitle || "Branch Position",
-      color: siblingNode?.color || "#0078D4",
-      fillType: "solid",
-      zIndex: 2,
-    };
+    let newBranchNode: IWhiteboardNode;
+
+    if (templateNode.type === "task") {
+      // ONLY org task card branches another org task card!
+      newBranchNode = {
+        id: newBranchId,
+        type: "task",
+        x: newX,
+        y: newY,
+        width: templateNode.width || 160,
+        height: templateNode.height || 96,
+        title: "New Team Member",
+        subtitle: "Position",
+        color: templateNode.color || "#0078D4",
+        headerHeight: templateNode.headerHeight,
+        fillType: templateNode.fillType || "solid",
+        zIndex: 2,
+      };
+    } else if (templateNode.type === "shape") {
+      // Shapes create branches matching their shape geometry, color, and styling (e.g. simple rounded design like in Image 2)
+      newBranchNode = {
+        id: newBranchId,
+        type: "shape",
+        shapeType: templateNode.shapeType || "rounded",
+        x: newX,
+        y: newY,
+        width: templateNode.width || 180,
+        height: templateNode.height || 100,
+        title: templateNode.title || (templateNode.shapeType === "rounded" ? "Rounded" : "Shape"),
+        color: templateNode.color || "#F59E0B",
+        fillType: templateNode.fillType || "solid",
+        textColor: templateNode.textColor || "#FFFFFF",
+        fontWeight: templateNode.fontWeight || "bold",
+        fontSize: templateNode.fontSize || "14px",
+        textAlign: templateNode.textAlign || "center",
+        zIndex: 2,
+      };
+    } else if (templateNode.type === "sticky") {
+      newBranchNode = {
+        id: newBranchId,
+        type: "sticky",
+        noteFormat: templateNode.noteFormat || "text",
+        x: newX,
+        y: newY,
+        width: templateNode.width || 200,
+        height: templateNode.height || 180,
+        title: templateNode.title || "Note",
+        body: "",
+        color: templateNode.color || "#EC4899",
+        textColor: templateNode.textColor,
+        fontSize: templateNode.fontSize,
+        zIndex: 2,
+      };
+    } else {
+      newBranchNode = {
+        id: newBranchId,
+        type: templateNode.type,
+        shapeType: templateNode.shapeType || "rounded",
+        x: newX,
+        y: newY,
+        width: templateNode.width || 180,
+        height: templateNode.height || 100,
+        title: templateNode.title || "Branch",
+        color: templateNode.color || "#F59E0B",
+        fillType: templateNode.fillType || "solid",
+        textColor: templateNode.textColor || "#FFFFFF",
+        zIndex: 2,
+      };
+    }
 
     const newEdgeId = `edge-branch-${Date.now()}`;
     const newEdge: IWhiteboardEdge = {
       id: newEdgeId,
       from: parentNode.id,
       to: newBranchId,
+      fromAnchor: "bottom",
+      toAnchor: "top",
       color: edge.color || "#60A5FA",
-      style: edge.style || "solid",
+      style: "orthogonal",
+      lineStyle: "solid",
+      arrowDirection: "forward",
     };
 
     const updatedNodes = [...nodes, newBranchNode];
@@ -1748,6 +1817,7 @@ export default function WhiteboardCanvas({
     setNodes(updatedNodes);
     setEdges(updatedEdges);
     pushHistory(updatedNodes, updatedEdges);
+    triggerAutoSave(updatedNodes, updatedEdges);
 
     setSelectedNodeId(newBranchId);
     setSelectedNodeIds([newBranchId]);
@@ -1772,27 +1842,87 @@ export default function WhiteboardCanvas({
     }
 
     const newBranchId = `node-branch-${Date.now()}`;
-    const newBranchNode: IWhiteboardNode = {
-      id: newBranchId,
-      type: "task",
-      x: newX,
-      y: newY,
-      width: 160,
-      height: 96,
-      title: "New Team Member",
-      subtitle: "Position",
-      color: "#0078D4",
-      fillType: "solid",
-      zIndex: 2,
-    };
+    let newBranchNode: IWhiteboardNode;
+
+    if (parentNode.type === "task") {
+      // ONLY org task card branches another org task card!
+      newBranchNode = {
+        id: newBranchId,
+        type: "task",
+        x: newX,
+        y: newY,
+        width: parentNode.width || 160,
+        height: parentNode.height || 96,
+        title: "New Team Member",
+        subtitle: "Position",
+        color: parentNode.color || "#0078D4",
+        headerHeight: parentNode.headerHeight,
+        fillType: parentNode.fillType || "solid",
+        zIndex: 2,
+      };
+    } else if (parentNode.type === "shape") {
+      // Shapes create branches matching their shape geometry, color, and styling (e.g. simple rounded design like in Image 2)
+      newBranchNode = {
+        id: newBranchId,
+        type: "shape",
+        shapeType: parentNode.shapeType || "rounded",
+        x: newX,
+        y: newY,
+        width: parentNode.width || 180,
+        height: parentNode.height || 100,
+        title: parentNode.title || (parentNode.shapeType === "rounded" ? "Rounded" : "Shape"),
+        color: parentNode.color || "#F59E0B",
+        fillType: parentNode.fillType || "solid",
+        textColor: parentNode.textColor || "#FFFFFF",
+        fontWeight: parentNode.fontWeight || "bold",
+        fontSize: parentNode.fontSize || "14px",
+        textAlign: parentNode.textAlign || "center",
+        zIndex: 2,
+      };
+    } else if (parentNode.type === "sticky") {
+      newBranchNode = {
+        id: newBranchId,
+        type: "sticky",
+        noteFormat: parentNode.noteFormat || "text",
+        x: newX,
+        y: newY,
+        width: parentNode.width || 200,
+        height: parentNode.height || 180,
+        title: parentNode.title || "Note",
+        body: "",
+        color: parentNode.color || "#EC4899",
+        textColor: parentNode.textColor,
+        fontSize: parentNode.fontSize,
+        zIndex: 2,
+      };
+    } else {
+      newBranchNode = {
+        id: newBranchId,
+        type: parentNode.type || "shape",
+        shapeType: parentNode.shapeType || "rounded",
+        x: newX,
+        y: newY,
+        width: parentNode.width || 180,
+        height: parentNode.height || 100,
+        title: parentNode.title || "Branch",
+        color: parentNode.color || "#F59E0B",
+        fillType: parentNode.fillType || "solid",
+        textColor: parentNode.textColor || "#FFFFFF",
+        zIndex: 2,
+      };
+    }
 
     const newEdgeId = `edge-branch-${Date.now()}`;
     const newEdge: IWhiteboardEdge = {
       id: newEdgeId,
       from: parentNode.id,
       to: newBranchId,
+      fromAnchor: "bottom",
+      toAnchor: "top",
       color: "#60A5FA",
-      style: "solid",
+      style: "orthogonal",
+      lineStyle: "solid",
+      arrowDirection: "forward",
     };
 
     const updatedNodes = [...nodes, newBranchNode];
@@ -1800,12 +1930,39 @@ export default function WhiteboardCanvas({
     setNodes(updatedNodes);
     setEdges(updatedEdges);
     pushHistory(updatedNodes, updatedEdges);
+    triggerAutoSave(updatedNodes, updatedEdges);
 
     setSelectedNodeId(newBranchId);
     setSelectedNodeIds([newBranchId]);
   };
 
-  // Node Dragging Start (Supports Ctrl+Click multi-select and Group Dragging)
+  // Helper: Given a list of node IDs, expand to include all group members for any node belonging to a groupId
+  const resolveGroupMembers = useCallback(
+    (nodeIds: string[], allNodes: IWhiteboardNode[]): string[] => {
+      const result = new Set<string>(nodeIds);
+      const activeGroupIds = new Set<string>();
+
+      for (const id of nodeIds) {
+        const n = allNodes.find((item) => item.id === id);
+        if (n?.groupId) {
+          activeGroupIds.add(n.groupId);
+        }
+      }
+
+      if (activeGroupIds.size > 0) {
+        for (const n of allNodes) {
+          if (n.groupId && activeGroupIds.has(n.groupId)) {
+            result.add(n.id);
+          }
+        }
+      }
+
+      return Array.from(result);
+    },
+    []
+  );
+
+  // Node Dragging Start (Supports linked groups, Ctrl+Click multi-select, and compound temporary groups)
   const handleNodeMouseDown = (node: IWhiteboardNode, e: React.MouseEvent) => {
     e.stopPropagation();
     if (activeTool === "hand") return;
@@ -1858,25 +2015,46 @@ export default function WhiteboardCanvas({
     const isMultiSelect = e.ctrlKey || e.metaKey || e.shiftKey;
 
     if (isMultiSelect) {
-      // Toggle node in multi-selection group
+      // Toggle node or its linked group in multi-selection group
+      const nodeGroupMembers = node.groupId
+        ? resolveGroupMembers([node.id], nodes)
+        : [node.id];
+
+      const isAlreadySelected = selectedNodeIds.includes(node.id);
       let nextSelected: string[];
-      if (selectedNodeIds.includes(node.id)) {
-        nextSelected = selectedNodeIds.filter((id) => id !== node.id);
+
+      if (isAlreadySelected) {
+        // Deselect node (and its group members if linked)
+        nextSelected = selectedNodeIds.filter((id) => !nodeGroupMembers.includes(id));
       } else {
-        nextSelected = [...selectedNodeIds, node.id];
+        // Add node (and all its linked group members)
+        nextSelected = Array.from(new Set([...selectedNodeIds, ...nodeGroupMembers]));
       }
+
       setSelectedNodeIds(nextSelected);
       setSelectedNodeId(nextSelected[nextSelected.length - 1] || null);
       return;
     }
 
-    // Normal click without Ctrl:
-    // If clicking a node that is ALREADY part of the multi-selection group, keep the group to drag together!
-    let activeGroup = selectedNodeIds;
-    if (!selectedNodeIds.includes(node.id)) {
-      activeGroup = [node.id];
+    // Normal click without Ctrl/Shift:
+    // 1. For EDITING & FORMATTING: select this specific node so individual editing (box color, text, font, fill) works seamlessly!
+    // 2. For DRAGGING & MOVEMENT: if this node belongs to a linked group (or an active multi-selection), move all group members together!
+    const wasAlreadyMultiSelected = selectedNodeIds.length > 1 && selectedNodeIds.includes(node.id);
+    let nodesToDrag: string[];
+
+    if (wasAlreadyMultiSelected) {
+      // User clicked within an existing multi-selection; prepare group drag
+      nodesToDrag = resolveGroupMembers(selectedNodeIds, nodes);
+    } else {
+      // Single node selected for individual formatting & editing
+      setSelectedNodeId(node.id);
       setSelectedNodeIds([node.id]);
+      nodesToDrag = node.groupId ? resolveGroupMembers([node.id], nodes) : [node.id];
     }
+
+    clickedCandidateNodeRef.current = { node, wasMultiSelected: wasAlreadyMultiSelected };
+    hasActuallyMovedDragRef.current = false;
+
     setSelectedNodeId(node.id);
     setActiveColor(node.color || "#0078D4");
     setActiveFillType(node.fillType || "solid");
@@ -1888,7 +2066,7 @@ export default function WhiteboardCanvas({
 
     const initialPositions: Record<string, { x: number; y: number }> = {};
     nodes.forEach((n) => {
-      if (activeGroup.includes(n.id)) {
+      if (nodesToDrag.includes(n.id)) {
         initialPositions[n.id] = { x: n.x, y: n.y };
       }
     });
@@ -1949,6 +2127,7 @@ export default function WhiteboardCanvas({
         setSelectedNodeIds([]);
         setSelectedNodeId(null);
         setEditingNodeId(null);
+        setEditingTitleId(null);
       }
 
       // Start drag-to-select rectangular selector
@@ -2157,8 +2336,9 @@ export default function WhiteboardCanvas({
           })
           .map((n) => n.id);
 
-        setSelectedNodeIds(intersectingIds);
-        setSelectedNodeId(intersectingIds[0] || null);
+        const expandedIds = resolveGroupMembers(intersectingIds, nodes);
+        setSelectedNodeIds(expandedIds);
+        setSelectedNodeId(expandedIds[0] || null);
       }
       return;
     }
@@ -2167,6 +2347,10 @@ export default function WhiteboardCanvas({
     if (isDraggingGroup && groupDragStartCoords) {
       const dx = coords.x - groupDragStartCoords.x;
       const dy = coords.y - groupDragStartCoords.y;
+
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        hasActuallyMovedDragRef.current = true;
+      }
 
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = requestAnimationFrame(() => {
@@ -2320,7 +2504,20 @@ export default function WhiteboardCanvas({
       setDraggingNodeId(null);
       setGroupDragStartCoords(null);
       setInitialGroupNodePositions({});
+
+      // If user clicked without dragging, ensure this node is individually selected for formatting & color editing
+      if (!hasActuallyMovedDragRef.current && clickedCandidateNodeRef.current) {
+        const targetNode = clickedCandidateNodeRef.current.node;
+        setSelectedNodeId(targetNode.id);
+        setSelectedNodeIds([targetNode.id]);
+        setActiveColor(targetNode.color || "#0078D4");
+        setActiveFillType(targetNode.fillType || "solid");
+      }
+      clickedCandidateNodeRef.current = null;
+      hasActuallyMovedDragRef.current = false;
+
       pushHistory(nodesRef.current, edgesRef.current);
+      triggerAutoSave(nodesRef.current, edgesRef.current);
     }
   };
 
@@ -2434,6 +2631,64 @@ export default function WhiteboardCanvas({
       showTemporaryToast("Removed from canvas, but failed to connect to S3.");
     }
   }, [s3DeleteModal, executeCanvasDelete, showTemporaryToast]);
+
+  // Link Selected Objects into a Unified Group Entity that moves together
+  const handleGroupSelectedNodes = useCallback(() => {
+    const ids =
+      selectedNodeIds.length > 0 ? selectedNodeIds : selectedNodeId ? [selectedNodeId] : [];
+    if (ids.length < 2) {
+      showTemporaryToast("Select 2 or more objects to link as a group entity");
+      return;
+    }
+
+    const newGroupId = `group-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const allIdsToGroup = resolveGroupMembers(ids, nodesRef.current);
+
+    const updatedNodes = nodesRef.current.map((n) =>
+      allIdsToGroup.includes(n.id) ? { ...n, groupId: newGroupId } : n
+    );
+
+    nodesRef.current = updatedNodes;
+    setNodes(updatedNodes);
+    // Select the primary node individually so individual editing (color, text, size) works immediately
+    // while dragging it will move all group members together in the same space!
+    const primaryId = ids[0] || allIdsToGroup[0];
+    setSelectedNodeId(primaryId);
+    setSelectedNodeIds([primaryId]);
+    pushHistory(updatedNodes, edgesRef.current);
+    triggerAutoSave(updatedNodes, edgesRef.current);
+    showTemporaryToast(`Linked ${allIdsToGroup.length} objects as a unified group entity. Drag to move together.`);
+  }, [selectedNodeIds, selectedNodeId, resolveGroupMembers, pushHistory, triggerAutoSave, showTemporaryToast]);
+
+  // Unlink / Ungroup Selected Objects - dissolves group entity so objects move independently
+  const handleUngroupSelectedNodes = useCallback(() => {
+    const ids =
+      selectedNodeIds.length > 0 ? selectedNodeIds : selectedNodeId ? [selectedNodeId] : [];
+    if (ids.length === 0) return;
+
+    // Find all groupIds present in selection
+    const groupIdsToDissolve = new Set<string>();
+    nodesRef.current.forEach((n) => {
+      if (ids.includes(n.id) && n.groupId) {
+        groupIdsToDissolve.add(n.groupId);
+      }
+    });
+
+    if (groupIdsToDissolve.size === 0) {
+      showTemporaryToast("Selected objects are not linked into any group");
+      return;
+    }
+
+    const updatedNodes = nodesRef.current.map((n) =>
+      n.groupId && groupIdsToDissolve.has(n.groupId) ? { ...n, groupId: undefined } : n
+    );
+
+    nodesRef.current = updatedNodes;
+    setNodes(updatedNodes);
+    pushHistory(updatedNodes, edgesRef.current);
+    triggerAutoSave(updatedNodes, edgesRef.current);
+    showTemporaryToast(`Unlinked group (${ids.length} objects are now independent entities)`);
+  }, [selectedNodeIds, selectedNodeId, pushHistory, triggerAutoSave, showTemporaryToast]);
 
   // Link Selected Objects together with connector edges (supports Sequential, Star, and Bidirectional)
   const handleLinkSelectedNodes = useCallback(
@@ -2595,12 +2850,20 @@ export default function WhiteboardCanvas({
           setSelectedNodeIds(allIds);
           setSelectedNodeId(allIds[0] || null);
           return;
+        } else if (e.key === "g" || e.key === "G") {
+          e.preventDefault();
+          if (e.shiftKey) {
+            handleUngroupSelectedNodes();
+          } else {
+            handleGroupSelectedNodes();
+          }
+          return;
         } else if (e.key === "l" || e.key === "L") {
           e.preventDefault();
           if (e.shiftKey) {
-            handleUnlinkSelectedNodes();
+            handleUngroupSelectedNodes();
           } else {
-            handleLinkSelectedNodes("sequence");
+            handleGroupSelectedNodes();
           }
           return;
         }
@@ -2621,6 +2884,8 @@ export default function WhiteboardCanvas({
       } else if (e.key === "Escape") {
         setSelectedNodeId(null);
         setSelectedNodeIds([]);
+        setEditingNodeId(null);
+        setEditingTitleId(null);
         setConnectingFromNodeId(null);
         setConnectingMousePos(null);
         setDoubleClickMenu(null);
@@ -2668,6 +2933,8 @@ export default function WhiteboardCanvas({
     connectingFromNodeId,
     s3DeleteModal,
     handleDeleteSelected,
+    handleGroupSelectedNodes,
+    handleUngroupSelectedNodes,
     handleLinkSelectedNodes,
     handleUnlinkSelectedNodes,
   ]);
@@ -2691,10 +2958,32 @@ export default function WhiteboardCanvas({
     if (!canvasEl) return;
 
     const handleWheel = (e: WheelEvent) => {
-      // Allow internal scrolling inside inputs / textareas when editing
+      // Allow internal scrolling inside inputs / textareas / scrollable note bodies
       const target = e.target as HTMLElement | null;
-      if (target && target.closest("textarea, input, [data-scrollable='true']")) {
-        return;
+      if (target && !e.ctrlKey && !e.metaKey) {
+        const scrollable = (target.closest(
+          "textarea, select, [data-scrollable='true'], .overflow-y-auto, .overflow-auto, .overflow-y-scroll, .overflow-x-auto"
+        ) ||
+          target.closest("[data-note-card='true']")?.querySelector(
+            "textarea, [data-scrollable='true'], .overflow-y-auto, .overflow-auto"
+          )) as HTMLElement | null;
+
+        if (scrollable) {
+          const hasVerticalOverflow = scrollable.scrollHeight > scrollable.clientHeight + 1;
+          const hasHorizontalOverflow = scrollable.scrollWidth > scrollable.clientWidth + 1;
+
+          if (hasVerticalOverflow || hasHorizontalOverflow) {
+            // Scroll the element directly so transformed canvas doesn't swallow wheel events
+            if (hasVerticalOverflow && e.deltaY !== 0) {
+              scrollable.scrollTop += e.deltaY;
+            }
+            if (hasHorizontalOverflow && e.deltaX !== 0) {
+              scrollable.scrollLeft += e.deltaX;
+            }
+            e.preventDefault(); // Stop canvas from panning underneath!
+            return;
+          }
+        }
       }
 
       e.preventDefault();
@@ -2753,8 +3042,9 @@ export default function WhiteboardCanvas({
       nodesRef.current = updated;
       setNodes(updated);
       pushHistory(updated, edgesRef.current);
+      triggerAutoSave(updated, edgesRef.current);
     },
-    [pushHistory]
+    [pushHistory, triggerAutoSave]
   );
 
   // Live text update during typing (keeps draft synchronously so text never reverts on blur/click)
@@ -2771,31 +3061,33 @@ export default function WhiteboardCanvas({
     [triggerAutoSave]
   );
 
-  // Update selected node attributes (Supports updating entire temporary group at once)
+  // Update selected node attributes (Supports updating single node or entire multi-selection with auto-save)
   const updateSelectedNode = useCallback(
     (patch: Partial<IWhiteboardNode>, fallbackNodeId?: string) => {
-      let targetIds =
-        selectedNodeIds.length > 0
-          ? selectedNodeIds
-          : selectedNodeId
-            ? [selectedNodeId]
-            : fallbackNodeId
-              ? [fallbackNodeId]
-              : [];
-
-      if (targetIds.length === 0 && editingNodeId) {
+      let targetIds: string[];
+      if (selectedNodeId && selectedNodeIds.length <= 1) {
+        targetIds = [selectedNodeId];
+      } else if (selectedNodeIds.length > 0) {
+        targetIds = selectedNodeIds;
+      } else if (selectedNodeId) {
+        targetIds = [selectedNodeId];
+      } else if (fallbackNodeId) {
+        targetIds = [fallbackNodeId];
+      } else if (editingNodeId) {
         targetIds = [editingNodeId];
+      } else {
+        return;
       }
 
-      if (targetIds.length === 0) return;
       const updated = nodesRef.current.map((n) =>
         targetIds.includes(n.id) ? { ...n, ...patch } : n
       );
       nodesRef.current = updated;
       setNodes(updated);
       pushHistory(updated, edgesRef.current);
+      triggerAutoSave(updated, edgesRef.current);
     },
-    [selectedNodeIds, selectedNodeId, editingNodeId, pushHistory]
+    [selectedNodeIds, selectedNodeId, editingNodeId, pushHistory, triggerAutoSave]
   );
 
   // Sticky Note Checklist Handlers
@@ -3121,13 +3413,14 @@ export default function WhiteboardCanvas({
   const renderShapeGeometry = (node: IWhiteboardNode) => {
     const w = Math.round(node.width);
     const h = Math.round(node.height);
+    const nodeColor = node.color || "#0078D4";
     const fill =
       node.fillType === "solid"
-        ? node.color || "#0078D4"
-        : node.fillType === "tint"
-          ? `${node.color || "#0078D4"}33`
-          : "transparent";
-    const stroke = node.color || "#0078D4";
+        ? nodeColor
+        : node.fillType === "none"
+          ? "transparent"
+          : `${nodeColor}33`;
+    const stroke = nodeColor;
     const strokeWidth = 2;
 
     switch (node.shapeType) {
@@ -3544,6 +3837,7 @@ export default function WhiteboardCanvas({
           handleInsertFunctionalArea(parsed.areaType, dropCoords);
           setShowTemplateSelector(false);
           return;
+        } else if (parsed.category === "node") {
           handleAddNode(
             parsed.type,
             parsed.shapeType || "rectangle",
@@ -3729,19 +4023,34 @@ export default function WhiteboardCanvas({
       </header>
 
       {/* 2. FLOATING FORMAT BAR (Shown above selected node - Differentiated by Object Type) */}
-      {selectedNode && (
+      {selectedNode && selectedNodeIds.length <= 1 && (
         <div
-          className="absolute z-40 bg-[#1A1C22] border border-[#2D3039] rounded-lg shadow-2xl px-2.5 py-1.5 flex items-center gap-2 text-xs text-gray-300 animate-in fade-in-50"
+          onMouseDown={(e) => e.stopPropagation()}
+          className="absolute z-40 bg-[#1A1C22] border border-[#2D3039] rounded-lg shadow-2xl px-2.5 py-1.5 flex items-center gap-2 text-xs text-gray-300 animate-in fade-in-50 max-w-[calc(100vw-32px)] overflow-x-auto scrollbar-none"
           style={{
-            left: Math.max(20, Math.min(window.innerWidth - 480, selectedNode.x * zoom + pan.x)),
+            left: Math.max(20, Math.min(window.innerWidth - 760, selectedNode.x * zoom + pan.x)),
             top: Math.max(60, selectedNode.y * zoom + pan.y - 48),
           }}
         >
-          <span className="px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400 text-[10px] font-bold uppercase tracking-wider">
+          <span className="px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400 text-[10px] font-bold uppercase tracking-wider shrink-0">
             {selectedNode.type === "shape" ? selectedNode.shapeType || "shape" : selectedNode.type}
           </span>
 
-          <div className="h-4 w-px bg-[#30333D]" />
+          {selectedNode.groupId && (
+            <button
+              type="button"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={handleUngroupSelectedNodes}
+              className="px-1.5 py-0.5 rounded bg-blue-500/20 hover:bg-amber-500/25 text-blue-300 hover:text-amber-200 border border-blue-500/35 text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+              title="Linked as group entity (drag moves together). Click to unlink."
+            >
+              <Link2 className="w-2.5 h-2.5 text-blue-400" />
+              <span>Linked Group</span>
+              <span className="text-[9px] text-gray-400">· Unlink</span>
+            </button>
+          )}
+
+          <div className="h-4 w-px bg-[#30333D] shrink-0" />
 
           {/* A. SHAPE CONTROLS */}
           {selectedNode.type === "shape" && (
@@ -3859,23 +4168,35 @@ export default function WhiteboardCanvas({
               {/* Color Swatch */}
               <div className="relative">
                 <button
-                  onClick={() => setShowStylePalette(!showStylePalette)}
-                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs"
+                  type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowStylePalette(!showStylePalette);
+                  }}
+                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs cursor-pointer hover:scale-110 transition-transform"
                   style={{ backgroundColor: selectedNode.color || "#0078D4" }}
-                  title="Change Color"
+                  title="Change Box Color"
                 />
 
                 {showStylePalette && (
-                  <div className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50">
+                  <div
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50"
+                  >
                     {COLOR_PALETTE.map((c) => (
                       <button
                         key={c.name}
-                        onClick={() => {
+                        type="button"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setActiveColor(c.value);
                           updateSelectedNode({ color: c.value });
                           setShowStylePalette(false);
                         }}
-                        className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20"
+                        className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20 cursor-pointer"
                         style={{ backgroundColor: c.value }}
                         title={c.name}
                       />
@@ -3885,6 +4206,8 @@ export default function WhiteboardCanvas({
               </div>
 
               <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => handleAddBranchFromNode(selectedNode.id)}
                 className="px-2 py-1 bg-blue-600/30 hover:bg-blue-600 text-blue-300 hover:text-white rounded text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
                 title="Add Branch Node (+)"
@@ -3898,14 +4221,66 @@ export default function WhiteboardCanvas({
           {/* B. TASK CONTROLS */}
           {selectedNode.type === "task" && (
             <>
+              {/* Box Color Swatch - Placed first so it is immediately prominent and never cut off */}
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowStylePalette(!showStylePalette);
+                  }}
+                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs cursor-pointer hover:scale-110 transition-transform"
+                  style={{ backgroundColor: selectedNode.color || "#0078D4" }}
+                  title="Change Box Color"
+                />
+
+                {showStylePalette && (
+                  <div
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50"
+                  >
+                    {COLOR_PALETTE.map((c) => (
+                      <button
+                        key={c.name}
+                        type="button"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveColor(c.value);
+                          updateSelectedNode({ color: c.value });
+                          setShowStylePalette(false);
+                        }}
+                        className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20 cursor-pointer"
+                        style={{ backgroundColor: c.value }}
+                        title={c.name}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Text / Header Color Picker */}
+              <TextColorPicker
+                value={selectedNode.textColor}
+                onChange={(color) => updateSelectedNode({ textColor: color })}
+                defaultColor="#FDE68A"
+              />
+
+              <div className="h-4 w-px bg-[#30333D] shrink-0" />
+
               {/* Status pills with smart progress presets */}
-              <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33]">
+              <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33] shrink-0">
                 {(["Active", "In Progress", "Completed", "Backlog"] as const).map((st) => {
                   const isCurrent = (selectedNode.status || "").toLowerCase() === st.toLowerCase();
                   return (
                     <button
                       key={st}
-                      onClick={() => {
+                      type="button"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
                         let newSubtitle = st as string;
                         let prog = 0;
                         if (st === "Completed") {
@@ -3926,7 +4301,7 @@ export default function WhiteboardCanvas({
                         handleLiveTextChange(selectedNode.id, { status: st, subtitle: newSubtitle, progress: prog });
                         updateSelectedNode({ status: st, subtitle: newSubtitle, progress: prog });
                       }}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all ${isCurrent
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${isCurrent
                         ? "bg-blue-600 text-white font-bold"
                         : "text-gray-400 hover:text-white"
                         }`}
@@ -3938,35 +4313,39 @@ export default function WhiteboardCanvas({
               </div>
 
               {/* Tag / Progress Name & Percentage Input */}
-              <div className="flex items-center gap-1 bg-[#121316] px-1.5 py-0.5 rounded border border-[#282B33]">
+              <div className="flex items-center gap-1 bg-[#121316] px-1.5 py-0.5 rounded border border-[#282B33] shrink-0">
                 <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Tag / Progress:</span>
                 <input
                   type="text"
                   value={selectedNode.subtitle || ""}
                   placeholder="e.g. Completed (100%) or President"
+                  onMouseDown={(e) => e.stopPropagation()}
                   onChange={(e) => {
                     const val = e.target.value;
                     handleLiveTextChange(selectedNode.id, { subtitle: val });
                     updateSelectedNode({ subtitle: val });
                   }}
-                  className="bg-[#1A1C22] text-xs text-blue-200 border border-blue-500/30 focus:border-blue-400 px-1.5 py-0.5 rounded w-32 md:w-40 focus:outline-none font-bold placeholder:text-gray-500"
+                  className="bg-[#1A1C22] text-xs text-blue-200 border border-blue-500/30 focus:border-blue-400 px-1.5 py-0.5 rounded w-32 md:w-36 focus:outline-none font-bold placeholder:text-gray-500"
                   title="Edit bottom tag or progress name & percentage"
                 />
               </div>
 
               {/* Quick Percentage Presets */}
-              <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33]">
+              <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33] shrink-0">
                 {[0, 25, 50, 75, 90, 100].map((pct) => (
                   <button
                     key={pct}
-                    onClick={() => {
+                    type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
                       const curr = selectedNode.subtitle || selectedNode.status || "In Progress";
                       const base = curr.replace(/\s*\(\d+%\)/, "").trim() || "Progress";
                       const newSub = `${base} (${pct}%)`;
                       handleLiveTextChange(selectedNode.id, { subtitle: newSub, progress: pct });
                       updateSelectedNode({ subtitle: newSub, progress: pct });
                     }}
-                    className="px-1 py-0.5 rounded text-[9px] font-bold text-blue-300 hover:text-white hover:bg-blue-600/40 transition-colors"
+                    className="px-1 py-0.5 rounded text-[9px] font-bold text-blue-300 hover:text-white hover:bg-blue-600/40 transition-colors cursor-pointer"
                     title={`Set progress to ${pct}%`}
                   >
                     {pct}%
@@ -3980,43 +4359,11 @@ export default function WhiteboardCanvas({
                 defaultPx={11}
               />
 
-              <TextColorPicker
-                value={selectedNode.textColor}
-                onChange={(color) => updateSelectedNode({ textColor: color })}
-                defaultColor="#FDE68A"
-              />
-
-              {/* Color Swatch */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowStylePalette(!showStylePalette)}
-                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs"
-                  style={{ backgroundColor: selectedNode.color || "#0078D4" }}
-                  title="Change Color"
-                />
-
-                {showStylePalette && (
-                  <div className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50">
-                    {COLOR_PALETTE.map((c) => (
-                      <button
-                        key={c.name}
-                        onClick={() => {
-                          setActiveColor(c.value);
-                          updateSelectedNode({ color: c.value });
-                          setShowStylePalette(false);
-                        }}
-                        className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20"
-                        style={{ backgroundColor: c.value }}
-                        title={c.name}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-
               <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => handleAddBranchFromNode(selectedNode.id)}
-                className="px-2 py-1 bg-blue-600/30 hover:bg-blue-600 text-blue-300 hover:text-white rounded text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                className="px-2 py-1 bg-blue-600/30 hover:bg-blue-600 text-blue-300 hover:text-white rounded text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
                 title="Add Branch Node (+)"
               >
                 <GitFork className="w-3.5 h-3.5" />
@@ -4575,7 +4922,7 @@ export default function WhiteboardCanvas({
         </div>
       )}
 
-      {/* 2b. MULTI-SELECTION FLOATING TOOLBAR WITH LINK & UNLINK ACTIONS */}
+      {/* 2b. MULTI-SELECTION FLOATING TOOLBAR WITH LINK AS GROUP ENTITY & UNLINK ACTIONS */}
       {selectedNodeIds.length > 1 && (() => {
         const selectedNodes = nodes.filter((n) => selectedNodeIds.includes(n.id));
         const minX = selectedNodes.length > 0 ? Math.min(...selectedNodes.map((n) => n.x)) : 0;
@@ -4585,13 +4932,23 @@ export default function WhiteboardCanvas({
         // Position centered above group in screen coordinates, safely clamped to screen viewport
         const groupCenterX = minX + (maxX - minX) / 2;
         const winW = typeof window !== "undefined" ? window.innerWidth : 1400;
-        const screenLeft = Math.max(20, Math.min(winW - 680, groupCenterX * zoom + pan.x - 220));
+        const screenLeft = Math.max(20, Math.min(winW - 740, groupCenterX * zoom + pan.x - 240));
         const screenTop = Math.max(65, minY * zoom + pan.y - 54);
+
+        const selectedGroupIds = Array.from(
+          new Set(selectedNodes.map((n) => n.groupId).filter(Boolean) as string[])
+        );
+        const isEntireSelectionOneGroup =
+          selectedNodes.length > 1 &&
+          selectedGroupIds.length === 1 &&
+          selectedNodes.every((n) => n.groupId === selectedGroupIds[0]);
+        const hasAnyGroupInSelection = selectedGroupIds.length > 0;
+        const unlinkedCount = selectedNodes.filter((n) => !n.groupId).length;
 
         const linkedEdges = edges.filter(
           (e) => selectedNodeIds.includes(e.from) && selectedNodeIds.includes(e.to)
         );
-        const isLinked = linkedEdges.length > 0;
+        const hasArrows = linkedEdges.length > 0;
 
         return (
           <div
@@ -4608,41 +4965,133 @@ export default function WhiteboardCanvas({
             </div>
 
             {/* Link Status Pill */}
-            {isLinked ? (
-              <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-mono border border-blue-500/40 flex items-center gap-1 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                Linked ({linkedEdges.length})
+            {isEntireSelectionOneGroup ? (
+              <span
+                className="px-2 py-0.5 rounded-full bg-blue-500/25 text-blue-300 text-[10px] font-mono border border-blue-500/40 flex items-center gap-1 shrink-0"
+                title="Objects are linked into a single group entity that moves together"
+              >
+                <Link2 className="w-3 h-3 text-blue-400" />
+                Linked Group ({selectedNodes.length})
+              </span>
+            ) : hasAnyGroupInSelection ? (
+              <span
+                className="px-2 py-0.5 rounded-full bg-purple-500/25 text-purple-300 text-[10px] font-mono border border-purple-500/40 flex items-center gap-1 shrink-0"
+                title="Compound group containing linked entities and temporary items"
+              >
+                <Layers className="w-3 h-3 text-purple-400" />
+                Compound ({selectedGroupIds.length} linked + {unlinkedCount} items)
               </span>
             ) : (
-              <span className="px-2 py-0.5 rounded-full bg-white/5 text-gray-400 text-[10px] font-mono border border-white/10 flex items-center gap-1 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
-                Not Linked
+              <span
+                className="px-2 py-0.5 rounded-full bg-white/10 text-gray-300 text-[10px] font-mono border border-white/15 flex items-center gap-1 shrink-0"
+                title="Temporary group: moves together while selected"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                Temporary Group ({selectedNodes.length})
               </span>
             )}
 
             <div className="h-4 w-px bg-[#30333D] shrink-0" />
 
-            {/* LINK BUTTON WITH SPLIT DROPDOWN */}
-            <div className="relative flex items-center shrink-0">
+            {/* Batch Color Swatch */}
+            <div className="relative shrink-0">
               <button
                 type="button"
-                onClick={() => handleLinkSelectedNodes("sequence")}
-                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-l text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-                title="Link selected objects with arrows in sequence (Ctrl+L)"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowStylePalette(!showStylePalette);
+                }}
+                className="px-2 py-1 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 rounded text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Change color of all selected boxes"
               >
-                <Link2 className="w-3.5 h-3.5" />
-                <span>Link</span>
+                <Palette className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Color</span>
               </button>
+
+              {showStylePalette && (
+                <div
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50"
+                >
+                  {COLOR_PALETTE.map((c) => (
+                    <button
+                      key={c.name}
+                      type="button"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveColor(c.value);
+                        updateSelectedNode({ color: c.value });
+                        setShowStylePalette(false);
+                      }}
+                      className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20 cursor-pointer"
+                      style={{ backgroundColor: c.value }}
+                      title={c.name}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="h-4 w-px bg-[#30333D] shrink-0" />
+
+            {/* MAIN LINK AS GROUP ENTITY & UNLINK ACTIONS */}
+            {isEntireSelectionOneGroup ? (
+              <button
+                type="button"
+                onClick={handleUngroupSelectedNodes}
+                className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-amber-200 border border-amber-500/40 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                title="Unlink group so objects move independently (Ctrl+Shift+G or Ctrl+Shift+L)"
+              >
+                <Unlink className="w-3.5 h-3.5" />
+                <span>Unlink Group</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleGroupSelectedNodes}
+                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer shrink-0"
+                  title="Link selected objects as a unified group entity that moves together (Ctrl+G or Ctrl+L)"
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  <span>Link as Group</span>
+                </button>
+                {hasAnyGroupInSelection && (
+                  <button
+                    type="button"
+                    onClick={handleUngroupSelectedNodes}
+                    className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                    title="Unlink existing groups in selection"
+                  >
+                    <Unlink className="w-3 h-3" />
+                    <span>Unlink</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="h-4 w-px bg-[#30333D] shrink-0" />
+
+            {/* OPTIONAL CONNECTOR ARROW LINES DROPDOWN */}
+            <div className="relative flex items-center shrink-0">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowLinkMenu(!showLinkMenu);
                 }}
-                className="px-1.5 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded-r text-xs border-l border-blue-500/40 transition-colors cursor-pointer"
-                title="More link options"
+                className="px-2 py-1 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 rounded text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                title="Connect selected objects with arrow lines"
               >
-                <ChevronDown className="w-3 h-3" />
+                <MoveRight className="w-3 h-3 text-cyan-400" />
+                <span>Arrows</span>
+                {hasArrows && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                )}
+                <ChevronDown className="w-3 h-3 text-gray-400" />
               </button>
 
               {showLinkMenu && (
@@ -4660,7 +5109,7 @@ export default function WhiteboardCanvas({
                   >
                     <MoveRight className="w-3.5 h-3.5 text-blue-400" />
                     <div>
-                      <div className="font-semibold text-[11px]">Sequential Link</div>
+                      <div className="font-semibold text-[11px]">Sequential Arrows</div>
                       <div className="text-[9px] text-gray-400">Node 1 → Node 2 → Node 3</div>
                     </div>
                   </button>
@@ -4675,7 +5124,7 @@ export default function WhiteboardCanvas({
                   >
                     <ArrowLeftRight className="w-3.5 h-3.5 text-indigo-400" />
                     <div>
-                      <div className="font-semibold text-[11px]">Bidirectional Link</div>
+                      <div className="font-semibold text-[11px]">Bidirectional Arrows</div>
                       <div className="text-[9px] text-gray-400">Node A ↔ Node B (Both Ways)</div>
                     </div>
                   </button>
@@ -4691,8 +5140,25 @@ export default function WhiteboardCanvas({
                     >
                       <GitFork className="w-3.5 h-3.5 text-cyan-400" />
                       <div>
-                        <div className="font-semibold text-[11px]">Link All from First</div>
+                        <div className="font-semibold text-[11px]">Star Arrows</div>
                         <div className="text-[9px] text-gray-400">Node 1 → All others</div>
+                      </div>
+                    </button>
+                  )}
+
+                  {hasArrows && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleUnlinkSelectedNodes();
+                        setShowLinkMenu(false);
+                      }}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-red-500/20 text-red-300 hover:text-red-200 transition-colors text-left cursor-pointer border-t border-white/10 mt-1"
+                    >
+                      <Unlink className="w-3.5 h-3.5 text-red-400" />
+                      <div>
+                        <div className="font-semibold text-[11px]">Remove Arrow Lines</div>
+                        <div className="text-[9px] text-gray-400">Delete arrows between nodes</div>
                       </div>
                     </button>
                   )}
@@ -4700,34 +5166,11 @@ export default function WhiteboardCanvas({
               )}
             </div>
 
-            {/* UNLINK BUTTON */}
-            {isLinked ? (
-              <button
-                type="button"
-                onClick={handleUnlinkSelectedNodes}
-                className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-amber-200 border border-amber-500/40 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
-                title="Unlink and remove all arrows connecting selected objects (Ctrl+Shift+L)"
-              >
-                <Unlink className="w-3.5 h-3.5" />
-                <span>Unlink ({linkedEdges.length})</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="px-2.5 py-1 bg-white/5 text-gray-500 border border-white/5 rounded text-xs font-medium flex items-center gap-1.5 opacity-40 cursor-not-allowed shrink-0"
-                title="No links exist between selected objects"
-              >
-                <Unlink className="w-3.5 h-3.5" />
-                <span>Unlink</span>
-              </button>
-            )}
-
             <div className="h-4 w-px bg-[#30333D] shrink-0" />
 
             {/* Group Movement Hint */}
             <span className="text-[11px] text-gray-400 hidden lg:inline shrink-0">
-              Drag to move group
+              Drag any item to move entity together
             </span>
 
             <div className="h-4 w-px bg-[#30333D] shrink-0" />
@@ -4946,34 +5389,35 @@ export default function WhiteboardCanvas({
             </button>
           </div>
 
-          {/* Quick Link / Unlink if multiple objects are currently selected */}
+          {/* Quick Link as Group / Unlink if multiple objects are currently selected */}
           {selectedNodeIds.length >= 2 && (() => {
-            const linkedEdges = edges.filter(
-              (e) => selectedNodeIds.includes(e.from) && selectedNodeIds.includes(e.to)
+            const selectedGroupIds = Array.from(
+              new Set(nodes.filter((n) => selectedNodeIds.includes(n.id)).map((n) => n.groupId).filter(Boolean))
             );
+            const isGrouped = selectedGroupIds.length > 0;
             return (
               <div className="p-1.5 mb-2 bg-blue-950/40 border border-blue-500/30 rounded-lg flex items-center justify-between gap-1">
                 <button
                   type="button"
                   onClick={() => {
-                    handleLinkSelectedNodes("sequence");
+                    handleGroupSelectedNodes();
                     setDoubleClickMenu(null);
                   }}
                   className="flex-1 py-1 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                  title="Link selected objects"
+                  title="Link selected objects as a unified group entity that moves together"
                 >
                   <Link2 className="w-3 h-3" />
-                  <span>Link ({selectedNodeIds.length})</span>
+                  <span>Link as Group ({selectedNodeIds.length})</span>
                 </button>
-                {linkedEdges.length > 0 && (
+                {isGrouped && (
                   <button
                     type="button"
                     onClick={() => {
-                      handleUnlinkSelectedNodes();
+                      handleUngroupSelectedNodes();
                       setDoubleClickMenu(null);
                     }}
                     className="py-1 px-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer transition-colors border border-amber-500/30"
-                    title="Unlink selected objects"
+                    title="Unlink group entity"
                   >
                     <Unlink className="w-3 h-3" />
                     <span>Unlink</span>
@@ -5454,7 +5898,7 @@ export default function WhiteboardCanvas({
             />
           )}
 
-          {/* Temporary Group Bounding Box Frame (Drag as group) */}
+          {/* Group Bounding Box Frame (Linked, Compound, or Temporary Group) */}
           {selectedNodeIds.length > 1 && (() => {
             const selectedNodes = nodes.filter((n) => selectedNodeIds.includes(n.id));
             if (selectedNodes.length === 0) return null;
@@ -5463,6 +5907,16 @@ export default function WhiteboardCanvas({
             const minY = Math.min(...selectedNodes.map((n) => n.y)) - 12;
             const maxX = Math.max(...selectedNodes.map((n) => n.x + n.width)) + 12;
             const maxY = Math.max(...selectedNodes.map((n) => n.y + n.height)) + 12;
+
+            const selectedGroupIds = Array.from(
+              new Set(selectedNodes.map((n) => n.groupId).filter(Boolean) as string[])
+            );
+            const isEntireSelectionOneGroup =
+              selectedNodes.length > 1 &&
+              selectedGroupIds.length === 1 &&
+              selectedNodes.every((n) => n.groupId === selectedGroupIds[0]);
+            const hasAnyGroupInSelection = selectedGroupIds.length > 0;
+            const unlinkedCount = selectedNodes.filter((n) => !n.groupId).length;
 
             return (
               <div
@@ -5473,11 +5927,39 @@ export default function WhiteboardCanvas({
                   width: `${maxX - minX}px`,
                   height: `${maxY - minY}px`,
                 }}
-                className="border-2 border-dashed border-cyan-400 bg-cyan-400/5 rounded-xl pointer-events-none z-20 shadow-[0_0_20px_rgba(6,182,212,0.15)] transition-all"
+                className={`border-2 border-dashed rounded-xl pointer-events-none z-20 transition-all ${
+                  isEntireSelectionOneGroup
+                    ? "border-blue-400 bg-blue-500/5 shadow-[0_0_20px_rgba(59,130,246,0.2)]"
+                    : hasAnyGroupInSelection
+                      ? "border-purple-400 bg-purple-500/5 shadow-[0_0_20px_rgba(168,85,247,0.2)]"
+                      : "border-cyan-400 bg-cyan-400/5 shadow-[0_0_20px_rgba(6,182,212,0.15)]"
+                }`}
               >
-                <div className="absolute -top-7 left-2 px-2.5 py-0.5 rounded-full bg-cyan-500 text-black text-[10px] font-bold flex items-center gap-1.5 shadow-md">
-                  <Layers className="w-3 h-3" />
-                  <span>Temporary Group ({selectedNodeIds.length} items) · Drag to move as group</span>
+                <div
+                  className={`absolute -top-7 left-2 px-2.5 py-0.5 rounded-full text-black text-[10px] font-bold flex items-center gap-1.5 shadow-md ${
+                    isEntireSelectionOneGroup
+                      ? "bg-blue-400 text-white"
+                      : hasAnyGroupInSelection
+                        ? "bg-purple-400 text-white"
+                        : "bg-cyan-500 text-black"
+                  }`}
+                >
+                  {isEntireSelectionOneGroup ? (
+                    <>
+                      <Link2 className="w-3 h-3" />
+                      <span>Linked Group ({selectedNodes.length} items) · Moves together as entity</span>
+                    </>
+                  ) : hasAnyGroupInSelection ? (
+                    <>
+                      <Layers className="w-3 h-3" />
+                      <span>Compound Group ({selectedGroupIds.length} linked + {unlinkedCount} items) · Moves together</span>
+                    </>
+                  ) : (
+                    <>
+                      <Layers className="w-3 h-3" />
+                      <span>Temporary Group ({selectedNodeIds.length} items) · Drag to move together</span>
+                    </>
+                  )}
                 </div>
               </div>
             );
@@ -5559,7 +6041,7 @@ export default function WhiteboardCanvas({
                     width: `${node.width}px`,
                     height: `${node.height}px`,
                   }}
-                  className={`flex flex-col items-center justify-center cursor-pointer transition-all ${isSelected ? "ring-2 ring-blue-500 rounded-full" : ""
+                  className={`flex flex-col items-center justify-center cursor-pointer transition-all relative ${isSelected ? "ring-2 ring-blue-500 rounded-full" : ""
                     }`}
                 >
                   <div className="relative w-28 h-28 rounded-full border-2 border-cyan-400/80 shadow-[0_0_25px_rgba(6,182,212,0.6)] flex items-center justify-center bg-[#0D0E11]/90">
@@ -5650,6 +6132,7 @@ export default function WhiteboardCanvas({
               return (
                 <div
                   key={node.id}
+                  data-note-card="true"
                   onMouseDown={(e) => handleNodeMouseDown(node, e)}
                   onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
                   style={{
@@ -5661,7 +6144,7 @@ export default function WhiteboardCanvas({
                     backgroundColor: `${node.color || "#EC4899"}26`,
                     borderColor: node.color || "#EC4899",
                   }}
-                  className={`p-3 rounded-xl border-2 cursor-pointer shadow-lg flex flex-col justify-between transition-all relative overflow-hidden group/sticky ${isSelected ? "ring-2 ring-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.3)]" : ""
+                  className={`p-3 rounded-xl border-2 cursor-pointer shadow-lg flex flex-col justify-between transition-all relative overflow-visible group/sticky ${isSelected ? "ring-2 ring-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.3)]" : ""
                     }`}
                 >
                   {/* HEADER FOR ALL FORMATS */}
@@ -5689,39 +6172,67 @@ export default function WhiteboardCanvas({
                         </span>
                       )}
 
-                      {/* Editable Note Title */}
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          defaultValue={node.title || (isJson ? "data.json" : isMarkdown ? "notes.md" : isChecklist ? "Action Items" : "notes.txt")}
-                          autoFocus
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onChange={(e) => handleLiveTextChange(node.id, { title: e.target.value })}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") e.currentTarget.blur();
-                          }}
-                          onBlur={(e) => {
-                            updateNode(node.id, { title: e.target.value });
-                            setEditingNodeId(null);
-                          }}
-                          className="bg-black/30 border border-white/20 rounded px-1.5 py-0.5 text-xs font-semibold text-white focus:outline-none w-full"
-                          placeholder="Note Title"
-                        />
-                      ) : (
-                        <span
-                          className="text-xs font-bold truncate tracking-wide"
-                          style={{ color: stickyTextColor }}
-                          title={node.title}
-                        >
-                          {node.title || (isJson ? "data.json" : isMarkdown ? "notes.md" : isChecklist ? "Action Items" : "notes.txt")}
-                        </span>
-                      )}
+                      {/* Editable Note Title (Double-click or click pencil to edit) */}
+                      <div className="flex items-center gap-1 min-w-0 flex-1">
+                        {editingTitleId === node.id ? (
+                          <input
+                            type="text"
+                            defaultValue={node.title || (isJson ? "data.json" : isMarkdown ? "notes.md" : isChecklist ? "Action Items" : "notes.txt")}
+                            autoFocus
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onChange={(e) => handleLiveTextChange(node.id, { title: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === "Escape") e.currentTarget.blur();
+                            }}
+                            onBlur={(e) => {
+                              updateNode(node.id, { title: e.target.value });
+                              setEditingTitleId(null);
+                            }}
+                            className="bg-black/50 border border-amber-400/80 rounded px-1.5 py-0.5 text-xs font-semibold text-white focus:outline-none w-full shadow-inner"
+                            placeholder="Note Title"
+                          />
+                        ) : (
+                          <div
+                            className="flex items-center gap-1 min-w-0 group/title cursor-text flex-1"
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTitleId(node.id);
+                            }}
+                            onClick={(e) => {
+                              if (isSelected) {
+                                e.stopPropagation();
+                                setEditingTitleId(node.id);
+                              }
+                            }}
+                            title="Click or double-click to edit note title"
+                          >
+                            <span
+                              className="text-xs font-bold truncate tracking-wide hover:underline"
+                              style={{ color: stickyTextColor }}
+                            >
+                              {node.title || (isJson ? "data.json" : isMarkdown ? "notes.md" : isChecklist ? "Action Items" : "notes.txt")}
+                            </span>
+                            <Edit3 className="w-2.5 h-2.5 opacity-0 group-hover/title:opacity-80 transition-opacity text-white/60 shrink-0" />
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Right Header Actions */}
                     <div className="flex items-center gap-1 shrink-0">
                       {isJson && (
                         <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingNodeId(isEditing ? null : node.id);
+                            }}
+                            className="p-1 hover:bg-white/10 rounded text-amber-300 transition-colors cursor-pointer"
+                            title={isEditing ? "View Highlighting" : "Edit JSON Raw"}
+                          >
+                            {isEditing ? <Eye className="w-3 h-3" /> : <Edit3 className="w-3 h-3" />}
+                          </button>
                           <button
                             type="button"
                             onClick={(e) => {
@@ -5786,24 +6297,37 @@ export default function WhiteboardCanvas({
                       )}
 
                       {isText && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (node.body) navigator.clipboard.writeText(node.body);
-                          }}
-                          className="p-1 hover:bg-white/10 rounded text-gray-300 hover:text-white transition-colors cursor-pointer"
-                          title="Copy Text"
-                        >
-                          <Copy className="w-3 h-3" />
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingNodeId(isEditing ? null : node.id);
+                            }}
+                            className="p-1 hover:bg-white/10 rounded text-pink-300 transition-colors cursor-pointer"
+                            title={isEditing ? "Finish Editing Text" : "Edit Note Text"}
+                          >
+                            <Edit3 className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (node.body) navigator.clipboard.writeText(node.body);
+                            }}
+                            className="p-1 hover:bg-white/10 rounded text-gray-300 hover:text-white transition-colors cursor-pointer"
+                            title="Copy Text"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
 
                   {/* BODY CONTENT BY FORMAT */}
                   {isChecklist && (
-                    <div className="w-full flex-1 flex flex-col overflow-hidden mt-1.5">
+                    <div className="w-full flex-1 flex flex-col overflow-hidden mt-1.5" data-scrollable="true">
                       {/* Mini Progress Track */}
                       <div className="w-full h-1 bg-black/25 rounded-full overflow-hidden mb-1.5 shrink-0">
                         <div
@@ -5819,7 +6343,7 @@ export default function WhiteboardCanvas({
                       </div>
 
                       {/* Items List */}
-                      <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                      <div data-scrollable="true" className="flex-1 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
                         {items.map((item, idx) => (
                           <div
                             key={item.id}
@@ -5923,9 +6447,10 @@ export default function WhiteboardCanvas({
                   )}
 
                   {isJson && (
-                    <div className="w-full flex-1 flex flex-col overflow-hidden mt-1.5">
+                    <div className="w-full flex-1 flex flex-col overflow-hidden mt-1.5" data-scrollable="true">
                       {isEditing ? (
                         <textarea
+                          data-scrollable="true"
                           autoFocus
                           defaultValue={node.body}
                           onMouseDown={(e) => e.stopPropagation()}
@@ -5937,16 +6462,17 @@ export default function WhiteboardCanvas({
                             updateNode(node.id, { body: e.target.value });
                             setEditingNodeId(null);
                           }}
-                          className="w-full flex-1 bg-black/40 text-amber-200 font-mono text-[11px] p-2 rounded-lg border border-amber-500/30 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none leading-relaxed"
+                          className="w-full flex-1 bg-black/40 text-amber-200 font-mono text-[11px] p-2 rounded-lg border border-amber-500/30 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none leading-relaxed overflow-y-auto scrollbar-thin shadow-inner"
                           placeholder="{\n  &quot;key&quot;: &quot;value&quot;\n}"
                         />
                       ) : (
                         <div
+                          data-scrollable="true"
                           onDoubleClick={(e) => {
                             e.stopPropagation();
                             setEditingNodeId(node.id);
                           }}
-                          className="flex-1 overflow-auto p-1.5 bg-black/40 rounded-lg border border-amber-500/10 font-mono text-[11px] leading-relaxed scrollbar-thin"
+                          className="flex-1 overflow-auto p-1.5 bg-black/40 rounded-lg border border-amber-500/10 font-mono text-[11px] leading-relaxed scrollbar-thin cursor-text"
                           title="Double-click to edit JSON raw code"
                         >
                           {renderJsonSyntaxHighlighted(node.body || "{}")}
@@ -5972,9 +6498,10 @@ export default function WhiteboardCanvas({
                   )}
 
                   {isMarkdown && (
-                    <div className="w-full flex-1 flex flex-col overflow-hidden mt-1.5">
+                    <div className="w-full flex-1 flex flex-col overflow-hidden mt-1.5" data-scrollable="true">
                       {isEditing ? (
                         <textarea
+                          data-scrollable="true"
                           autoFocus
                           defaultValue={node.body}
                           onMouseDown={(e) => e.stopPropagation()}
@@ -5986,16 +6513,17 @@ export default function WhiteboardCanvas({
                             updateNode(node.id, { body: e.target.value });
                             setEditingNodeId(null);
                           }}
-                          className="w-full flex-1 bg-black/40 text-indigo-100 font-mono text-xs p-2.5 rounded-lg border border-indigo-500/30 focus:outline-none focus:ring-1 focus:ring-indigo-400 resize-none leading-relaxed"
+                          className="w-full flex-1 bg-black/40 text-indigo-100 font-mono text-xs p-2.5 rounded-lg border border-indigo-500/30 focus:outline-none focus:ring-1 focus:ring-indigo-400 resize-none leading-relaxed overflow-y-auto scrollbar-thin shadow-inner"
                           placeholder="# Write markdown...\n- [ ] Task item\n**Bold** text"
                         />
                       ) : (
                         <div
+                          data-scrollable="true"
                           onDoubleClick={(e) => {
                             e.stopPropagation();
                             setEditingNodeId(node.id);
                           }}
-                          className="flex-1 overflow-y-auto p-2.5 bg-black/35 rounded-lg border border-indigo-500/10 select-text text-gray-200 text-xs leading-relaxed scrollbar-thin"
+                          className="flex-1 overflow-y-auto p-2.5 bg-black/35 rounded-lg border border-indigo-500/10 select-text text-gray-200 text-xs leading-relaxed scrollbar-thin cursor-text"
                           title="Double-click to edit Markdown raw text"
                         >
                           {renderMarkdownToJsx(node.body || "", {
@@ -6012,9 +6540,10 @@ export default function WhiteboardCanvas({
                   )}
 
                   {isText && (
-                    <div className="w-full flex-1 flex flex-col overflow-hidden mt-1.5">
+                    <div className="w-full flex-1 flex flex-col overflow-hidden mt-1.5" data-scrollable="true">
                       {isEditing ? (
                         <textarea
+                          data-scrollable="true"
                           autoFocus
                           defaultValue={node.body}
                           onMouseDown={(e) => e.stopPropagation()}
@@ -6026,7 +6555,7 @@ export default function WhiteboardCanvas({
                             updateNode(node.id, { body: e.target.value });
                             setEditingNodeId(null);
                           }}
-                          className="w-full flex-1 bg-black/30 focus:outline-none border border-white/20 rounded-lg p-2 resize-none leading-relaxed text-xs text-gray-200 font-sans"
+                          className="w-full flex-1 bg-black/40 focus:outline-none border border-pink-400/50 rounded-lg p-2 resize-none leading-relaxed text-xs text-gray-200 font-sans overflow-y-auto scrollbar-thin shadow-inner"
                           style={{
                             textAlign: node.textAlign || "left",
                             fontSize: `${parseFontSizePx(node.fontSize, 12)}px`,
@@ -6036,19 +6565,22 @@ export default function WhiteboardCanvas({
                         />
                       ) : (
                         <div
+                          data-scrollable="true"
                           onDoubleClick={(e) => {
                             e.stopPropagation();
                             setEditingNodeId(node.id);
                           }}
-                          className="flex-1 overflow-y-auto p-2 bg-black/20 rounded-lg border border-white/10 select-text whitespace-pre-wrap leading-relaxed font-sans scrollbar-thin"
+                          className="flex-1 overflow-y-auto p-2 bg-black/20 rounded-lg border border-white/10 select-text whitespace-pre-wrap leading-relaxed font-sans scrollbar-thin cursor-text"
                           style={{
                             textAlign: node.textAlign || "left",
                             fontSize: `${parseFontSizePx(node.fontSize, 12)}px`,
                             color: stickyTextColor,
                           }}
-                          title="Double-click to edit text"
+                          title="Double-click to edit note text"
                         >
-                          {node.body || "Click to add text..."}
+                          {node.body || (
+                            <span className="opacity-40 italic">Double-click to add text...</span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -6097,9 +6629,12 @@ export default function WhiteboardCanvas({
                       }
                     }}
                   >
-                    {/* Top Task Banner (Gold bordered) */}
+                    {/* Top Task Banner (Dynamic accent / gold border) */}
                     <div
-                      style={{ height: `${safeHeaderHeight}px` }}
+                      style={{
+                        height: `${safeHeaderHeight}px`,
+                        borderColor: node.color ? `${node.color}99` : "rgba(245, 158, 11, 0.8)",
+                      }}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
                         setSelectedNodeId(node.id);
@@ -6107,7 +6642,7 @@ export default function WhiteboardCanvas({
                         setEditingNodeId(node.id);
                         setEditingField("title");
                       }}
-                      className="p-2 bg-[#1A1813] border-2 border-amber-500/80 rounded-t-md flex items-center justify-center text-center overflow-hidden relative group/header"
+                      className="p-2 bg-[#1A1813] border-2 rounded-t-md flex items-center justify-center text-center overflow-hidden relative group/header transition-colors"
                     >
                       {isEditing && (editingField === "title" || !editingField) ? (
                         <textarea
@@ -6169,9 +6704,18 @@ export default function WhiteboardCanvas({
                       </div>
                     </div>
 
-                    {/* Bottom Position / Progress Box (Blue bordered) */}
+                    {/* Bottom Position / Progress Box (Dynamic Color Box) */}
                     <div
-                      style={{ height: `${bottomHeight}px` }}
+                      style={{
+                        height: `${bottomHeight}px`,
+                        borderColor: node.color || "#3B82F6",
+                        backgroundColor:
+                          node.fillType === "solid"
+                            ? (node.color || "#0A2540")
+                            : node.fillType === "none"
+                              ? "transparent"
+                              : `${node.color || "#0078D4"}40`,
+                      }}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
                         setSelectedNodeId(node.id);
@@ -6179,7 +6723,7 @@ export default function WhiteboardCanvas({
                         setEditingNodeId(node.id);
                         setEditingField("subtitle");
                       }}
-                      className="p-2 bg-[#0F1E36] border-2 border-t-0 border-blue-500/80 rounded-b-md flex flex-col items-center justify-center text-center overflow-hidden relative group/bottom"
+                      className="p-2 border-2 border-t-0 rounded-b-md flex flex-col items-center justify-center text-center overflow-hidden relative group/bottom transition-colors"
                     >
                       {isEditing && (editingField === "subtitle" || !editingField) ? (
                         <input
@@ -6250,7 +6794,7 @@ export default function WhiteboardCanvas({
                     width: `${node.width}px`,
                     height: `${node.height}px`,
                   }}
-                  className={`group/img cursor-pointer rounded-lg overflow-hidden transition-all relative ${isSelected
+                  className={`group/img cursor-pointer rounded-lg transition-all relative ${isSelected
                     ? "ring-2 ring-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.3)]"
                     : "shadow-xl border border-[#2D3039]"
                     }`}
@@ -6259,10 +6803,10 @@ export default function WhiteboardCanvas({
                     <img
                       src={node.imageUrl}
                       alt={node.title || "Whiteboard Media"}
-                      className="w-full h-full object-contain pointer-events-none select-none bg-black/30"
+                      className="w-full h-full object-contain pointer-events-none select-none bg-black/30 rounded-lg"
                     />
                   ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center bg-[#181A22] text-gray-400 p-4">
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-[#181A22] text-gray-400 p-4 rounded-lg">
                       <ImageIcon className="w-8 h-8 mb-2 text-gray-500" />
                       <span className="text-xs font-medium">Click to upload media</span>
                     </div>
@@ -6284,7 +6828,7 @@ export default function WhiteboardCanvas({
                   </div>
 
                   {node.title && (
-                    <div className="absolute bottom-0 inset-x-0 bg-black/70 backdrop-blur-xs py-1 px-2 text-[10px] text-gray-200 truncate pointer-events-none text-center flex items-center justify-between">
+                    <div className="absolute bottom-0 inset-x-0 bg-black/70 backdrop-blur-xs py-1 px-2 text-[10px] text-gray-200 truncate pointer-events-none text-center flex items-center justify-between rounded-b-lg">
                       <span className="truncate">{node.title}</span>
                       {node.fileUrl && (
                         <a
@@ -6322,7 +6866,7 @@ export default function WhiteboardCanvas({
                     width: `${node.width}px`,
                     height: `${node.height}px`,
                   }}
-                  className={`group/pdf cursor-pointer rounded-xl overflow-hidden transition-all relative flex flex-col bg-[#1A1517] border border-red-500/30 ${isSelected
+                  className={`group/pdf cursor-pointer rounded-xl transition-all relative flex flex-col bg-[#1A1517] border border-red-500/30 ${isSelected
                     ? "ring-2 ring-red-400 shadow-[0_0_20px_rgba(239,68,68,0.3)]"
                     : "shadow-xl hover:border-red-500/50"
                     }`}
@@ -8044,15 +8588,21 @@ export default function WhiteboardCanvas({
         {/* Color / Fill Palette (Matching Screenshot 5) */}
         <div className="relative" ref={stylePaletteRef}>
           <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={() => setShowStylePalette(!showStylePalette)}
-            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#22242D] transition-colors"
+            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#22242D] transition-colors cursor-pointer"
             title="Style Palette"
           >
             <Palette className="w-4 h-4" />
           </button>
 
           {showStylePalette && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-3 w-64 z-50 animate-in fade-in-50">
+            <div
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-3 w-64 z-50 animate-in fade-in-50"
+            >
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
                 Color Palette
               </div>
@@ -8060,11 +8610,13 @@ export default function WhiteboardCanvas({
                 {COLOR_PALETTE.map((c) => (
                   <button
                     key={c.name}
+                    type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
                     onClick={() => {
                       setActiveColor(c.value);
-                      if (selectedNodeId) updateSelectedNode({ color: c.value });
+                      if (selectedNodeId || selectedNodeIds.length > 0) updateSelectedNode({ color: c.value });
                     }}
-                    className="w-7 h-7 rounded-full border border-white/20 hover:scale-110 transition-transform"
+                    className="w-7 h-7 rounded-full border border-white/20 hover:scale-110 transition-transform cursor-pointer"
                     style={{ backgroundColor: c.value }}
                     title={c.name}
                   />
@@ -8078,11 +8630,13 @@ export default function WhiteboardCanvas({
                 {(["solid", "tint", "none"] as const).map((ft) => (
                   <button
                     key={ft}
+                    type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
                     onClick={() => {
                       setActiveFillType(ft);
-                      if (selectedNodeId) updateSelectedNode({ fillType: ft });
+                      if (selectedNodeId || selectedNodeIds.length > 0) updateSelectedNode({ fillType: ft });
                     }}
-                    className={`px-2 py-1 rounded text-xs capitalize ${activeFillType === ft
+                    className={`px-2 py-1 rounded text-xs capitalize cursor-pointer ${activeFillType === ft
                       ? "bg-blue-600 text-white font-semibold"
                       : "bg-[#22242D] text-gray-300 hover:text-white"
                       }`}
