@@ -205,8 +205,8 @@ const whiteboardSchema = new Schema<IWhiteboard>(
         id: { type: String, required: true },
         from: { type: String, required: true },
         to: { type: String, required: true },
-        fromAnchor: { type: String, default: "bottom" },
-        toAnchor: { type: String, default: "top" },
+        fromAnchor: { type: String },
+        toAnchor: { type: String },
         label: { type: String, default: "" },
         color: { type: String, default: "#60A5FA" },
         style: {

@@ -470,6 +470,9 @@ export default function WhiteboardCanvas({
   const [showShapePalette, setShowShapePalette] = useState(false);
   const [showStylePalette, setShowStylePalette] = useState(false);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const stylePaletteRef = useRef<HTMLDivElement>(null);
+  const shapePaletteRef = useRef<HTMLDivElement>(null);
+  const templateSelectorRef = useRef<HTMLDivElement>(null);
 
   // Double Click Creation Popover (Prompt requirement: "functions double left click opens")
   const [doubleClickMenu, setDoubleClickMenu] = useState<{
@@ -751,18 +754,28 @@ export default function WhiteboardCanvas({
     };
   }, []);
 
-  // Dismiss canvas background color picker on outside click
+  // Dismiss canvas background color picker and tool palettes on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (bgColorPickerRef.current && !bgColorPickerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (bgColorPickerRef.current && !bgColorPickerRef.current.contains(target)) {
         setShowBgColorPicker(false);
       }
+      if (stylePaletteRef.current && !stylePaletteRef.current.contains(target)) {
+        setShowStylePalette(false);
+      }
+      if (shapePaletteRef.current && !shapePaletteRef.current.contains(target)) {
+        setShowShapePalette(false);
+      }
+      if (templateSelectorRef.current && !templateSelectorRef.current.contains(target)) {
+        setShowTemplateSelector(false);
+      }
     }
-    if (showBgColorPicker) {
+    if (showBgColorPicker || showStylePalette || showShapePalette || showTemplateSelector) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [showBgColorPicker]);
+  }, [showBgColorPicker, showStylePalette, showShapePalette, showTemplateSelector]);
 
   // Push history state with deep clone & boundary checks
   const pushHistory = useCallback(
@@ -1439,12 +1452,16 @@ export default function WhiteboardCanvas({
 
   // Node Dragging Start (Supports Ctrl+Click multi-select and Group Dragging)
   const handleNodeMouseDown = (node: IWhiteboardNode, e: React.MouseEvent) => {
+    e.stopPropagation();
     if (activeTool === "hand") return;
     if (editingNodeId === node.id) return; // Allow text selection if editing
 
-    e.stopPropagation();
     setDoubleClickMenu(null);
     setEdgeSettingsPopover(null);
+    setShowShapePalette(false);
+    setShowTemplateSelector(false);
+    setShowBgColorPicker(false);
+    setShowShapeSwitcher(false);
 
     // 1. If Pen Draw Tool is active, start drawing even if mouse is pressed over a node
     if (activeTool === "draw") {
@@ -1527,6 +1544,11 @@ export default function WhiteboardCanvas({
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     setDoubleClickMenu(null);
     setEdgeSettingsPopover(null);
+    setShowStylePalette(false);
+    setShowShapePalette(false);
+    setShowTemplateSelector(false);
+    setShowBgColorPicker(false);
+    setShowShapeSwitcher(false);
 
     if (e.button === 1 || activeTool === "hand") {
       // Pan
@@ -1668,8 +1690,8 @@ export default function WhiteboardCanvas({
 
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = requestAnimationFrame(() => {
-        setNodes((prev) =>
-          prev.map((n) => {
+        setNodes((prev) => {
+          const updated = prev.map((n) => {
             if (initialGroupNodePositions[n.id]) {
               return {
                 ...n,
@@ -1678,8 +1700,10 @@ export default function WhiteboardCanvas({
               };
             }
             return n;
-          })
-        );
+          });
+          nodesRef.current = updated;
+          return updated;
+        });
       });
     }
   };
@@ -2025,15 +2049,58 @@ export default function WhiteboardCanvas({
   // Selected Node Reference
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
 
+  // Direct node update by ID (guaranteed to persist even if selection changes during blur)
+  const updateNode = useCallback(
+    (id: string, patch: Partial<IWhiteboardNode>) => {
+      if (!id) return;
+      const updated = nodesRef.current.map((n) => (n.id === id ? { ...n, ...patch } : n));
+      nodesRef.current = updated;
+      setNodes(updated);
+      pushHistory(updated, edgesRef.current);
+    },
+    [pushHistory]
+  );
+
+  // Live text update during typing (keeps draft synchronously so text never reverts on blur/click)
+  const handleLiveTextChange = useCallback(
+    (nodeId: string, patch: Partial<IWhiteboardNode>) => {
+      if (!nodeId) return;
+      const updated = nodesRef.current.map((n) =>
+        n.id === nodeId ? { ...n, ...patch } : n
+      );
+      nodesRef.current = updated;
+      setNodes(updated);
+      triggerAutoSave(updated, edgesRef.current);
+    },
+    [triggerAutoSave]
+  );
+
   // Update selected node attributes (Supports updating entire temporary group at once)
-  const updateSelectedNode = (patch: Partial<IWhiteboardNode>) => {
-    const targetIds =
-      selectedNodeIds.length > 0 ? selectedNodeIds : selectedNodeId ? [selectedNodeId] : [];
-    if (targetIds.length === 0) return;
-    const updated = nodes.map((n) => (targetIds.includes(n.id) ? { ...n, ...patch } : n));
-    setNodes(updated);
-    pushHistory(updated, edges);
-  };
+  const updateSelectedNode = useCallback(
+    (patch: Partial<IWhiteboardNode>, fallbackNodeId?: string) => {
+      let targetIds =
+        selectedNodeIds.length > 0
+          ? selectedNodeIds
+          : selectedNodeId
+          ? [selectedNodeId]
+          : fallbackNodeId
+          ? [fallbackNodeId]
+          : [];
+
+      if (targetIds.length === 0 && editingNodeId) {
+        targetIds = [editingNodeId];
+      }
+
+      if (targetIds.length === 0) return;
+      const updated = nodesRef.current.map((n) =>
+        targetIds.includes(n.id) ? { ...n, ...patch } : n
+      );
+      nodesRef.current = updated;
+      setNodes(updated);
+      pushHistory(updated, edgesRef.current);
+    },
+    [selectedNodeIds, selectedNodeId, editingNodeId, pushHistory]
+  );
 
   // Sticky Note Checklist Handlers
   const handleToggleChecklistItem = useCallback(
@@ -2062,13 +2129,13 @@ export default function WhiteboardCanvas({
 
   const handleUpdateChecklistItemText = useCallback(
     (nodeId: string, itemId: string, text: string) => {
-      const targetNode = nodes.find((n) => n.id === nodeId);
+      const targetNode = nodesRef.current.find((n) => n.id === nodeId);
       if (!targetNode) return;
       const currentList = parseNodeChecklist(targetNode);
       const updatedList = updateChecklistItemText(currentList, itemId, text);
       const updatedBody = serializeChecklistToBody(updatedList);
 
-      const updatedNodes = nodes.map((n) =>
+      const updatedNodes = nodesRef.current.map((n) =>
         n.id === nodeId
           ? {
               ...n,
@@ -2078,9 +2145,11 @@ export default function WhiteboardCanvas({
             }
           : n
       );
+      nodesRef.current = updatedNodes;
       setNodes(updatedNodes);
+      triggerAutoSave(updatedNodes, edgesRef.current);
     },
-    [nodes]
+    [triggerAutoSave]
   );
 
   const handleAddChecklistItem = useCallback(
@@ -2195,11 +2264,9 @@ export default function WhiteboardCanvas({
 
   const updateNodeTitle = useCallback(
     (id: string, title: string) => {
-      const updatedNodes = nodes.map((n) => (n.id === id ? { ...n, title } : n));
-      setNodes(updatedNodes);
-      pushHistory(updatedNodes, edges);
+      updateNode(id, { title });
     },
-    [nodes, edges, pushHistory]
+    [updateNode]
   );
 
   // Generate smooth SVG path from stroke points for freehand pen drawing
@@ -2391,7 +2458,8 @@ export default function WhiteboardCanvas({
     fromY: number,
     color: string = "#60A5FA"
   ) => {
-    const angle = Math.atan2(tipY - fromY, tipX - fromX);
+    let angle = Math.atan2(tipY - fromY, tipX - fromX);
+    if (isNaN(angle)) angle = 0;
     const wingLength = 11;
     const wingAngle = Math.PI / 6; // 30 degrees
     const wing1X = tipX - wingLength * Math.cos(angle - wingAngle);
@@ -2426,9 +2494,39 @@ export default function WhiteboardCanvas({
       let startX: number, startY: number, endX: number, endY: number;
       let pathData: string;
       let tipFromX: number, tipFromY: number;
+      let srcFromX: number, srcFromY: number;
 
-      if (Math.abs(dx) > Math.abs(dy)) {
-        // Horizontal dominance: connect closest horizontal edges directly
+      // Calculate horizontal vs vertical spacing gaps
+      // gapX > 0 means horizontally non-overlapping with space between nodes
+      const gapX =
+        dx > 0
+          ? toNode.x - (fromNode.x + fromNode.width)
+          : fromNode.x - (toNode.x + toNode.width);
+
+      // gapY > 0 means vertically non-overlapping with space between nodes
+      const gapY =
+        dy > 0
+          ? toNode.y - (fromNode.y + fromNode.height)
+          : fromNode.y - (toNode.y + toNode.height);
+
+      // Dynamically select best anchor face (up, down, left, right) based on relative positions
+      let isHorizontal: boolean;
+      if (gapX > 0 && gapY <= 0) {
+        // Horizontally separated and overlapping vertically (side-by-side row)
+        isHorizontal = true;
+      } else if (gapY > 0 && gapX <= 0) {
+        // Vertically separated and overlapping horizontally (stacked hierarchy)
+        isHorizontal = false;
+      } else if (gapX > 0 && gapY > 0) {
+        // Diagonally separated: choose dominant gap
+        isHorizontal = gapX >= gapY;
+      } else {
+        // Overlapping bounding boxes: fallback to center distance
+        isHorizontal = Math.abs(dx) >= Math.abs(dy);
+      }
+
+      if (isHorizontal) {
+        // Horizontal connection: connect closest horizontal faces directly (right <-> left)
         if (dx > 0) {
           startX = fromNode.x + fromNode.width;
           startY = fromCenterY;
@@ -2440,12 +2538,30 @@ export default function WhiteboardCanvas({
           endX = toNode.x + toNode.width;
           endY = toCenterY;
         }
-        const midX = startX + (endX - startX) / 2;
-        pathData = `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`;
-        tipFromX = midX;
-        tipFromY = endY;
+
+        if (edge.style === "straight") {
+          pathData = `M ${startX} ${startY} L ${endX} ${endY}`;
+          tipFromX = startX;
+          tipFromY = startY;
+          srcFromX = endX;
+          srcFromY = endY;
+        } else if (edge.style === "curved") {
+          const midX = startX + (endX - startX) / 2;
+          pathData = `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`;
+          tipFromX = midX;
+          tipFromY = endY;
+          srcFromX = midX;
+          srcFromY = startY;
+        } else {
+          const midX = startX + (endX - startX) / 2;
+          pathData = `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`;
+          tipFromX = midX;
+          tipFromY = endY;
+          srcFromX = midX;
+          srcFromY = startY;
+        }
       } else {
-        // Vertical dominance: connect closest vertical edges directly
+        // Vertical connection: connect closest vertical faces directly (bottom <-> top)
         if (dy > 0) {
           startX = fromCenterX;
           startY = fromNode.y + fromNode.height;
@@ -2457,10 +2573,28 @@ export default function WhiteboardCanvas({
           endX = toCenterX;
           endY = toNode.y + toNode.height;
         }
-        const midY = startY + (endY - startY) / 2;
-        pathData = `M ${startX} ${startY} L ${startX} ${midY} L ${endX} ${midY} L ${endX} ${endY}`;
-        tipFromX = endX;
-        tipFromY = midY;
+
+        if (edge.style === "straight") {
+          pathData = `M ${startX} ${startY} L ${endX} ${endY}`;
+          tipFromX = startX;
+          tipFromY = startY;
+          srcFromX = endX;
+          srcFromY = endY;
+        } else if (edge.style === "curved") {
+          const midY = startY + (endY - startY) / 2;
+          pathData = `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
+          tipFromX = endX;
+          tipFromY = midY;
+          srcFromX = startX;
+          srcFromY = midY;
+        } else {
+          const midY = startY + (endY - startY) / 2;
+          pathData = `M ${startX} ${startY} L ${startX} ${midY} L ${endX} ${midY} L ${endX} ${endY}`;
+          tipFromX = endX;
+          tipFromY = midY;
+          srcFromX = startX;
+          srcFromY = midY;
+        }
       }
 
       const isSelectedEdge = selectedEdgeId === edge.id;
@@ -2510,7 +2644,7 @@ export default function WhiteboardCanvas({
 
           {/* Backward / Source Arrowhead (<- or <->) */}
           {(dir === "backward" || dir === "bidirectional") &&
-            renderArrowhead(startX, startY, midPointX, midPointY, edgeColor)}
+            renderArrowhead(startX, startY, srcFromX, srcFromY, edgeColor)}
 
           {/* Interactive Arrow Link Setting Handle: "+" circular button - ONLY VISIBLE ON HOVER OR SELECTED */}
           {(isSelectedEdge || isHovered) && (
@@ -3659,40 +3793,95 @@ export default function WhiteboardCanvas({
             left: 0,
           }}
         >
-          {/* SVG Connector Arrows & Live Interactions */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
+          {/* SVG Connector Arrows & Lines Layer (Never clipped at negative or out-of-bounds coordinates) */}
+          <svg
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              overflow: "visible",
+            }}
+            className="pointer-events-none z-10"
+          >
             {renderEdges()}
+          </svg>
 
-            {/* Live dynamic arrow preview while connecting two nodes */}
-            {activeTool === "arrow" && connectingFromNodeId && connectingMousePos && (() => {
-              const fromNode = nodes.find((n) => n.id === connectingFromNodeId);
-              if (!fromNode) return null;
-              const startX = fromNode.x + fromNode.width / 2;
-              const startY = fromNode.y + fromNode.height / 2;
-              const targetX = connectingMousePos.x;
-              const targetY = connectingMousePos.y;
+          {/* Dynamic in-flight arrow preview while connecting two nodes (Rendered in top overlay) */}
+          {activeTool === "arrow" && connectingFromNodeId && connectingMousePos && (() => {
+            const fromNode = nodes.find((n) => n.id === connectingFromNodeId);
+            if (!fromNode) return null;
+            const fromCenterX = fromNode.x + fromNode.width / 2;
+            const fromCenterY = fromNode.y + fromNode.height / 2;
+            const targetX = connectingMousePos.x;
+            const targetY = connectingMousePos.y;
 
-              return (
-                <g className="pointer-events-none">
-                  <line
-                    x1={startX}
-                    y1={startY}
-                    x2={targetX}
-                    y2={targetY}
-                    stroke="#38BDF8"
-                    strokeWidth="3"
-                    strokeDasharray="6,4"
-                  />
-                  {(arrowConnectType === "forward" || arrowConnectType === "bidirectional") &&
-                    renderArrowhead(targetX, targetY, startX, startY, "#38BDF8")}
-                  {(arrowConnectType === "backward" || arrowConnectType === "bidirectional") &&
-                    renderArrowhead(startX, startY, targetX, targetY, "#38BDF8")}
-                </g>
-              );
-            })()}
+            const mdx = targetX - fromCenterX;
+            const mdy = targetY - fromCenterY;
+            let startX = fromCenterX;
+            let startY = fromCenterY;
 
-            {/* Live active stroke while pen drawing */}
-            {isDrawingPen && currentPenPoints.length > 0 && (
+            if (Math.abs(mdx) >= Math.abs(mdy)) {
+              if (mdx > 0) {
+                startX = fromNode.x + fromNode.width;
+                startY = fromCenterY;
+              } else {
+                startX = fromNode.x;
+                startY = fromCenterY;
+              }
+            } else {
+              if (mdy > 0) {
+                startX = fromCenterX;
+                startY = fromNode.y + fromNode.height;
+              } else {
+                startX = fromCenterX;
+                startY = fromNode.y;
+              }
+            }
+
+            return (
+              <svg
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                  overflow: "visible",
+                }}
+                className="pointer-events-none z-40"
+              >
+                <line
+                  x1={startX}
+                  y1={startY}
+                  x2={targetX}
+                  y2={targetY}
+                  stroke="#38BDF8"
+                  strokeWidth="3"
+                  strokeDasharray="6,4"
+                />
+                {(arrowConnectType === "forward" || arrowConnectType === "bidirectional") &&
+                  renderArrowhead(targetX, targetY, startX, startY, "#38BDF8")}
+                {(arrowConnectType === "backward" || arrowConnectType === "bidirectional") &&
+                  renderArrowhead(startX, startY, targetX, targetY, "#38BDF8")}
+              </svg>
+            );
+          })()}
+
+          {/* Live active stroke while pen drawing (Rendered in top overlay for instant real-time drag visibility) */}
+          {isDrawingPen && currentPenPoints.length > 0 && (
+            <svg
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+                overflow: "visible",
+              }}
+              className="pointer-events-none z-40"
+            >
               <path
                 d={generateSvgPath(currentPenPoints)}
                 fill="none"
@@ -3702,8 +3891,8 @@ export default function WhiteboardCanvas({
                 strokeLinejoin="round"
                 className="pointer-events-none shadow-sm"
               />
-            )}
-          </svg>
+            </svg>
+          )}
 
           {/* Rectangular Drag-to-Select Marquee Box */}
           {isSelectingBox && selectionBox && (
@@ -3936,10 +4125,16 @@ export default function WhiteboardCanvas({
                             <input
                               type="text"
                               defaultValue={node.title || "Checklist"}
+                              autoFocus
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onChange={(e) => handleLiveTextChange(node.id, { title: e.target.value })}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") e.currentTarget.blur();
                               }}
-                              onBlur={(e) => updateNodeTitle(node.id, e.target.value)}
+                              onBlur={(e) => {
+                                updateNode(node.id, { title: e.target.value });
+                                setEditingNodeId(null);
+                              }}
                               className="bg-black/30 border border-white/20 rounded px-1.5 py-0.5 text-xs font-semibold text-white focus:outline-none w-full"
                               placeholder="Checklist Title"
                             />
@@ -4093,8 +4288,13 @@ export default function WhiteboardCanvas({
                     <textarea
                       autoFocus
                       defaultValue={node.body}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onChange={(e) => handleLiveTextChange(node.id, { body: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") e.currentTarget.blur();
+                      }}
                       onBlur={(e) => {
-                        updateSelectedNode({ body: e.target.value });
+                        updateNode(node.id, { body: e.target.value });
                         setEditingNodeId(null);
                       }}
                       className="w-full h-full bg-transparent focus:outline-none resize-none leading-relaxed"
@@ -4147,10 +4347,15 @@ export default function WhiteboardCanvas({
                           type="text"
                           defaultValue={node.title}
                           autoFocus
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onChange={(e) => handleLiveTextChange(node.id, { title: e.target.value })}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") e.currentTarget.blur();
                           }}
-                          onBlur={(e) => updateSelectedNode({ title: e.target.value })}
+                          onBlur={(e) => {
+                            updateNode(node.id, { title: e.target.value });
+                            setEditingNodeId(null);
+                          }}
                           className="bg-transparent text-center w-full focus:outline-none font-medium"
                           style={{
                             fontSize: `${parseFontSizePx(node.fontSize, 10)}px`,
@@ -4176,11 +4381,13 @@ export default function WhiteboardCanvas({
                         <input
                           type="text"
                           defaultValue={node.subtitle}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onChange={(e) => handleLiveTextChange(node.id, { subtitle: e.target.value })}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") e.currentTarget.blur();
                           }}
                           onBlur={(e) => {
-                            updateSelectedNode({ subtitle: e.target.value });
+                            updateNode(node.id, { subtitle: e.target.value });
                             setEditingNodeId(null);
                           }}
                           className="bg-transparent text-xs text-blue-200 text-center w-full focus:outline-none font-bold"
@@ -4749,8 +4956,13 @@ export default function WhiteboardCanvas({
                     <textarea
                       autoFocus
                       defaultValue={node.title}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onChange={(e) => handleLiveTextChange(node.id, { title: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") e.currentTarget.blur();
+                      }}
                       onBlur={(e) => {
-                        updateSelectedNode({ title: e.target.value });
+                        updateNode(node.id, { title: e.target.value });
                         setEditingNodeId(null);
                       }}
                       className="w-full h-full bg-transparent focus:outline-none resize-none"
@@ -4821,11 +5033,13 @@ export default function WhiteboardCanvas({
                       type="text"
                       defaultValue={node.title}
                       autoFocus
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onChange={(e) => handleLiveTextChange(node.id, { title: e.target.value })}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") e.currentTarget.blur();
                       }}
                       onBlur={(e) => {
-                        updateSelectedNode({ title: e.target.value });
+                        updateNode(node.id, { title: e.target.value });
                         setEditingNodeId(null);
                       }}
                       className="bg-transparent text-center w-full focus:outline-none font-bold pointer-events-auto"
@@ -5179,7 +5393,7 @@ export default function WhiteboardCanvas({
         </button>
 
         {/* R - Shapes Tool with Palette Popover (Matching Screenshot 4) */}
-        <div className="relative">
+        <div className="relative" ref={shapePaletteRef}>
           <button
             onClick={() => setShowShapePalette(!showShapePalette)}
             className={`p-2 rounded-lg transition-colors ${
@@ -5331,7 +5545,7 @@ export default function WhiteboardCanvas({
         </button>
 
         {/* Templates & Functional Areas Drawer */}
-        <div className="relative">
+        <div className="relative" ref={templateSelectorRef}>
           <button
             onClick={() => setShowTemplateSelector(!showTemplateSelector)}
             className={`p-2 rounded-lg transition-colors ${
@@ -5419,7 +5633,7 @@ export default function WhiteboardCanvas({
         <div className="h-5 w-px bg-[#262832]" />
 
         {/* Color / Fill Palette (Matching Screenshot 5) */}
-        <div className="relative">
+        <div className="relative" ref={stylePaletteRef}>
           <button
             onClick={() => setShowStylePalette(!showStylePalette)}
             className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#22242D] transition-colors"

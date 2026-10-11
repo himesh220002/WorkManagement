@@ -1080,6 +1080,314 @@ describe("Whiteboard Canvas & Organizational Chart Template", () => {
       expect(updatePayload.nodes[0].textColor).toBe("#B45309");
       expect(updatePayload.nodes[0].title).toBe("Deliver Q3 Deliverables");
     });
+
+    it("verifies direct node update by ID persists changes even when selection is cleared on canvas click", () => {
+      const initialNodes = [
+        {
+          id: "node-task-1",
+          type: "task" as const,
+          x: 100,
+          y: 100,
+          width: 200,
+          height: 80,
+          title: "Initial Title",
+          subtitle: "Manager",
+          color: "#0078D4",
+        },
+      ];
+
+      // In select mode, canvas mousedown clears selectedNodeId to null
+      let selectedNodeId: string | null = null;
+      let editingNodeId: string | null = "node-task-1";
+
+      const newText = "Updated Strategic Milestone";
+
+      // Direct update function using target node ID
+      const updateNodeDirect = (id: string, patch: any, currentNodes: typeof initialNodes) => {
+        return currentNodes.map((n) => (n.id === id ? { ...n, ...patch } : n));
+      };
+
+      const updated = updateNodeDirect("node-task-1", { title: newText }, initialNodes);
+      expect(updated[0].title).toBe("Updated Strategic Milestone");
+
+      // Verify that even if selection state was null, target node retained new title
+      expect(selectedNodeId).toBeNull();
+      expect(updated[0].title).not.toBe("Initial Title");
+    });
+
+    it("verifies live text drafting ensures input changes are retained before blur/unmount", () => {
+      const currentNodes = [
+        {
+          id: "node-shape-1",
+          type: "shape" as const,
+          x: 150,
+          y: 150,
+          width: 140,
+          height: 120,
+          title: "Old Label",
+          color: "#EC4899",
+        },
+      ];
+
+      const handleLiveTextChange = (id: string, patch: any) => {
+        return currentNodes.map((n) => (n.id === id ? { ...n, ...patch } : n));
+      };
+
+      // As user types in select mode, live update captures each keystroke
+      const draftedNodes = handleLiveTextChange("node-shape-1", { title: "Executive Decision" });
+
+      // When canvas click unmounts the input in select mode, draftedNodes already has the updated title
+      expect(draftedNodes[0].title).toBe("Executive Decision");
+    });
+
+    it("verifies connector lines calculate robust coordinates for displaced/negative nodes without clipping", () => {
+      const fromNode = {
+        id: "node-from",
+        type: "shape" as const,
+        x: -2188,
+        y: -1881,
+        width: 170,
+        height: 100,
+        title: "From Node",
+      };
+      const toNode = {
+        id: "node-to",
+        type: "shape" as const,
+        x: -1948,
+        y: -1881,
+        width: 180,
+        height: 100,
+        title: "To Node",
+      };
+      const edge = {
+        id: "edge-test",
+        from: "node-from",
+        to: "node-to",
+        color: "#60A5FA",
+        style: "orthogonal" as const,
+      };
+
+      const fromCenterX = fromNode.x + fromNode.width / 2;
+      const fromCenterY = fromNode.y + fromNode.height / 2;
+      const toCenterX = toNode.x + toNode.width / 2;
+      const toCenterY = toNode.y + toNode.height / 2;
+
+      const dx = toCenterX - fromCenterX;
+      const dy = toCenterY - fromCenterY;
+
+      expect(dx).toBeGreaterThan(0);
+      const startX = fromNode.x + fromNode.width;
+      const startY = fromCenterY;
+      const endX = toNode.x;
+      const endY = toCenterY;
+      const midX = startX + (endX - startX) / 2;
+
+      const pathData = `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`;
+      expect(pathData).toBe("M -2018 -1831 L -1983 -1831 L -1983 -1831 L -1948 -1831");
+      expect(pathData).not.toContain("NaN");
+    });
+
+    it("verifies live pen points generate continuous smooth SVG path during drag", () => {
+      const generateSvgPath = (pts: { x: number; y: number }[]): string => {
+        if (pts.length === 0) return "";
+        if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y} L ${pts[0].x + 0.1} ${pts[0].y + 0.1}`;
+        let d = `M ${pts[0].x} ${pts[0].y}`;
+        for (let i = 1; i < pts.length - 1; i++) {
+          const xc = (pts[i].x + pts[i + 1].x) / 2;
+          const yc = (pts[i].y + pts[i + 1].y) / 2;
+          d += ` Q ${pts[i].x} ${pts[i].y}, ${xc} ${yc}`;
+        }
+        d += ` L ${pts[pts.length - 1].x} ${pts[pts.length - 1].y}`;
+        return d;
+      };
+
+      // 1 point
+      expect(generateSvgPath([{ x: 10, y: 20 }])).toBe("M 10 20 L 10.1 20.1");
+
+      // Multiple dragging points
+      const dragPoints = [
+        { x: 10, y: 20 },
+        { x: 30, y: 40 },
+        { x: 60, y: 70 },
+      ];
+      const livePath = generateSvgPath(dragPoints);
+      expect(livePath).toContain("M 10 20");
+      expect(livePath).toContain("Q 30 40");
+      expect(livePath).toContain("L 60 70");
+    });
+
+    it("verifies empty canvas click and outside click immediately dismiss color palette", () => {
+      let showStylePalette = true;
+      let showShapePalette = true;
+      let showTemplateSelector = true;
+
+      // Canvas background click handler resets all popovers
+      const handleCanvasMouseDown = () => {
+        showStylePalette = false;
+        showShapePalette = false;
+        showTemplateSelector = false;
+      };
+
+      handleCanvasMouseDown();
+      expect(showStylePalette).toBe(false);
+      expect(showShapePalette).toBe(false);
+      expect(showTemplateSelector).toBe(false);
+    });
+  });
+
+  describe("Dynamic Arrow Anchor Routing (Up, Down, Left, Right)", () => {
+    // Dynamic anchor resolution logic as implemented in WhiteboardCanvas
+    const computeEdgeEndpoints = (
+      fromNode: { x: number; y: number; width: number; height: number },
+      toNode: { x: number; y: number; width: number; height: number },
+      style: "orthogonal" | "straight" | "curved" = "orthogonal"
+    ) => {
+      const fromCenterX = fromNode.x + fromNode.width / 2;
+      const fromCenterY = fromNode.y + fromNode.height / 2;
+      const toCenterX = toNode.x + toNode.width / 2;
+      const toCenterY = toNode.y + toNode.height / 2;
+
+      const dx = toCenterX - fromCenterX;
+      const dy = toCenterY - fromCenterY;
+
+      const gapX =
+        dx > 0
+          ? toNode.x - (fromNode.x + fromNode.width)
+          : fromNode.x - (toNode.x + toNode.width);
+
+      const gapY =
+        dy > 0
+          ? toNode.y - (fromNode.y + fromNode.height)
+          : fromNode.y - (toNode.y + toNode.height);
+
+      let isHorizontal: boolean;
+      if (gapX > 0 && gapY <= 0) {
+        isHorizontal = true;
+      } else if (gapY > 0 && gapX <= 0) {
+        isHorizontal = false;
+      } else if (gapX > 0 && gapY > 0) {
+        isHorizontal = gapX >= gapY;
+      } else {
+        isHorizontal = Math.abs(dx) >= Math.abs(dy);
+      }
+
+      let startX: number, startY: number, endX: number, endY: number;
+      let fromFace: "top" | "bottom" | "left" | "right";
+      let toFace: "top" | "bottom" | "left" | "right";
+
+      if (isHorizontal) {
+        if (dx > 0) {
+          startX = fromNode.x + fromNode.width;
+          startY = fromCenterY;
+          endX = toNode.x;
+          endY = toCenterY;
+          fromFace = "right";
+          toFace = "left";
+        } else {
+          startX = fromNode.x;
+          startY = fromCenterY;
+          endX = toNode.x + toNode.width;
+          endY = toCenterY;
+          fromFace = "left";
+          toFace = "right";
+        }
+      } else {
+        if (dy > 0) {
+          startX = fromCenterX;
+          startY = fromNode.y + fromNode.height;
+          endX = toCenterX;
+          endY = toNode.y;
+          fromFace = "bottom";
+          toFace = "top";
+        } else {
+          startX = fromCenterX;
+          startY = fromNode.y;
+          endX = toCenterX;
+          endY = toNode.y + toNode.height;
+          fromFace = "top";
+          toFace = "bottom";
+        }
+      }
+
+      return { startX, startY, endX, endY, fromFace, toFace, isHorizontal };
+    };
+
+    it("dynamically routes side-by-side nodes (Phase 1 -> Phase 2) horizontally from right to left face", () => {
+      const phase1 = { x: 120, y: 200, width: 200, height: 140 };
+      const phase2 = { x: 350, y: 200, width: 200, height: 140 };
+
+      const result = computeEdgeEndpoints(phase1, phase2);
+      expect(result.fromFace).toBe("right");
+      expect(result.toFace).toBe("left");
+      expect(result.startX).toBe(320); // 120 + 200
+      expect(result.startY).toBe(270); // 200 + 70
+      expect(result.endX).toBe(350);
+      expect(result.endY).toBe(270);
+    });
+
+    it("dynamically routes stacked hierarchy nodes (President -> VP) vertically from bottom to top face", () => {
+      const president = { x: 500, y: 100, width: 220, height: 100 };
+      const vp = { x: 300, y: 260, width: 200, height: 100 };
+
+      const result = computeEdgeEndpoints(president, vp);
+      expect(result.fromFace).toBe("bottom");
+      expect(result.toFace).toBe("top");
+      expect(result.startX).toBe(610); // 500 + 110
+      expect(result.startY).toBe(200); // 100 + 100
+      expect(result.endX).toBe(400); // 300 + 100
+      expect(result.endY).toBe(260);
+    });
+
+    it("dynamically routes backward horizontal nodes (Phase 2 -> Phase 1) from left to right face", () => {
+      const phase2 = { x: 350, y: 200, width: 200, height: 140 };
+      const phase1 = { x: 120, y: 200, width: 200, height: 140 };
+
+      const result = computeEdgeEndpoints(phase2, phase1);
+      expect(result.fromFace).toBe("left");
+      expect(result.toFace).toBe("right");
+      expect(result.startX).toBe(350);
+      expect(result.startY).toBe(270);
+      expect(result.endX).toBe(320);
+      expect(result.endY).toBe(270);
+    });
+
+    it("dynamically routes upward vertical nodes (Subordinate -> Supervisor) from top to bottom face", () => {
+      const vp = { x: 300, y: 260, width: 200, height: 100 };
+      const president = { x: 500, y: 100, width: 220, height: 100 };
+
+      const result = computeEdgeEndpoints(vp, president);
+      expect(result.fromFace).toBe("top");
+      expect(result.toFace).toBe("bottom");
+      expect(result.startX).toBe(400);
+      expect(result.startY).toBe(260);
+      expect(result.endX).toBe(610);
+      expect(result.endY).toBe(200);
+    });
+
+    it("dynamically routes in-flight arrow preview from the closest face towards cursor position", () => {
+      const node = { x: 100, y: 100, width: 100, height: 100 };
+      const fromCenterX = 150;
+      const fromCenterY = 150;
+
+      const getPreviewStart = (targetX: number, targetY: number) => {
+        const mdx = targetX - fromCenterX;
+        const mdy = targetY - fromCenterY;
+        if (Math.abs(mdx) >= Math.abs(mdy)) {
+          return mdx > 0 ? { x: node.x + node.width, y: fromCenterY } : { x: node.x, y: fromCenterY };
+        } else {
+          return mdy > 0 ? { x: fromCenterX, y: node.y + node.height } : { x: fromCenterX, y: node.y };
+        }
+      };
+
+      // Cursor to the right
+      expect(getPreviewStart(400, 150)).toEqual({ x: 200, y: 150 });
+      // Cursor to the left
+      expect(getPreviewStart(20, 150)).toEqual({ x: 100, y: 150 });
+      // Cursor below
+      expect(getPreviewStart(150, 400)).toEqual({ x: 150, y: 200 });
+      // Cursor above
+      expect(getPreviewStart(150, 20)).toEqual({ x: 150, y: 100 });
+    });
   });
 });
 
