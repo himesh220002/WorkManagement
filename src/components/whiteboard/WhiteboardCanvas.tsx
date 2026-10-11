@@ -74,8 +74,17 @@ import {
   Link2,
   Unlink,
   ChevronDown,
+  Boxes,
+  Table,
 } from "lucide-react";
 import { IWhiteboardNode, IWhiteboardEdge } from "@/models/whiteboard";
+import {
+  ICON_GALLERY_GROUPS,
+  IIconGalleryItem,
+  IconGroupType,
+  getLucideIcon,
+  filterIconGalleryItems,
+} from "@/lib/whiteboardIconGallery";
 import { WHITEBOARD_TEMPLATES, createFunctionalArea } from "@/lib/whiteboardTemplates";
 import {
   parseNodeChecklist,
@@ -593,6 +602,20 @@ export default function WhiteboardCanvas({
   // Multi-selection link options dropdown menu
   const [showLinkMenu, setShowLinkMenu] = useState(false);
 
+  // Tech, Product & Flow Icons Gallery Popover Drawer
+  const [showIconGallery, setShowIconGallery] = useState(false);
+  const [iconGallerySearch, setIconGallerySearch] = useState("");
+  const [iconGalleryActiveTab, setIconGalleryActiveTab] = useState<IconGroupType | "all">("all");
+  const iconGalleryRef = useRef<HTMLDivElement>(null);
+
+  // Table Grid Creation Popover State (Rows x Cols of Boxes)
+  const [showTableDialog, setShowTableDialog] = useState(false);
+  const [tableRows, setTableRows] = useState(3);
+  const [tableCols, setTableCols] = useState(3);
+  const [tableGap, setTableGap] = useState(0);
+  const [hoveredGridCell, setHoveredGridCell] = useState<{ r: number; c: number } | null>(null);
+  const tableDialogRef = useRef<HTMLDivElement>(null);
+
   // Direct file upload ref for images, SVGs, graphs, diagrams
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Direct file import ref for .md, .json, .txt into formatted sticky notes
@@ -871,13 +894,21 @@ export default function WhiteboardCanvas({
       if (shapeSwitcherRef.current && !shapeSwitcherRef.current.contains(target)) {
         setShowShapeSwitcher(false);
       }
+      if (iconGalleryRef.current && !iconGalleryRef.current.contains(target)) {
+        setShowIconGallery(false);
+      }
+      if (tableDialogRef.current && !tableDialogRef.current.contains(target)) {
+        setShowTableDialog(false);
+      }
     }
     if (
       showBgColorPicker ||
       showStylePalette ||
       showShapePalette ||
       showTemplateSelector ||
-      showShapeSwitcher
+      showShapeSwitcher ||
+      showIconGallery ||
+      showTableDialog
     ) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -888,6 +919,8 @@ export default function WhiteboardCanvas({
     showShapePalette,
     showTemplateSelector,
     showShapeSwitcher,
+    showIconGallery,
+    showTableDialog,
   ]);
 
   // Push history state with deep clone & boundary checks
@@ -1555,7 +1588,10 @@ export default function WhiteboardCanvas({
     explicitCoords?: { x: number; y: number },
     noteFormat?: NoteFormat,
     initialTitle?: string,
-    initialBody?: string
+    initialBody?: string,
+    iconName?: string,
+    subtitle?: string,
+    iconGroup?: string
   ) => {
     const coords = explicitCoords
       ? explicitCoords
@@ -1566,7 +1602,28 @@ export default function WhiteboardCanvas({
     const newId = `node-${Date.now()}`;
     let newNode: IWhiteboardNode;
 
-    if (type === "sticky") {
+    if (type === "icon") {
+      const nodeWidth = 80;
+      const nodeHeight = 82;
+      newNode = {
+        id: newId,
+        type: "icon",
+        x: coords.x - Math.round(nodeWidth / 2),
+        y: coords.y - Math.round(nodeHeight / 2),
+        width: nodeWidth,
+        height: nodeHeight,
+        title: initialTitle || "Icon Node",
+        subtitle: subtitle || "",
+        iconName: iconName || "Database",
+        iconGroup: iconGroup || "infra",
+        color: customColor || "#0EA5E9",
+        fillType: "solid",
+        textColor: "#FFFFFF",
+        fontSize: "12px",
+        fontWeight: "bold",
+        zIndex: nodes.length + 1,
+      };
+    } else if (type === "sticky") {
       const resolvedFormat: NoteFormat =
         noteFormat || (isChecklist ? "checklist" : "text");
       const isFormatChecklist = resolvedFormat === "checklist";
@@ -1575,32 +1632,32 @@ export default function WhiteboardCanvas({
 
       const defaultChecklist = isFormatChecklist
         ? [
-            { id: `c-${Date.now()}-1`, text: "Review milestone goals", completed: false },
-            { id: `c-${Date.now()}-2`, text: "Update project whiteboard", completed: false },
-            { id: `c-${Date.now()}-3`, text: "Sync with team squad", completed: false },
-          ]
+          { id: `c-${Date.now()}-1`, text: "Review milestone goals", completed: false },
+          { id: `c-${Date.now()}-2`, text: "Update project whiteboard", completed: false },
+          { id: `c-${Date.now()}-3`, text: "Sync with team squad", completed: false },
+        ]
         : undefined;
 
       const resolvedTitle = initialTitle
         ? initialTitle
         : isFormatJson
-        ? "data.json"
-        : isFormatMd
-        ? "notes.md"
-        : isFormatChecklist
-        ? "Action Items"
-        : "notes.txt";
+          ? "data.json"
+          : isFormatMd
+            ? "notes.md"
+            : isFormatChecklist
+              ? "Action Items"
+              : "notes.txt";
 
       const resolvedBody =
         initialBody !== undefined
           ? initialBody
           : isFormatJson
-          ? DEFAULT_JSON_NOTE
-          : isFormatMd
-          ? DEFAULT_MARKDOWN_NOTE
-          : isFormatChecklist
-          ? serializeChecklistToBody(defaultChecklist!)
-          : DEFAULT_TEXT_NOTE;
+            ? DEFAULT_JSON_NOTE
+            : isFormatMd
+              ? DEFAULT_MARKDOWN_NOTE
+              : isFormatChecklist
+                ? serializeChecklistToBody(defaultChecklist!)
+                : DEFAULT_TEXT_NOTE;
 
       const resolvedWidth = isFormatMd ? 320 : isFormatJson ? 300 : isFormatChecklist ? 240 : 220;
       const resolvedHeight = isFormatMd ? 320 : isFormatJson ? 280 : isFormatChecklist ? 220 : 200;
@@ -1717,6 +1774,74 @@ export default function WhiteboardCanvas({
     setShowShapePalette(false);
     triggerAutoSave(updated, edges);
   };
+
+  // Table Grid Generator: Asks row,col and creates those exact number of boxes in r,c arrangement without outer wall
+  const handleCreateTableGrid = useCallback(
+    (
+      rowCount: number,
+      colCount: number,
+      gap: number = 0,
+      customCoords?: { x: number; y: number }
+    ) => {
+      const rows = Math.max(1, Math.min(25, rowCount));
+      const cols = Math.max(1, Math.min(25, colCount));
+      const cellWidth = 140;
+      const cellHeight = 60;
+      const totalW = cols * cellWidth + Math.max(0, cols - 1) * gap;
+      const totalH = rows * cellHeight + Math.max(0, rows - 1) * gap;
+
+      const winW = typeof window !== "undefined" ? window.innerWidth : 1400;
+      const winH = typeof window !== "undefined" ? window.innerHeight : 900;
+
+      const startX = customCoords
+        ? customCoords.x - Math.round(totalW / 2)
+        : Math.round(-pan.x / zoom + winW / 2 / zoom - totalW / 2);
+      const startY = customCoords
+        ? customCoords.y - Math.round(totalH / 2)
+        : Math.round(-pan.y / zoom + winH / 2 / zoom - totalH / 2);
+
+      const tableGroupId = `group-table-${Date.now()}`;
+      const newCells: IWhiteboardNode[] = [];
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cellX = startX + c * (cellWidth + gap);
+          const cellY = startY + r * (cellHeight + gap);
+          const isHeader = r === 0 && rows > 1;
+
+          newCells.push({
+            id: `cell-${Date.now()}-${r}-${c}`,
+            type: "shape",
+            shapeType: "rectangle",
+            x: cellX,
+            y: cellY,
+            width: cellWidth,
+            height: cellHeight,
+            title: isHeader ? `Header ${c + 1}` : `Row ${r + 1}, Col ${c + 1}`,
+            color: isHeader ? "#0078D4" : "#1A1C24",
+            fillType: "solid",
+            textColor: "#FFFFFF",
+            fontSize: "12px",
+            fontWeight: isHeader ? "bold" : "normal",
+            textAlign: "center",
+            zIndex: 2,
+            groupId: tableGroupId,
+          });
+        }
+      }
+
+      const updated = [...nodes, ...newCells];
+      setNodes(updated);
+      pushHistory(updated, edges);
+      triggerAutoSave(updated, edges);
+
+      const cellIds = newCells.map((n) => n.id);
+      setSelectedNodeId(cellIds[0]);
+      setSelectedNodeIds(cellIds);
+      setShowTableDialog(false);
+    },
+    [pan, zoom, nodes, edges, pushHistory, triggerAutoSave]
+  );
 
   // Insert complete functional area (Meeting Notes, Notes, Diagram, Project Planner)
   const handleInsertFunctionalArea = (
@@ -1871,7 +1996,26 @@ export default function WhiteboardCanvas({
     const newBranchId = `node-branch-${Date.now()}`;
     let newBranchNode: IWhiteboardNode;
 
-    if (parentNode.type === "task") {
+    if (parentNode.type === "icon") {
+      newBranchNode = {
+        id: newBranchId,
+        type: "icon",
+        iconName: parentNode.iconName || "Database",
+        iconGroup: parentNode.iconGroup || "infra",
+        x: newX,
+        y: newY,
+        width: parentNode.width || 80,
+        height: parentNode.height || 82,
+        title: parentNode.title || "Connected Node",
+        subtitle: parentNode.subtitle || "",
+        color: parentNode.color || "#0EA5E9",
+        fillType: parentNode.fillType || "solid",
+        textColor: parentNode.textColor || "#FFFFFF",
+        fontWeight: parentNode.fontWeight || "bold",
+        fontSize: parentNode.fontSize || "12px",
+        zIndex: 2,
+      };
+    } else if (parentNode.type === "task") {
       // ONLY org task card branches another org task card!
       newBranchNode = {
         id: newBranchId,
@@ -3335,16 +3479,16 @@ export default function WhiteboardCanvas({
       const updatedNodes = nodes.map((n) =>
         n.id === node.id
           ? {
-              ...n,
-              noteFormat: targetFormat,
-              hasCheckbox,
-              checklist: targetFormat === "checklist" ? newChecklist : undefined,
-              body: newBody,
-              title: newTitle,
-              color: newColor,
-              width: newWidth,
-              height: newHeight,
-            }
+            ...n,
+            noteFormat: targetFormat,
+            hasCheckbox,
+            checklist: targetFormat === "checklist" ? newChecklist : undefined,
+            body: newBody,
+            title: newTitle,
+            color: newColor,
+            width: newWidth,
+            height: newHeight,
+          }
           : n
       );
       setNodes(updatedNodes);
@@ -3394,9 +3538,9 @@ export default function WhiteboardCanvas({
         const coords = doubleClickMenu
           ? { x: doubleClickMenu.canvasX, y: doubleClickMenu.canvasY }
           : {
-              x: Math.round(-pan.x / zoom + wW / 2 / zoom),
-              y: Math.round(-pan.y / zoom + wH / 2 / zoom),
-            };
+            x: Math.round(-pan.x / zoom + wW / 2 / zoom),
+            y: Math.round(-pan.y / zoom + wH / 2 / zoom),
+          };
         handleAddNode(
           "sticky",
           "rectangle",
@@ -3860,7 +4004,16 @@ export default function WhiteboardCanvas({
         const parsed = JSON.parse(customData);
         const dropCoords = getCanvasCoords(e.clientX, e.clientY);
 
-        if (parsed.category === "functional-area") {
+        if (parsed.category === "table-grid") {
+          handleCreateTableGrid(
+            parsed.rows || 3,
+            parsed.cols || 3,
+            parsed.gap !== undefined ? parsed.gap : 0,
+            dropCoords
+          );
+          setShowTableDialog(false);
+          return;
+        } else if (parsed.category === "functional-area") {
           handleInsertFunctionalArea(parsed.areaType, dropCoords);
           setShowTemplateSelector(false);
           return;
@@ -3873,9 +4026,13 @@ export default function WhiteboardCanvas({
             dropCoords,
             parsed.noteFormat,
             parsed.initialTitle,
-            parsed.initialBody
+            parsed.initialBody,
+            parsed.iconName,
+            parsed.subtitle,
+            parsed.iconGroup
           );
           setShowShapePalette(false);
+          setShowIconGallery(false);
           return;
         }
       } catch { }
@@ -3961,7 +4118,7 @@ export default function WhiteboardCanvas({
       />
 
       {/* 1. TOP HEADER BAR (Breadcrumb, Title, Favorite, Author Avatar, Share, Fullscreen) */}
-      <header className="absolute top-0 left-0 right-0 h-13 px-4 bg-[#121316]/90 backdrop-blur-md border-b border-[#22242B] flex items-center justify-between z-30 shadow-md">
+      <header className="absolute top-0 left-0 right-0 h-13 px-4 bg-[#121316]/10 border-b border-[#22242B] flex items-center justify-between z-30 shadow-md">
         <div className="flex items-center gap-3">
           <Link
             href="/whiteboards"
@@ -4060,7 +4217,11 @@ export default function WhiteboardCanvas({
           }}
         >
           <span className="px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400 text-[10px] font-bold uppercase tracking-wider shrink-0">
-            {selectedNode.type === "shape" ? selectedNode.shapeType || "shape" : selectedNode.type}
+            {selectedNode.type === "shape"
+              ? selectedNode.shapeType || "shape"
+              : selectedNode.type === "icon"
+                ? `${(selectedNode.iconGroup || "tech").toUpperCase()} · ${(selectedNode.iconName || "ICON").toUpperCase()}`
+                : selectedNode.type}
           </span>
 
           {selectedNode.groupId && (
@@ -4257,6 +4418,95 @@ export default function WhiteboardCanvas({
             </>
           )}
 
+          {/* B. ICON NODE CONTROLS */}
+          {selectedNode.type === "icon" && (
+            <>
+              {/* Color Swatch */}
+              <div className="relative shrink-0" data-palette-container="true">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowStylePalette(!showStylePalette);
+                  }}
+                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs cursor-pointer hover:scale-110 transition-transform"
+                  style={{ backgroundColor: selectedNode.color || "#0EA5E9" }}
+                  title="Change Component Color"
+                />
+
+                {showStylePalette && (
+                  <div
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50"
+                  >
+                    {COLOR_PALETTE.map((c) => (
+                      <button
+                        key={c.name}
+                        type="button"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveColor(c.value);
+                          updateSelectedNode({ color: c.value });
+                          setShowStylePalette(false);
+                        }}
+                        className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20 cursor-pointer"
+                        style={{ backgroundColor: c.value }}
+                        title={c.name}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Bold text */}
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateSelectedNode({
+                    fontWeight: selectedNode.fontWeight === "bold" ? "normal" : "bold",
+                  });
+                }}
+                className={`p-1 rounded hover:bg-[#282A33] cursor-pointer ${selectedNode.fontWeight === "bold" ? "text-blue-400 bg-[#282A33]" : ""
+                  }`}
+                title="Bold title"
+              >
+                <Bold className="w-3.5 h-3.5" />
+              </button>
+
+              <FontSizeControl
+                fontSize={selectedNode.fontSize}
+                onChange={(sz) => updateSelectedNode({ fontSize: sz })}
+                defaultPx={12}
+              />
+
+              {/* Text Color Picker */}
+              <TextColorPicker
+                value={selectedNode.textColor}
+                onChange={(color) => updateSelectedNode({ textColor: color })}
+                defaultColor="#FFFFFF"
+              />
+
+              <div className="h-4 w-px bg-[#30333D] shrink-0" />
+
+              {/* Branch Connection */}
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => handleAddBranchFromNode(selectedNode.id)}
+                className="px-2 py-1 bg-blue-600/30 hover:bg-blue-600 text-blue-300 hover:text-white rounded text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                title="Add Connected Branch Node (+)"
+              >
+                <GitFork className="w-3.5 h-3.5" />
+                <span>+ Branch</span>
+              </button>
+            </>
+          )}
+
           {/* B. TASK CONTROLS */}
           {selectedNode.type === "task" && (
             <>
@@ -4418,8 +4668,8 @@ export default function WhiteboardCanvas({
               (selectedNode.hasCheckbox || (selectedNode.checklist && selectedNode.checklist.length > 0)
                 ? "checklist"
                 : selectedNode.body?.trim().startsWith("{") && selectedNode.body?.trim().endsWith("}")
-                ? "json"
-                : "text");
+                  ? "json"
+                  : "text");
 
             return (
               <>
@@ -4427,11 +4677,10 @@ export default function WhiteboardCanvas({
                 <div className="flex items-center gap-0.5 bg-black/40 p-0.5 rounded-lg border border-white/10">
                   <button
                     onClick={() => handleSetStickyFormat(selectedNode, "text")}
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
-                      currentFormat === "text"
-                        ? "bg-pink-600/40 text-pink-300 ring-1 ring-pink-500/50"
-                        : "text-gray-400 hover:text-white"
-                    }`}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${currentFormat === "text"
+                      ? "bg-pink-600/40 text-pink-300 ring-1 ring-pink-500/50"
+                      : "text-gray-400 hover:text-white"
+                      }`}
                     title="Plain Text File Structuring"
                   >
                     <FileText className="w-3 h-3" />
@@ -4440,11 +4689,10 @@ export default function WhiteboardCanvas({
 
                   <button
                     onClick={() => handleSetStickyFormat(selectedNode, "json")}
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
-                      currentFormat === "json"
-                        ? "bg-amber-600/40 text-amber-300 ring-1 ring-amber-500/50"
-                        : "text-gray-400 hover:text-white"
-                    }`}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${currentFormat === "json"
+                      ? "bg-amber-600/40 text-amber-300 ring-1 ring-amber-500/50"
+                      : "text-gray-400 hover:text-white"
+                      }`}
                     title="JSON Formatting Structure"
                   >
                     <Braces className="w-3 h-3" />
@@ -4453,11 +4701,10 @@ export default function WhiteboardCanvas({
 
                   <button
                     onClick={() => handleSetStickyFormat(selectedNode, "markdown")}
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
-                      currentFormat === "markdown"
-                        ? "bg-indigo-600/40 text-indigo-300 ring-1 ring-indigo-500/50"
-                        : "text-gray-400 hover:text-white"
-                    }`}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${currentFormat === "markdown"
+                      ? "bg-indigo-600/40 text-indigo-300 ring-1 ring-indigo-500/50"
+                      : "text-gray-400 hover:text-white"
+                      }`}
                     title="Rendered Markdown Format (.md)"
                   >
                     <FileCode className="w-3 h-3" />
@@ -4466,11 +4713,10 @@ export default function WhiteboardCanvas({
 
                   <button
                     onClick={() => handleSetStickyFormat(selectedNode, "checklist")}
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
-                      currentFormat === "checklist"
-                        ? "bg-cyan-600/40 text-cyan-300 ring-1 ring-cyan-500/50"
-                        : "text-gray-400 hover:text-white"
-                    }`}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${currentFormat === "checklist"
+                      ? "bg-cyan-600/40 text-cyan-300 ring-1 ring-cyan-500/50"
+                      : "text-gray-400 hover:text-white"
+                      }`}
                     title="Todo Checklist with Checkboxes"
                   >
                     <ListTodo className="w-3 h-3" />
@@ -5700,6 +5946,20 @@ export default function WhiteboardCanvas({
             </button>
             <button
               onClick={() => {
+                const coords = doubleClickMenu
+                  ? { x: doubleClickMenu.canvasX, y: doubleClickMenu.canvasY }
+                  : undefined;
+                handleCreateTableGrid(3, 3, 0, coords);
+                setDoubleClickMenu(null);
+              }}
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-emerald-300 hover:bg-[#22242D] hover:text-white cursor-pointer"
+              title="Create 3x3 Table Grid of boxes"
+            >
+              <Table className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Table Grid</span>
+            </button>
+            <button
+              onClick={() => {
                 fileInputRef.current?.click();
                 setDoubleClickMenu(null);
               }}
@@ -5966,22 +6226,20 @@ export default function WhiteboardCanvas({
                   width: `${maxX - minX}px`,
                   height: `${maxY - minY}px`,
                 }}
-                className={`border-2 border-dashed rounded-xl pointer-events-none z-20 transition-all ${
-                  isEntireSelectionOneGroup
-                    ? "border-blue-400 bg-blue-500/5 shadow-[0_0_20px_rgba(59,130,246,0.2)]"
-                    : hasAnyGroupInSelection
-                      ? "border-purple-400 bg-purple-500/5 shadow-[0_0_20px_rgba(168,85,247,0.2)]"
-                      : "border-cyan-400 bg-cyan-400/5 shadow-[0_0_20px_rgba(6,182,212,0.15)]"
-                }`}
+                className={`border-2 border-dashed rounded-xl pointer-events-none z-20 transition-all ${isEntireSelectionOneGroup
+                  ? "border-blue-400 bg-blue-500/5 shadow-[0_0_20px_rgba(59,130,246,0.2)]"
+                  : hasAnyGroupInSelection
+                    ? "border-purple-400 bg-purple-500/5 shadow-[0_0_20px_rgba(168,85,247,0.2)]"
+                    : "border-cyan-400 bg-cyan-400/5 shadow-[0_0_20px_rgba(6,182,212,0.15)]"
+                  }`}
               >
                 <div
-                  className={`absolute -top-7 left-2 px-2.5 py-0.5 rounded-full text-black text-[10px] font-bold flex items-center gap-1.5 shadow-md ${
-                    isEntireSelectionOneGroup
-                      ? "bg-blue-400 text-white"
-                      : hasAnyGroupInSelection
-                        ? "bg-purple-400 text-white"
-                        : "bg-cyan-500 text-black"
-                  }`}
+                  className={`absolute -top-7 left-2 px-2.5 py-0.5 rounded-full text-black text-[10px] font-bold flex items-center gap-1.5 shadow-md ${isEntireSelectionOneGroup
+                    ? "bg-blue-400 text-white"
+                    : hasAnyGroupInSelection
+                      ? "bg-purple-400 text-white"
+                      : "bg-cyan-500 text-black"
+                    }`}
                 >
                   {isEntireSelectionOneGroup ? (
                     <>
@@ -6153,8 +6411,8 @@ export default function WhiteboardCanvas({
                 (node.hasCheckbox || (node.checklist && node.checklist.length > 0)
                   ? "checklist"
                   : node.body?.trim().startsWith("{") && node.body?.trim().endsWith("}")
-                  ? "json"
-                  : "text");
+                    ? "json"
+                    : "text");
               const isChecklist = format === "checklist";
               const isJson = format === "json";
               const isMarkdown = format === "markdown";
@@ -7586,7 +7844,99 @@ export default function WhiteboardCanvas({
               );
             }
 
-            // 7. GEOMETRIC SHAPES (Square, Diamond, Circle, Triangle, Star, Hexagon, etc.)
+            // 7. TECH, PRODUCT & FLOW ICON NODE (Icon Squircle Badge + Bottom Text Name only)
+            if (node.type === "icon") {
+              const nodeColor = node.color || "#0EA5E9";
+              const IconComp = getLucideIcon(node.iconName);
+              const isOldDefaultSize = node.width === 150 && node.height === 110;
+              const nodeW = isOldDefaultSize ? 80 : (node.width || 80);
+              const nodeH = isOldDefaultSize ? 82 : (node.height || 82);
+
+              // Dynamically scale icon squircle relative to node bounds if resized
+              const iconBoxSize = Math.max(
+                32,
+                Math.min(Math.round(nodeW * 0.72), Math.round(nodeH - 26))
+              );
+              const iconGlyphSize = Math.max(16, Math.round(iconBoxSize * 0.52));
+
+              return (
+                <div
+                  key={node.id}
+                  onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
+                  style={{
+                    position: "absolute",
+                    left: `${node.x}px`,
+                    top: `${node.y}px`,
+                    width: `${nodeW}px`,
+                    height: `${nodeH}px`,
+                  }}
+                  className={`relative cursor-pointer transition-all select-none group/iconNode flex flex-col items-center justify-between p-0.5 ${isSelected
+                    ? "ring-2 ring-blue-400 ring-offset-2 ring-offset-transparent rounded-2xl"
+                    : "hover:opacity-95"
+                    }`}
+                >
+                  {/* Rounded Icon Squircle Box */}
+                  <div
+                    className="rounded-2xl flex items-center justify-center transition-transform group-hover/iconNode:scale-105 shrink-0"
+                    style={{
+                      width: `${iconBoxSize}px`,
+                      height: `${iconBoxSize}px`,
+                      backgroundColor: "#13151D",
+                      border: `1.5px solid ${nodeColor}66`,
+                      color: nodeColor,
+                      boxShadow: `0 4px 18px -2px ${nodeColor}33`,
+                    }}
+                    title={node.subtitle || node.title}
+                  >
+                    <IconComp
+                      style={{
+                        width: `${iconGlyphSize}px`,
+                        height: `${iconGlyphSize}px`,
+                      }}
+                      className="drop-shadow-md"
+                    />
+                  </div>
+
+                  {/* Bottom Text Name */}
+                  <div className="w-full text-center px-0.5 mt-1">
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        defaultValue={node.title}
+                        autoFocus
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onChange={(e) => handleLiveTextChange(node.id, { title: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.currentTarget.blur();
+                        }}
+                        onBlur={(e) => {
+                          updateNode(node.id, { title: e.target.value });
+                          setEditingNodeId(null);
+                        }}
+                        className="bg-black/80 border border-white/30 rounded px-1 text-center w-full focus:outline-none font-bold text-white text-xs"
+                      />
+                    ) : (
+                      <div
+                        className="text-xs font-bold truncate leading-tight drop-shadow-sm"
+                        style={{
+                          color: node.textColor || "#FFFFFF",
+                          fontSize: `${parseFontSizePx(node.fontSize, 12)}px`,
+                          fontWeight: node.fontWeight || "bold",
+                        }}
+                        title={node.title}
+                      >
+                        {node.title || "Icon Node"}
+                      </div>
+                    )}
+                  </div>
+
+                  {isSelected && renderResizeHandles(node)}
+                </div>
+              );
+            }
+
+            // 8. GEOMETRIC SHAPES (Square, Diamond, Circle, Triangle, Star, Hexagon, etc.)
             return (
               <div
                 key={node.id}
@@ -7767,7 +8117,7 @@ export default function WhiteboardCanvas({
       <div className="absolute bottom-3 right-3 z-40 select-none">
         {isMounted && (
           showMinimap ? (
-            <div className="bg-[#14151B]/95 backdrop-blur-md border border-[#262832] rounded-xl shadow-2xl p-2 animate-in fade-in-50 duration-150">
+            <div className="bg-[#14151B]/10 border border-[#262832] rounded-xl shadow-2xl p-2 animate-in fade-in-50 duration-150">
               {/* Navigator Header */}
               <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[#242630] text-[10px] text-gray-400">
                 <div className="flex items-center gap-1.5 font-bold text-gray-200">
@@ -8481,6 +8831,206 @@ export default function WhiteboardCanvas({
           <Maximize className="w-4 h-4" />
         </button>
 
+        {/* Table Grid Tool (R x C arrangement of boxes) */}
+        <div className="relative" ref={tableDialogRef}>
+          <button
+            type="button"
+            onClick={() => setShowTableDialog(!showTableDialog)}
+            className={`p-2 rounded-lg transition-colors cursor-pointer relative ${showTableDialog
+              ? "bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400"
+              : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+              }`}
+            title="Create Table Grid (Rows × Cols of boxes - Click or Drag onto canvas)"
+          >
+            <Table className="w-4 h-4 text-emerald-400" />
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#121316]" />
+          </button>
+
+          {showTableDialog && (
+            <div
+              onMouseDown={(e) => e.stopPropagation()}
+              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#151720] border border-[#2D3039] rounded-2xl shadow-2xl p-3.5 w-72 flex flex-col gap-3 z-50 animate-in fade-in-50 backdrop-blur-xl"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between pb-1.5 border-b border-[#252834]">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                    <Table className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-white">Create Table Grid</div>
+                    <div className="text-[10px] text-gray-400">R × C arrangement of boxes</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTableDialog(false)}
+                  className="p-1 rounded-lg hover:bg-[#232530] text-gray-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Visual 6x6 Grid Hover Picker */}
+              <div className="flex flex-col items-center gap-1.5 bg-[#0D0E13] p-2.5 rounded-xl border border-[#262935]">
+                <div className="text-[11px] font-mono font-semibold text-emerald-400">
+                  {hoveredGridCell
+                    ? `${hoveredGridCell.r} Rows × ${hoveredGridCell.c} Columns`
+                    : `${tableRows} Rows × ${tableCols} Columns (${tableRows * tableCols} Boxes)`}
+                </div>
+                <div
+                  className="grid grid-cols-6 gap-1 p-1"
+                  onMouseLeave={() => setHoveredGridCell(null)}
+                >
+                  {Array.from({ length: 6 }).map((_, rIdx) =>
+                    Array.from({ length: 6 }).map((_, cIdx) => {
+                      const r = rIdx + 1;
+                      const c = cIdx + 1;
+                      const isHovered =
+                        hoveredGridCell && r <= hoveredGridCell.r && c <= hoveredGridCell.c;
+                      const isSelected =
+                        !hoveredGridCell && r <= tableRows && c <= tableCols;
+                      const active = isHovered || isSelected;
+
+                      return (
+                        <div
+                          key={`${r}-${c}`}
+                          onMouseEnter={() => setHoveredGridCell({ r, c })}
+                          onClick={() => {
+                            setTableRows(r);
+                            setTableCols(c);
+                            handleCreateTableGrid(r, c, tableGap);
+                          }}
+                          className={`w-6 h-5 rounded transition-all cursor-pointer border ${active
+                            ? "bg-emerald-500/30 border-emerald-400 scale-105"
+                            : "bg-[#1E202B] border-[#2E3140] hover:border-gray-500"
+                            }`}
+                          title={`${r} × ${c} Table`}
+                        />
+                      );
+                    })
+                  )}
+                </div>
+                <div className="text-[9px] text-gray-500">
+                  Hover to select, click to create instantly
+                </div>
+              </div>
+
+              {/* Row & Col Inputs */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                    Rows
+                  </label>
+                  <div className="flex items-center bg-[#0D0E13] border border-[#2B2E3C] rounded-lg overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setTableRows(Math.max(1, tableRows - 1))}
+                      className="px-2 py-1 text-gray-400 hover:text-white hover:bg-[#20222D] text-xs font-bold"
+                    >
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={tableRows}
+                      onChange={(e) =>
+                        setTableRows(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))
+                      }
+                      className="w-full text-center bg-transparent text-white text-xs py-1 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setTableRows(Math.min(20, tableRows + 1))}
+                      className="px-2 py-1 text-gray-400 hover:text-white hover:bg-[#20222D] text-xs font-bold"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                    Columns
+                  </label>
+                  <div className="flex items-center bg-[#0D0E13] border border-[#2B2E3C] rounded-lg overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setTableCols(Math.max(1, tableCols - 1))}
+                      className="px-2 py-1 text-gray-400 hover:text-white hover:bg-[#20222D] text-xs font-bold"
+                    >
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={tableCols}
+                      onChange={(e) =>
+                        setTableCols(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))
+                      }
+                      className="w-full text-center bg-transparent text-white text-xs py-1 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setTableCols(Math.min(20, tableCols + 1))}
+                      className="px-2 py-1 text-gray-400 hover:text-white hover:bg-[#20222D] text-xs font-bold"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Spacing Option (Seamless vs Spaced) */}
+              <div className="flex items-center justify-between text-[11px] px-0.5">
+                <span className="text-gray-400 text-[10px]">Box Spacing:</span>
+                <div className="flex items-center gap-1 bg-[#0D0E13] p-0.5 rounded-lg border border-[#282B38]">
+                  {[
+                    { label: "Seamless (0px)", val: 0 },
+                    { label: "Spaced (6px)", val: 6 },
+                  ].map((opt) => (
+                    <button
+                      key={opt.val}
+                      type="button"
+                      onClick={() => setTableGap(opt.val)}
+                      className={`px-2 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${tableGap === opt.val
+                        ? "bg-emerald-600 text-white font-bold"
+                        : "text-gray-400 hover:text-white"
+                        }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Insert / Drag Button */}
+              <button
+                type="button"
+                draggable={true}
+                onDragStart={(e) =>
+                  handleItemDragStart(e, {
+                    category: "table-grid",
+                    rows: tableRows,
+                    cols: tableCols,
+                    gap: tableGap,
+                  })
+                }
+                onClick={() => handleCreateTableGrid(tableRows, tableCols, tableGap)}
+                className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-grab active:cursor-grabbing shadow-lg shadow-emerald-950/40"
+                title="Click to insert or drag onto canvas"
+              >
+                <Table className="w-4 h-4" />
+                <span>
+                  Create Table ({tableRows} × {tableCols} = {tableRows * tableCols} Boxes)
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Upload Media / Files / Graphs / SVGs / Diagrams from PC (AWS S3) */}
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -8489,6 +9039,201 @@ export default function WhiteboardCanvas({
         >
           <Upload className="w-4 h-4" />
         </button>
+
+        {/* Tech, Product & Flow Icons Gallery Drawer */}
+        <div className="relative" ref={iconGalleryRef}>
+          <button
+            type="button"
+            onClick={() => setShowIconGallery(!showIconGallery)}
+            className={`p-2 rounded-lg transition-colors cursor-pointer relative ${showIconGallery
+              ? "bg-cyan-600 text-white shadow-sm ring-1 ring-cyan-400"
+              : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+              }`}
+            title="Tech, Product & Flow Icons Gallery (Click or Drag into draw board)"
+          >
+            <Boxes className="w-4 h-4 text-cyan-400" />
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-cyan-400 ring-2 ring-[#121316]" />
+          </button>
+
+          {showIconGallery && (
+            <div
+              onMouseDown={(e) => e.stopPropagation()}
+              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#151720] border border-[#2D3039] rounded-2xl shadow-2xl p-3 w-[460px] max-h-[520px] flex flex-col gap-2.5 z-50 animate-in fade-in-50 backdrop-blur-xl"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between pb-1.5 border-b border-[#252834]">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                    <Boxes className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <span>Tech & Product Icons</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 font-semibold">
+                        42 Icons
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-gray-400">
+                      Click to add or hold & drag onto canvas
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowIconGallery(false)}
+                  className="p-1 rounded-lg hover:bg-[#232530] text-gray-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Search Box */}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={iconGallerySearch}
+                  onChange={(e) => setIconGallerySearch(e.target.value)}
+                  placeholder="Search icons (database, server, api, route, price)..."
+                  className="w-full bg-[#0D0E13] border border-[#2B2E3C] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none transition-colors"
+                />
+                {iconGallerySearch && (
+                  <button
+                    type="button"
+                    onClick={() => setIconGallerySearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-xs"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
+              {/* Category Filter Tabs */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none text-[10px]">
+                {[
+                  { id: "all", label: "All (42)", emoji: "✨" },
+                  { id: "infra", label: "Infra (7)", emoji: "🌐" },
+                  { id: "flow", label: "Flow (7)", emoji: "🔄" },
+                  { id: "ideation", label: "Ideation (5)", emoji: "💡" },
+                  { id: "logic", label: "Logic (7)", emoji: "🔢" },
+                  { id: "metrics", label: "Metrics (9)", emoji: "📊" },
+                  { id: "media", label: "Media (7)", emoji: "🎭" },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setIconGalleryActiveTab(tab.id as any)}
+                    className={`px-2 py-1 rounded-md shrink-0 font-medium transition-colors cursor-pointer flex items-center gap-1 ${iconGalleryActiveTab === tab.id
+                      ? "bg-cyan-600 text-white font-bold"
+                      : "bg-[#1E202B] text-gray-400 hover:text-gray-200 hover:bg-[#252837]"
+                      }`}
+                  >
+                    <span>{tab.emoji}</span>
+                    <span>{tab.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Grouped Icons Content Area */}
+              <div className="overflow-y-auto max-h-[320px] space-y-3 pr-1 scrollbar-thin">
+                {ICON_GALLERY_GROUPS.filter(
+                  (grp) => iconGalleryActiveTab === "all" || iconGalleryActiveTab === grp.type
+                ).map((group) => {
+                  const filteredItems = filterIconGalleryItems(
+                    iconGallerySearch,
+                    group.type
+                  );
+                  if (filteredItems.length === 0) return null;
+
+                  return (
+                    <div key={group.type} className="space-y-1.5">
+                      <div className="flex items-center justify-between px-1">
+                        <div className="flex items-center gap-1 text-[11px] font-bold text-gray-200">
+                          <span>{group.emoji}</span>
+                          <span>{group.title}</span>
+                          <span className="text-[9px] text-gray-500 font-mono">
+                            ({filteredItems.length})
+                          </span>
+                        </div>
+                        <span className="text-[9px] text-gray-500 font-mono">type: "{group.type}"</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {filteredItems.map((item) => {
+                          const IconComp = getLucideIcon(item.iconName);
+                          return (
+                            <div
+                              key={item.id}
+                              draggable={true}
+                              onDragStart={(e) =>
+                                handleItemDragStart(e, {
+                                  category: "node",
+                                  type: "icon",
+                                  iconName: item.iconName,
+                                  initialTitle: item.name,
+                                  subtitle: item.subtitle,
+                                  iconGroup: item.group,
+                                  color: item.color,
+                                })
+                              }
+                              onClick={() => {
+                                handleAddNode(
+                                  "icon",
+                                  "rectangle",
+                                  item.color,
+                                  false,
+                                  undefined,
+                                  undefined,
+                                  item.name,
+                                  undefined,
+                                  item.iconName,
+                                  item.subtitle,
+                                  item.group
+                                );
+                                setShowIconGallery(false);
+                              }}
+                              className="p-2 rounded-xl bg-[#1C1E27] hover:bg-[#242735] border border-[#2B2E3D] hover:border-cyan-500/40 transition-all flex items-start gap-2.5 cursor-grab active:cursor-grabbing group hover:shadow-lg"
+                              title={`${item.name} - ${item.subtitle} (Click or Hold & Drag onto canvas)`}
+                            >
+                              <div
+                                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 shadow-xs"
+                                style={{
+                                  backgroundColor: `${item.color}20`,
+                                  color: item.color,
+                                  border: `1px solid ${item.color}40`,
+                                }}
+                              >
+                                <IconComp className="w-4 h-4" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-semibold text-gray-200 group-hover:text-white truncate">
+                                  {item.name}
+                                </div>
+                                <div className="text-[10px] text-gray-400 line-clamp-1 leading-tight mt-0.5">
+                                  {item.subtitle}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Empty State */}
+                {ICON_GALLERY_GROUPS.filter(
+                  (grp) => iconGalleryActiveTab === "all" || iconGalleryActiveTab === grp.type
+                ).every(
+                  (grp) => filterIconGalleryItems(iconGallerySearch, grp.type).length === 0
+                ) && (
+                    <div className="py-8 text-center text-xs text-gray-500">
+                      No matching icons found for &quot;{iconGallerySearch}&quot;.
+                    </div>
+                  )}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Templates & Functional Areas Drawer */}
         <div className="relative" ref={templateSelectorRef}>

@@ -15,7 +15,8 @@ export type WhiteboardNodeType =
   | "markdown"
   | "json"
   | "graphml"
-  | "line";
+  | "line"
+  | "icon";
 
 export interface IChecklistItem {
   id: string;
@@ -62,6 +63,8 @@ export interface IWhiteboardNode {
   headerHeight?: number;
   metaData?: Record<string, any>;
   groupId?: string;
+  iconName?: string;
+  iconGroup?: string;
 }
 
 export interface IWhiteboardEdge {
@@ -147,9 +150,12 @@ const whiteboardSchema = new Schema<IWhiteboard>(
             "json",
             "graphml",
             "line",
+            "icon",
           ],
           default: "shape",
         },
+        iconName: { type: String, default: "" },
+        iconGroup: { type: String, default: "" },
         imageUrl: { type: String, default: "" },
         fileUrl: { type: String, default: "" },
         fileName: { type: String, default: "" },

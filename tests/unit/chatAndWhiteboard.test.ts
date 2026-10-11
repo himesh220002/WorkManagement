@@ -7,6 +7,13 @@ import {
   DEFAULT_TEXT_NOTE,
   DEFAULT_MARKDOWN_NOTE,
 } from "@/lib/whiteboardMarkdownAndJson";
+import {
+  ICON_GALLERY_GROUPS,
+  getAllIconGalleryItems,
+  filterIconGalleryItems,
+  getLucideIcon,
+  ICON_COMPONENT_MAP,
+} from "@/lib/whiteboardIconGallery";
 
 describe("Chat Space & Mentions Engine", () => {
   it("extracts multiple @mentions from input string", () => {
@@ -2426,4 +2433,358 @@ describe("Whiteboard Canvas & Organizational Chart Template", () => {
       expect(draggedNodes[2].x - draggedNodes[1].x).toBe(160);
     });
   });
+
+  describe("Whiteboard Tech, Product & Flow Icons Gallery", () => {
+    it("defines all 6 grouped categories with exact matching types and metadata", () => {
+      expect(ICON_GALLERY_GROUPS).toHaveLength(6);
+      const groupTypes = ICON_GALLERY_GROUPS.map((g) => g.type);
+      expect(groupTypes).toEqual(["infra", "flow", "ideation", "logic", "metrics", "media"]);
+
+      const totalItems = getAllIconGalleryItems();
+      expect(totalItems).toHaveLength(42);
+    });
+
+    it("validates Group 1: Infrastructure & Networking (type: 'infra') items and icons", () => {
+      const infraGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "infra");
+      expect(infraGroup).toBeDefined();
+      expect(infraGroup?.items).toHaveLength(7);
+
+      const itemNames = infraGroup?.items.map((i) => i.name);
+      expect(itemNames).toEqual(["Database", "API", "Browser", "Server", "Client", "User", "Gate"]);
+
+      const dbItem = infraGroup?.items.find((i) => i.name === "Database");
+      expect(dbItem?.iconName).toBe("Database");
+      expect(dbItem?.subtitle).toContain("MongoDB");
+
+      const serverItem = infraGroup?.items.find((i) => i.name === "Server");
+      expect(serverItem?.iconName).toBe("Server");
+      expect(serverItem?.subtitle).toContain("Express / Node");
+    });
+
+    it("validates Group 2: Routing, State & Data Pipelines (type: 'flow') items and icons", () => {
+      const flowGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "flow");
+      expect(flowGroup).toBeDefined();
+      expect(flowGroup?.items).toHaveLength(7);
+
+      const itemNames = flowGroup?.items.map((i) => i.name);
+      expect(itemNames).toEqual(["Route", "Re-route", "Connect", "Break", "Pipeline", "Funnel", "Crash"]);
+
+      const crashItem = flowGroup?.items.find((i) => i.name === "Crash");
+      expect(crashItem?.iconName).toBe("Bomb");
+      expect(crashItem?.subtitle).toContain("Server error");
+    });
+
+    it("validates Group 3: Concept Ideation & Brainstorming (type: 'ideation') items and icons", () => {
+      const ideationGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "ideation");
+      expect(ideationGroup).toBeDefined();
+      expect(ideationGroup?.items).toHaveLength(5);
+
+      const itemNames = ideationGroup?.items.map((i) => i.name);
+      expect(itemNames).toEqual(["Question", "Idea", "Thoughts", "Imagine", "Kick"]);
+    });
+
+    it("validates Group 4: Logic, Variables & Scaling Data (type: 'logic') items and icons", () => {
+      const logicGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "logic");
+      expect(logicGroup).toBeDefined();
+      expect(logicGroup?.items).toHaveLength(7);
+
+      const itemNames = logicGroup?.items.map((i) => i.name);
+      expect(itemNames).toEqual(["Key", "Value", "Pair", "Master", "Hash", "Encrypted", "Substance"]);
+    });
+
+    it("validates Group 5: Metrics, Value & Tracking (type: 'metrics') items and icons", () => {
+      const metricsGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "metrics");
+      expect(metricsGroup).toBeDefined();
+      expect(metricsGroup?.items).toHaveLength(9);
+
+      const itemNames = metricsGroup?.items.map((i) => i.name);
+      expect(itemNames).toEqual(["Price", "Rate", "High", "Low", "Trend", "Range", "Variety", "Random", "Equal"]);
+    });
+
+    it("validates Group 6: Media & System Feedback (type: 'media') items and icons", () => {
+      const mediaGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "media");
+      expect(mediaGroup).toBeDefined();
+      expect(mediaGroup?.items).toHaveLength(7);
+
+      const itemNames = mediaGroup?.items.map((i) => i.name);
+      expect(itemNames).toEqual(["Live", "Play", "Pause", "Music", "Exited", "Bored", "Car"]);
+    });
+
+    it("ensures every gallery icon resolves to an existing Lucide component without falling back to blank", () => {
+      const allItems = getAllIconGalleryItems();
+      for (const item of allItems) {
+        expect(ICON_COMPONENT_MAP[item.iconName]).toBeDefined();
+        const Comp = getLucideIcon(item.iconName);
+        expect(Comp).toBeDefined();
+      }
+    });
+
+    it("correctly filters icon gallery by keyword and category", () => {
+      const searchDb = filterIconGalleryItems("database", "all");
+      expect(searchDb).toHaveLength(1);
+      expect(searchDb[0].name).toBe("Database");
+
+      const infraOnly = filterIconGalleryItems("", "infra");
+      expect(infraOnly).toHaveLength(7);
+
+      const searchError = filterIconGalleryItems("error", "all");
+      expect(searchError.length).toBeGreaterThanOrEqual(1);
+      expect(searchError.some((i) => i.name === "Crash" || i.name === "Re-route")).toBe(true);
+    });
+
+    it("formats drag-and-drop payload and constructs valid icon whiteboard node on canvas", () => {
+      const sampleItem = {
+        name: "Database",
+        iconName: "Database",
+        subtitle: "For MongoDB cluster / storage tier",
+        group: "infra" as const,
+        color: "#0EA5E9",
+      };
+
+      const dragPayload = {
+        category: "node",
+        type: "icon",
+        iconName: sampleItem.iconName,
+        initialTitle: sampleItem.name,
+        subtitle: sampleItem.subtitle,
+        iconGroup: sampleItem.group,
+        color: sampleItem.color,
+      };
+
+      const dropCoords = { x: 500, y: 350 };
+      const nodeWidth = 80;
+      const nodeHeight = 82;
+
+      const createdNode = {
+        id: `node-${Date.now()}`,
+        type: dragPayload.type as "icon",
+        x: dropCoords.x - Math.round(nodeWidth / 2),
+        y: dropCoords.y - Math.round(nodeHeight / 2),
+        width: nodeWidth,
+        height: nodeHeight,
+        title: dragPayload.initialTitle,
+        subtitle: dragPayload.subtitle,
+        iconName: dragPayload.iconName,
+        iconGroup: dragPayload.iconGroup,
+        color: dragPayload.color,
+        fillType: "solid" as const,
+        textColor: "#FFFFFF",
+        fontSize: "12px",
+        fontWeight: "bold",
+        zIndex: 2,
+      };
+
+      expect(createdNode).toMatchObject({
+        type: "icon",
+        iconName: "Database",
+        iconGroup: "infra",
+        title: "Database",
+        subtitle: "For MongoDB cluster / storage tier",
+        color: "#0EA5E9",
+        x: 460,
+        y: 309,
+        width: 80,
+        height: 82,
+      });
+    });
+
+    it("creates a connected branch node from an icon node inheriting styling and group metadata", () => {
+      const parentIconNode = {
+        id: "node-parent-1",
+        type: "icon" as const,
+        iconName: "Server",
+        iconGroup: "infra",
+        x: 200,
+        y: 200,
+        width: 150,
+        height: 110,
+        title: "Compute Server",
+        subtitle: "Express / Node instances",
+        color: "#6366F1",
+      };
+
+      const branchX = parentIconNode.x + parentIconNode.width + 120;
+      const branchY = parentIconNode.y;
+
+      const branchNode = {
+        id: "node-branch-1",
+        type: "icon" as const,
+        iconName: parentIconNode.iconName,
+        iconGroup: parentIconNode.iconGroup,
+        x: branchX,
+        y: branchY,
+        width: parentIconNode.width,
+        height: parentIconNode.height,
+        title: parentIconNode.title,
+        subtitle: parentIconNode.subtitle,
+        color: parentIconNode.color,
+        fillType: "solid" as const,
+        textColor: "#FFFFFF",
+        fontWeight: "bold",
+        fontSize: "12px",
+        zIndex: 2,
+      };
+
+      expect(branchNode.type).toBe("icon");
+      expect(branchNode.iconName).toBe("Server");
+      expect(branchNode.iconGroup).toBe("infra");
+      expect(branchNode.color).toBe("#6366F1");
+      expect(branchNode.x).toBe(470);
+      expect(branchNode.y).toBe(200);
+    });
+  });
+
+  describe("Whiteboard Simple Table Grid (R x C Arrangement of Boxes)", () => {
+    const generateTableCells = ({
+      rows,
+      cols,
+      startX = 100,
+      startY = 100,
+      cellWidth = 140,
+      cellHeight = 60,
+      gap = 0,
+    }: {
+      rows: number;
+      cols: number;
+      startX?: number;
+      startY?: number;
+      cellWidth?: number;
+      cellHeight?: number;
+      gap?: number;
+    }) => {
+      const tableGroupId = `group-table-${Date.now()}`;
+      const cells: any[] = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cellX = startX + c * (cellWidth + gap);
+          const cellY = startY + r * (cellHeight + gap);
+          const isHeader = r === 0 && rows > 1;
+          cells.push({
+            id: `cell-${r}-${c}`,
+            type: "shape",
+            shapeType: "rectangle",
+            x: cellX,
+            y: cellY,
+            width: cellWidth,
+            height: cellHeight,
+            title: isHeader ? `Header ${c + 1}` : `Row ${r + 1}, Col ${c + 1}`,
+            color: isHeader ? "#0078D4" : "#1A1C24",
+            fillType: "solid",
+            textColor: "#FFFFFF",
+            fontSize: "12px",
+            fontWeight: isHeader ? "bold" : "normal",
+            textAlign: "center",
+            groupId: tableGroupId,
+          });
+        }
+      }
+      return { cells, tableGroupId };
+    };
+
+    it("creates exact number of boxes in r,c arrangement without outer wall (e.g. 3 rows x 4 cols = 12 boxes)", () => {
+      const rows = 3;
+      const cols = 4;
+      const { cells, tableGroupId } = generateTableCells({ rows, cols });
+
+      expect(cells).toHaveLength(12);
+      expect(cells.every((c) => c.type === "shape" && c.shapeType === "rectangle")).toBe(true);
+
+      // Verify all cells belong to the same unified tableGroupId
+      expect(cells.every((c) => c.groupId === tableGroupId)).toBe(true);
+
+      // Verify no outer wall / container box is created — only the 12 boxes
+      expect(cells.find((c) => c.type === "frame" || c.title?.includes("Wall"))).toBeUndefined();
+    });
+
+    it("positions cells in exact grid coordinates without overlap when gap is 0 (seamless table)", () => {
+      const { cells } = generateTableCells({
+        rows: 2,
+        cols: 3,
+        startX: 200,
+        startY: 150,
+        cellWidth: 140,
+        cellHeight: 60,
+        gap: 0,
+      });
+
+      // Row 0
+      expect(cells[0]).toMatchObject({ x: 200, y: 150, width: 140, height: 60 });
+      expect(cells[1]).toMatchObject({ x: 340, y: 150, width: 140, height: 60 });
+      expect(cells[2]).toMatchObject({ x: 480, y: 150, width: 140, height: 60 });
+
+      // Row 1
+      expect(cells[3]).toMatchObject({ x: 200, y: 210, width: 140, height: 60 });
+      expect(cells[4]).toMatchObject({ x: 340, y: 210, width: 140, height: 60 });
+      expect(cells[5]).toMatchObject({ x: 480, y: 210, width: 140, height: 60 });
+    });
+
+    it("supports custom box spacing when gap is set to 6px", () => {
+      const { cells } = generateTableCells({
+        rows: 2,
+        cols: 2,
+        startX: 100,
+        startY: 100,
+        cellWidth: 100,
+        cellHeight: 50,
+        gap: 6,
+      });
+
+      expect(cells[0]).toMatchObject({ x: 100, y: 100 });
+      expect(cells[1]).toMatchObject({ x: 206, y: 100 }); // 100 + 100 + 6
+      expect(cells[2]).toMatchObject({ x: 100, y: 156 }); // 100 + 50 + 6
+      expect(cells[3]).toMatchObject({ x: 206, y: 156 });
+    });
+
+    it("validates drag-and-drop table payload parsing and center positioning", () => {
+      const payload = {
+        category: "table-grid",
+        rows: 4,
+        cols: 5,
+        gap: 0,
+      };
+
+      const dropCoords = { x: 600, y: 400 };
+      const cellW = 140;
+      const cellH = 60;
+      const totalW = payload.cols * cellW;
+      const totalH = payload.rows * cellH;
+      const startX = dropCoords.x - Math.round(totalW / 2);
+      const startY = dropCoords.y - Math.round(totalH / 2);
+
+      const { cells } = generateTableCells({
+        rows: payload.rows,
+        cols: payload.cols,
+        startX,
+        startY,
+        cellWidth: cellW,
+        cellHeight: cellH,
+        gap: payload.gap,
+      });
+
+      expect(cells).toHaveLength(20);
+      expect(cells[0].x).toBe(600 - 350); // 250
+      expect(cells[0].y).toBe(400 - 120); // 280
+    });
+
+    it("allows dragging any cell in the table to move all cells together while preserving arrangement", () => {
+      const { cells } = generateTableCells({ rows: 2, cols: 2, startX: 100, startY: 100 });
+      const tableGroupId = cells[0].groupId;
+
+      // Moving node by +50, +30
+      const dx = 50;
+      const dy = 30;
+      const groupMembers = cells.filter((c) => c.groupId === tableGroupId);
+      const movedCells = groupMembers.map((c) => ({ ...c, x: c.x + dx, y: c.y + dy }));
+
+      expect(movedCells[0]).toMatchObject({ x: 150, y: 130 });
+      expect(movedCells[1]).toMatchObject({ x: 290, y: 130 });
+      expect(movedCells[2]).toMatchObject({ x: 150, y: 190 });
+      expect(movedCells[3]).toMatchObject({ x: 290, y: 190 });
+
+      // Relative offsets strictly preserved
+      expect(movedCells[1].x - movedCells[0].x).toBe(140);
+      expect(movedCells[2].y - movedCells[0].y).toBe(60);
+    });
+  });
+
 
