@@ -9,6 +9,8 @@ import {
   ORG_CHART_EDGES,
 } from "@/lib/whiteboardTemplates";
 
+import bcrypt from "bcryptjs";
+
 export async function GET(req: NextRequest) {
   try {
     await connectToDatabase();
@@ -16,6 +18,7 @@ export async function GET(req: NextRequest) {
     const tenantFilter = getTenantQueryFilter(session);
 
     let boards = await Whiteboard.find(tenantFilter)
+      .select("-passwordHash")
       .sort({ updatedAt: -1, createdAt: -1 })
       .lean();
 
@@ -38,6 +41,10 @@ export async function GET(req: NextRequest) {
         authorName,
         authorId: session.userId || "",
         authorInitials,
+        isProtected: false,
+        deleteRequiresPass: true,
+        publicEdit: true,
+        tempTokenPhrase: Math.floor(100000 + Math.random() * 900000).toString(),
         nodes: ORG_CHART_NODES,
         edges: ORG_CHART_EDGES,
       });
@@ -46,9 +53,12 @@ export async function GET(req: NextRequest) {
         await syncTenantWrite("Whiteboard", "create", defaultBoard, undefined, session.companyCode);
       }
 
+      const boardObj = defaultBoard.toObject ? defaultBoard.toObject() : defaultBoard;
+      delete (boardObj as any).passwordHash;
+
       return NextResponse.json({
         success: true,
-        whiteboards: [defaultBoard],
+        whiteboards: [boardObj],
       });
     }
 
@@ -78,7 +88,17 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title = "Untitled Whiteboard", templateId = "blank" } = body;
+    const {
+      title = "Untitled Whiteboard",
+      templateId = "blank",
+      authorName: customAuthorName,
+      isProtected = false,
+      securityType = "pin",
+      password = "",
+      deleteRequiresPass = true,
+      publicEdit = true,
+      tempTokenPhrase: customTempToken,
+    } = body;
 
     let nodes: any[] = [];
     let edges: any[] = [];
@@ -89,13 +109,46 @@ export async function POST(req: NextRequest) {
       edges = selectedTemplate.edges;
     }
 
-    const authorName = session.name || session.email?.split("@")[0] || "User";
+    const authorName = (customAuthorName && customAuthorName.trim().length > 0)
+      ? customAuthorName.trim()
+      : (session.name || session.email?.split("@")[0] || "User");
+
     const authorInitials = authorName
       .split(" ")
       .map((w: string) => w[0])
+      .filter(Boolean)
       .join("")
       .toUpperCase()
-      .slice(0, 2);
+      .slice(0, 2) || "U";
+
+    let passwordHash = "";
+    const isProt = Boolean(isProtected && password && password.trim().length > 0);
+
+    if (isProt) {
+      const cleanPass = password.trim();
+      if (securityType === "pin") {
+        if (!/^\d{4}$/.test(cleanPass)) {
+          return NextResponse.json(
+            { success: false, error: "4-digit PIN must contain exactly 4 numbers" },
+            { status: 400 }
+          );
+        }
+      } else {
+        if (cleanPass.length < 6) {
+          return NextResponse.json(
+            { success: false, error: "Password must be at least 6 characters long" },
+            { status: 400 }
+          );
+        }
+      }
+      const salt = await bcrypt.genSalt(10);
+      passwordHash = await bcrypt.hash(cleanPass, salt);
+    }
+
+    // Generate 6-digit temporary token phrase if not provided
+    const tempTokenPhrase = (customTempToken && /^\d{6}$/.test(customTempToken.trim()))
+      ? customTempToken.trim()
+      : Math.floor(100000 + Math.random() * 900000).toString();
 
     const newBoard = await Whiteboard.create({
       companyId: session.companyId,
@@ -106,6 +159,12 @@ export async function POST(req: NextRequest) {
       authorName,
       authorId: session.userId,
       authorInitials,
+      isProtected: isProt,
+      securityType: isProt ? securityType : "pin",
+      passwordHash,
+      deleteRequiresPass: Boolean(deleteRequiresPass),
+      publicEdit: Boolean(publicEdit),
+      tempTokenPhrase,
       nodes,
       edges,
     });
@@ -114,9 +173,12 @@ export async function POST(req: NextRequest) {
       await syncTenantWrite("Whiteboard", "create", newBoard, undefined, session.companyCode);
     }
 
+    const boardObj = newBoard.toObject ? newBoard.toObject() : newBoard;
+    delete (boardObj as any).passwordHash;
+
     return NextResponse.json({
       success: true,
-      whiteboard: newBoard,
+      whiteboard: boardObj,
     });
   } catch (error: any) {
     console.error("Failed to create whiteboard:", error);

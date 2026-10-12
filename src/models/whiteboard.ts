@@ -98,6 +98,12 @@ export interface IWhiteboard {
   authorName: string;
   authorId?: string;
   authorInitials?: string;
+  isProtected?: boolean;
+  securityType?: "pin" | "password";
+  passwordHash?: string;
+  deleteRequiresPass?: boolean;
+  publicEdit?: boolean;
+  tempTokenPhrase?: string;
   nodes: IWhiteboardNode[];
   edges: IWhiteboardEdge[];
   backgroundColor?: string;
@@ -129,6 +135,12 @@ const whiteboardSchema = new Schema<IWhiteboard>(
     authorName: { type: String, default: "Admin" },
     authorId: { type: String, default: "" },
     authorInitials: { type: String, default: "HS" },
+    isProtected: { type: Boolean, default: false },
+    securityType: { type: String, enum: ["pin", "password"], default: "pin" },
+    passwordHash: { type: String, default: "" },
+    deleteRequiresPass: { type: Boolean, default: true },
+    publicEdit: { type: Boolean, default: true },
+    tempTokenPhrase: { type: String, default: "" },
     nodes: [
       {
         id: { type: String, required: true },

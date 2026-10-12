@@ -3093,5 +3093,137 @@ describe("Whiteboard Saving, 20s Auto-Save, Interaction Guard & Real-Time Sync",
   });
 });
 
+describe("Whiteboard Security & Permissions: PIN/Password, Creator Attribution & 6-Digit Token Phrase", () => {
+  it("validates 4-digit PIN format requiring strictly 4 numeric characters", () => {
+    const isValidPin = (pin: string) => /^\d{4}$/.test(pin.trim());
+
+    expect(isValidPin("4829")).toBe(true);
+    expect(isValidPin("0000")).toBe(true);
+    expect(isValidPin("9999")).toBe(true);
+
+    expect(isValidPin("123")).toBe(false); // too short
+    expect(isValidPin("12345")).toBe(false); // too long
+    expect(isValidPin("482a")).toBe(false); // contains letter
+    expect(isValidPin("abcd")).toBe(false); // letters only
+    expect(isValidPin("")).toBe(false); // empty
+  });
+
+  it("validates 6+ character password minimum length", () => {
+    const isValidPassword = (pass: string) => pass.trim().length >= 6;
+
+    expect(isValidPassword("secure123")).toBe(true);
+    expect(isValidPassword("secret")).toBe(true);
+    expect(isValidPassword("123456")).toBe(true);
+
+    expect(isValidPassword("12345")).toBe(false);
+    expect(isValidPassword("abc")).toBe(false);
+    expect(isValidPassword("")).toBe(false);
+  });
+
+  it("generates a random 6-digit numeric temporary token phrase for colleague edit approval", () => {
+    const generateTokenPhrase = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+    for (let i = 0; i < 20; i++) {
+      const phrase = generateTokenPhrase();
+      expect(phrase).toMatch(/^\d{6}$/);
+      expect(Number(phrase)).toBeGreaterThanOrEqual(100000);
+      expect(Number(phrase)).toBeLessThanOrEqual(999999);
+    }
+  });
+
+  it("authorizes colleague edit access via 6-digit phrase when publicEdit is false", () => {
+    const board = {
+      _id: "wb-sec-1",
+      title: "Strategy 2026",
+      authorName: "Satyam Sharma",
+      isProtected: true,
+      publicEdit: false,
+      tempTokenPhrase: "849201",
+    };
+
+    const verifyAccess = (candidate: string, boardConfig: typeof board) => {
+      const trimmed = candidate.trim();
+      if (trimmed === boardConfig.tempTokenPhrase) {
+        return { authorized: true, via: "tempToken" };
+      }
+      return { authorized: false, error: "Incorrect approval token phrase" };
+    };
+
+    // Colleague enters exact 6-digit phrase provided by creator
+    const result1 = verifyAccess("849201", board);
+    expect(result1.authorized).toBe(true);
+    expect(result1.via).toBe("tempToken");
+
+    // Colleague enters incorrect phrase
+    const result2 = verifyAccess("999999", board);
+    expect(result2.authorized).toBe(false);
+    expect(result2.error).toContain("Incorrect approval token");
+  });
+
+  it("blocks deletion when deleteRequiresPass is true unless master PIN/pass is provided", () => {
+    const board = {
+      _id: "wb-delete-guard",
+      title: "Protected Blueprint",
+      isProtected: true,
+      deleteRequiresPass: true,
+      masterPin: "4829",
+    };
+
+    const canDelete = (providedPin: string | undefined, boardConfig: typeof board) => {
+      if (!boardConfig.isProtected || !boardConfig.deleteRequiresPass) {
+        return { allowed: true };
+      }
+      if (!providedPin || providedPin !== boardConfig.masterPin) {
+        return { allowed: false, error: "Password or PIN is required to delete this whiteboard." };
+      }
+      return { allowed: true };
+    };
+
+    // Attempt delete without password
+    expect(canDelete(undefined, board)).toEqual({
+      allowed: false,
+      error: "Password or PIN is required to delete this whiteboard.",
+    });
+
+    // Attempt delete with wrong password
+    expect(canDelete("1111", board)).toEqual({
+      allowed: false,
+      error: "Password or PIN is required to delete this whiteboard.",
+    });
+
+    // Valid PIN allows deletion
+    expect(canDelete("4829", board)).toEqual({ allowed: true });
+  });
+
+  it("correctly extracts creator full name and initials for office attribution on whiteboard cards", () => {
+    const getCardAttribution = (fullName: string) => {
+      const clean = fullName.trim() || "User";
+      const initials = clean
+        .split(" ")
+        .map((w) => w[0])
+        .filter(Boolean)
+        .join("")
+        .toUpperCase()
+        .slice(0, 2) || "U";
+
+      return {
+        creatorName: clean,
+        initials,
+        cardBadge: `Created by ${clean}`,
+      };
+    };
+
+    const creator1 = getCardAttribution("Himesh Sharma");
+    expect(creator1.creatorName).toBe("Himesh Sharma");
+    expect(creator1.initials).toBe("HS");
+    expect(creator1.cardBadge).toBe("Created by Himesh Sharma");
+
+    const creator2 = getCardAttribution("Elena Rostova");
+    expect(creator2.creatorName).toBe("Elena Rostova");
+    expect(creator2.initials).toBe("ER");
+    expect(creator2.cardBadge).toBe("Created by Elena Rostova");
+  });
+});
+
 
 

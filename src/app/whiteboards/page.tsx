@@ -67,7 +67,8 @@ export default async function WhiteboardsPage() {
     <div className="w-full h-full">
       <WhiteboardsDashboardClient
         initialWhiteboards={whiteboards as any}
-        currentUserName={session.name || "User"}
+        currentUserName={session.name || session.email?.split("@")[0] || "User"}
+        currentUserId={session.userId || ""}
       />
     </div>
   );

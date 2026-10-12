@@ -76,6 +76,14 @@ import {
   ChevronDown,
   Boxes,
   Table,
+  Settings,
+  Lock,
+  Unlock,
+  Key,
+  Shield,
+  User,
+  Sliders,
+  CheckCircle,
 } from "lucide-react";
 import { IWhiteboardNode, IWhiteboardEdge } from "@/models/whiteboard";
 import {
@@ -116,13 +124,21 @@ interface WhiteboardCanvasProps {
     templateId?: string;
     isFavorite?: boolean;
     authorName?: string;
+    authorId?: string;
     authorInitials?: string;
+    isProtected?: boolean;
+    securityType?: "pin" | "password";
+    deleteRequiresPass?: boolean;
+    publicEdit?: boolean;
+    tempTokenPhrase?: string;
     nodes: IWhiteboardNode[];
     edges: IWhiteboardEdge[];
     backgroundColor?: string;
     updatedAt?: string | Date;
   };
   currentUserName: string;
+  currentUserId?: string;
+  isNew?: boolean;
 }
 
 const CANVAS_BG_THEMES = [
@@ -400,8 +416,51 @@ function TextColorPicker({
 export default function WhiteboardCanvas({
   initialBoard,
   currentUserName,
+  currentUserId,
+  isNew,
 }: WhiteboardCanvasProps) {
   const router = useRouter();
+
+  // Whiteboard Security, Permissions & Settings Popup State
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(Boolean(isNew));
+  const [deleteRequiresPass, setDeleteRequiresPass] = useState<boolean>(
+    initialBoard.deleteRequiresPass !== undefined ? Boolean(initialBoard.deleteRequiresPass) : true
+  );
+  const [publicEdit, setPublicEdit] = useState<boolean>(
+    initialBoard.publicEdit !== undefined ? Boolean(initialBoard.publicEdit) : true
+  );
+  const [tempTokenPhrase, setTempTokenPhrase] = useState<string>(
+    initialBoard.tempTokenPhrase || "849201"
+  );
+  const [isProtected, setIsProtected] = useState<boolean>(Boolean(initialBoard.isProtected));
+  const [securityType, setSecurityType] = useState<"pin" | "password">(
+    initialBoard.securityType || "pin"
+  );
+
+  // Password change sub-form in settings modal
+  const [showPasswordChange, setShowPasswordChange] = useState<boolean>(false);
+  const [changePassCurrent, setChangePassCurrent] = useState<string>("");
+  const [changePassNew, setChangePassNew] = useState<string>("");
+  const [changePassConfirm, setChangePassConfirm] = useState<string>("");
+  const [changePassSecType, setChangePassSecType] = useState<"pin" | "password">("pin");
+  const [settingsError, setSettingsError] = useState<string>("");
+  const [settingsSuccess, setSettingsSuccess] = useState<string>("");
+  const [isSavingSettings, setIsSavingSettings] = useState<boolean>(false);
+  const [copiedToken, setCopiedToken] = useState<boolean>(false);
+
+  // Edit authorization for restricted boards
+  const isCreator = Boolean(
+    (initialBoard.authorId && currentUserId && initialBoard.authorId === currentUserId) ||
+    (initialBoard.authorName && currentUserName && initialBoard.authorName.toLowerCase() === currentUserName.toLowerCase())
+  );
+  const [isEditUnlocked, setIsEditUnlocked] = useState<boolean>(
+    Boolean(initialBoard.publicEdit ?? true) || isCreator
+  );
+  const [isUnlockModalOpen, setIsUnlockModalOpen] = useState<boolean>(false);
+  const [unlockTokenOrPass, setUnlockTokenOrPass] = useState<string>("");
+  const [unlockError, setUnlockError] = useState<string>("");
+  const [isUnlocking, setIsUnlocking] = useState<boolean>(false);
+  const verifiedTokenRef = useRef<string>("");
 
   // Canvas Metadata
   const [boardId, setBoardId] = useState(initialBoard._id);
@@ -641,6 +700,130 @@ export default function WhiteboardCanvas({
     }, 4500);
   }, []);
 
+  const handleCopyToken = () => {
+    if (!tempTokenPhrase) return;
+    navigator.clipboard?.writeText(tempTokenPhrase);
+    setCopiedToken(true);
+    setTimeout(() => setCopiedToken(false), 2000);
+  };
+
+  const handleRegenerateToken = () => {
+    const freshToken = Math.floor(100000 + Math.random() * 900000).toString();
+    setTempTokenPhrase(freshToken);
+  };
+
+  const handleSaveSettings = async () => {
+    setSettingsError("");
+    setSettingsSuccess("");
+
+    if (showPasswordChange && changePassNew) {
+      const cleanNew = changePassNew.trim();
+      if (changePassSecType === "pin") {
+        if (!/^\d{4}$/.test(cleanNew)) {
+          setSettingsError("New 4-digit PIN must contain exactly 4 numeric digits.");
+          return;
+        }
+      } else {
+        if (cleanNew.length < 6) {
+          setSettingsError("New password must be at least 6 characters long.");
+          return;
+        }
+      }
+      if (cleanNew !== changePassConfirm.trim()) {
+        setSettingsError("New password and confirm password do not match.");
+        return;
+      }
+      if (isProtected && !changePassCurrent.trim()) {
+        setSettingsError("Current PIN or password is required to authorize this change.");
+        return;
+      }
+    }
+
+    try {
+      setIsSavingSettings(true);
+      const activeId = boardIdRef.current || boardId || "default-org-chart";
+      const payload: any = {
+        deleteRequiresPass,
+        publicEdit,
+        tempTokenPhrase,
+      };
+
+      if (showPasswordChange && changePassNew) {
+        payload.changePassword = true;
+        payload.currentPassword = changePassCurrent.trim();
+        payload.newPassword = changePassNew.trim();
+        payload.newSecurityType = changePassSecType;
+      }
+
+      const res = await fetch(`/api/whiteboards/${activeId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setSettingsError(data.error || "Failed to update settings.");
+        return;
+      }
+
+      if (showPasswordChange && changePassNew) {
+        setIsProtected(true);
+        setSecurityType(changePassSecType);
+        setShowPasswordChange(false);
+        setChangePassCurrent("");
+        setChangePassNew("");
+        setChangePassConfirm("");
+      }
+
+      setSettingsSuccess("Settings saved successfully!");
+      showTemporaryToast("Whiteboard settings saved!");
+      setTimeout(() => {
+        setIsSettingsModalOpen(false);
+        setSettingsSuccess("");
+      }, 1000);
+    } catch (err: any) {
+      setSettingsError(err.message || "Failed to save settings.");
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const handleVerifyUnlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUnlockError("");
+    if (!unlockTokenOrPass.trim()) {
+      setUnlockError("Please enter the 6-digit phrase or PIN/password.");
+      return;
+    }
+
+    try {
+      setIsUnlocking(true);
+      const activeId = boardIdRef.current || boardId || "default-org-chart";
+      const res = await fetch(`/api/whiteboards/${activeId}/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tokenOrPass: unlockTokenOrPass.trim() }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setUnlockError(data.error || "Verification failed. Check with creator.");
+        return;
+      }
+
+      verifiedTokenRef.current = unlockTokenOrPass.trim();
+      setIsEditUnlocked(true);
+      setIsUnlockModalOpen(false);
+      setUnlockTokenOrPass("");
+      showTemporaryToast(data.message || "Edit access granted!");
+    } catch (err: any) {
+      setUnlockError(err.message || "Verification request failed.");
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const rafIdRef = useRef<number | null>(null);
@@ -743,6 +926,7 @@ export default function WhiteboardCanvas({
             edges: currentEdges,
             isFavorite,
             backgroundColor: currentBg,
+            editToken: verifiedTokenRef.current || undefined,
           }),
           keepalive: isExiting,
         });
@@ -960,6 +1144,7 @@ export default function WhiteboardCanvas({
           backgroundColor: canvasBgColorRef.current,
           isFavorite,
           forceOverwrite: true,
+          editToken: verifiedTokenRef.current || undefined,
         }),
       });
 
@@ -4906,10 +5091,32 @@ export default function WhiteboardCanvas({
           {/* Author avatar from screenshot ("HS") */}
           <div
             className="w-7 h-7 rounded-full bg-[#2A2D36] border border-[#3A3D49] text-gray-200 font-bold text-[10px] flex items-center justify-center shadow-xs"
-            title={currentUserName}
+            title={`Created by: ${initialBoard.authorName || currentUserName}`}
           >
             {initialBoard.authorInitials || "HS"}
           </div>
+
+          {/* Unlock Edit button if whiteboard is locked / view-only */}
+          {!isEditUnlocked && (
+            <button
+              onClick={() => setIsUnlockModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 rounded-md transition-colors"
+              title={`Restricted Edit: Ask ${initialBoard.authorName || "creator"} for the 6-digit approval phrase`}
+            >
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+              <span>Unlock Edit</span>
+            </button>
+          )}
+
+          {/* Settings Popup Button */}
+          <button
+            onClick={() => setIsSettingsModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-[#202228] hover:bg-[#282B33] text-gray-200 border border-[#30333D] rounded-md transition-colors"
+            title="Whiteboard Settings, Passwords & Approval Tokens"
+          >
+            <Settings className="w-3.5 h-3.5 text-blue-400" />
+            <span>Settings</span>
+          </button>
 
           <button
             onClick={() => {
@@ -10451,6 +10658,393 @@ export default function WhiteboardCanvas({
                 <span>Push & Exit</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. WHITEBOARD SETTINGS POPUP MODAL (Appears after creation & via Settings button) */}
+      {isSettingsModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[10000000] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in-50"
+          onClick={() => {
+            if (!isSavingSettings) setIsSettingsModalOpen(false);
+          }}
+        >
+          <div
+            className="bg-[#15161C] border border-[#2B2D38] rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 text-[#E1DFDD]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-[#232530] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400">
+                  <Settings className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Whiteboard Settings & Access</h3>
+                  <p className="text-[11px] text-gray-400">Configure security permissions and edit approval token</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSettingsModalOpen(false)}
+                className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-[#20222B] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
+              {/* Creator Banner */}
+              <div className="p-3 rounded-xl bg-[#1A1C24] border border-[#2B2E3C] flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-blue-600/25 border border-blue-500/40 text-blue-400 flex items-center justify-center font-bold text-xs shrink-0">
+                    <User className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold block">
+                      Whiteboard Creator
+                    </span>
+                    <span className="text-xs font-bold text-white">
+                      {initialBoard.authorName || currentUserName}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[10px] text-gray-400 text-right max-w-[190px]">
+                  Office teammates can ask the creator for edit approval when needed.
+                </span>
+              </div>
+
+              {/* Checkboxes Section */}
+              <div className="space-y-3 pt-1">
+                {/* 1. Delete whiteboard needed pass [checked] */}
+                <label className="flex items-start gap-3 p-3 rounded-xl bg-[#1A1C24] border border-[#2B2E3C] cursor-pointer hover:border-[#383C4E] transition-colors select-none">
+                  <input
+                    type="checkbox"
+                    checked={deleteRequiresPass}
+                    onChange={(e) => setDeleteRequiresPass(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded bg-[#0F1015] border-[#323646] text-blue-600 focus:ring-0 cursor-pointer"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 font-bold text-white text-xs">
+                      <Lock className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Delete whiteboard needed pass</span>
+                      {deleteRequiresPass && (
+                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold border border-emerald-500/30">
+                          Checked
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      Requires entering the PIN or password before anyone can permanently delete this whiteboard.
+                    </p>
+                  </div>
+                </label>
+
+                {/* 2. Public edit [checked] */}
+                <label className="flex items-start gap-3 p-3 rounded-xl bg-[#1A1C24] border border-[#2B2E3C] cursor-pointer hover:border-[#383C4E] transition-colors select-none">
+                  <input
+                    type="checkbox"
+                    checked={publicEdit}
+                    onChange={(e) => setPublicEdit(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded bg-[#0F1015] border-[#323646] text-blue-600 focus:ring-0 cursor-pointer"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 font-bold text-white text-xs">
+                      <Edit3 className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Public edit</span>
+                      {publicEdit && (
+                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold border border-emerald-500/30">
+                          Checked
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      When checked, all office colleagues can freely edit. When unchecked, others need the 6-digit temporary token phrase or PIN.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {/* 3. Temporary Token Phrase 6-digit */}
+              <div className="p-3.5 rounded-xl bg-[#121318] border border-[#2B2E3C] space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Key className="w-3.5 h-3.5 text-purple-400" />
+                    <span className="text-xs font-bold text-white">Temporary Token Phrase (6-Digit)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRegenerateToken}
+                    className="text-[11px] text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCcwIcon className="w-3 h-3" />
+                    <span>Regenerate</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-[#0A0B0E] border border-[#242632]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base font-mono font-bold tracking-widest text-cyan-300 px-2">
+                      {tempTokenPhrase || "849201"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyToken}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#22242D] hover:bg-[#2C2F3B] text-white text-xs font-semibold border border-[#363946] transition-colors cursor-pointer"
+                  >
+                    {copiedToken ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-emerald-400">Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-gray-300" />
+                        <span>Copy Phrase</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-gray-400 leading-relaxed">
+                  If someone in the office needs edit permission, they can enter this 6-digit phrase asked from the whiteboard creator (<strong>{initialBoard.authorName || currentUserName}</strong>).
+                </p>
+              </div>
+
+              {/* 4. Password Change Section */}
+              <div className="rounded-xl bg-[#1A1C24] border border-[#2B2E3C] overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordChange(!showPasswordChange)}
+                  className="w-full px-3.5 py-3 flex items-center justify-between text-left hover:bg-[#20222B] transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="font-bold text-white text-xs">
+                      {isProtected ? "Change Password / PIN" : "Set Whiteboard Password / PIN"}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-blue-400 font-semibold">
+                    {showPasswordChange ? "Hide" : "Configure"}
+                  </span>
+                </button>
+
+                {showPasswordChange && (
+                  <div className="p-3.5 pt-1 border-t border-[#252834] space-y-3 bg-[#131419]">
+                    <div>
+                      <span className="block text-[11px] font-semibold text-gray-300 mb-1.5">
+                        Security Format:
+                      </span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label
+                          className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer ${
+                            changePassSecType === "pin"
+                              ? "bg-blue-950/40 border-blue-500/60 text-white"
+                              : "bg-[#181920] border-[#292B36] text-gray-400"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="changePassSecType"
+                            checked={changePassSecType === "pin"}
+                            onChange={() => setChangePassSecType("pin")}
+                            className="sr-only"
+                          />
+                          <Key className="w-3.5 h-3.5 text-blue-400" />
+                          <span className="font-semibold text-[11px]">4-Digit PIN</span>
+                        </label>
+                        <label
+                          className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer ${
+                            changePassSecType === "password"
+                              ? "bg-blue-950/40 border-blue-500/60 text-white"
+                              : "bg-[#181920] border-[#292B36] text-gray-400"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="changePassSecType"
+                            checked={changePassSecType === "password"}
+                            onChange={() => setChangePassSecType("password")}
+                            className="sr-only"
+                          />
+                          <Lock className="w-3.5 h-3.5 text-amber-400" />
+                          <span className="font-semibold text-[11px]">6-Char Password</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {isProtected && (
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-400 mb-1">
+                          Current PIN / Password:
+                        </label>
+                        <input
+                          type="password"
+                          value={changePassCurrent}
+                          onChange={(e) => setChangePassCurrent(e.target.value)}
+                          placeholder="Enter current PIN/pass"
+                          className="w-full px-3 py-1.5 rounded-md bg-[#0D0E12] border border-[#2B2D38] text-white focus:outline-none focus:border-blue-500 font-mono text-xs"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-[11px] font-medium text-gray-400 mb-1">
+                        New {changePassSecType === "pin" ? "4-Digit PIN" : "6-Char Password"}:
+                      </label>
+                      <input
+                        type="password"
+                        value={changePassNew}
+                        maxLength={changePassSecType === "pin" ? 4 : undefined}
+                        onChange={(e) => {
+                          const val = changePassSecType === "pin" ? e.target.value.replace(/\D/g, "") : e.target.value;
+                          setChangePassNew(val);
+                        }}
+                        placeholder={changePassSecType === "pin" ? "e.g. 5920" : "New password (min 6 chars)"}
+                        className="w-full px-3 py-1.5 rounded-md bg-[#0D0E12] border border-[#2B2D38] text-white focus:outline-none focus:border-blue-500 font-mono text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-medium text-gray-400 mb-1">
+                        Confirm New {changePassSecType === "pin" ? "PIN" : "Password"}:
+                      </label>
+                      <input
+                        type="password"
+                        value={changePassConfirm}
+                        maxLength={changePassSecType === "pin" ? 4 : undefined}
+                        onChange={(e) => {
+                          const val = changePassSecType === "pin" ? e.target.value.replace(/\D/g, "") : e.target.value;
+                          setChangePassConfirm(val);
+                        }}
+                        placeholder="Re-enter new code"
+                        className="w-full px-3 py-1.5 rounded-md bg-[#0D0E12] border border-[#2B2D38] text-white focus:outline-none focus:border-blue-500 font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Feedback messages */}
+              {settingsError && (
+                <div className="p-2.5 rounded-lg bg-rose-950/60 border border-rose-500/40 text-rose-300 text-[11px] flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                  <span>{settingsError}</span>
+                </div>
+              )}
+              {settingsSuccess && (
+                <div className="p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-[11px] flex items-center gap-2">
+                  <Check className="w-4 h-4 shrink-0 text-emerald-400" />
+                  <span>{settingsSuccess}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3.5 border-t border-[#232530] flex items-center justify-end gap-2.5 bg-[#121318]">
+              <button
+                type="button"
+                onClick={() => setIsSettingsModalOpen(false)}
+                className="px-3.5 py-1.5 rounded-md text-xs text-gray-400 hover:text-white transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                disabled={isSavingSettings}
+                onClick={handleSaveSettings}
+                className="px-4 py-1.5 rounded-md text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+              >
+                {isSavingSettings ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Settings</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. UNLOCK EDIT MODAL (For colleagues using temporary 6-digit phrase or PIN) */}
+      {isUnlockModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[10000000] bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in-50"
+          onClick={() => {
+            if (!isUnlocking) setIsUnlockModalOpen(false);
+          }}
+        >
+          <div
+            className="bg-[#15161C] border border-[#2B2D38] rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 text-[#E1DFDD] p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-[#232530]">
+              <div className="flex items-center gap-2 text-amber-400">
+                <Lock className="w-4 h-4" />
+                <h3 className="text-sm font-bold text-white">Unlock Edit Access</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsUnlockModalOpen(false)}
+                className="text-gray-400 hover:text-white p-1 rounded-md"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleVerifyUnlock} className="mt-4 space-y-3 text-xs">
+              <p className="text-gray-300 leading-relaxed text-[11px]">
+                This whiteboard has public editing disabled. Enter the <strong>6-digit temporary token phrase</strong> provided by creator <strong>{initialBoard.authorName || "Creator"}</strong>, or enter the master PIN/password.
+              </p>
+
+              <div>
+                <label className="block text-[11px] font-medium text-gray-400 mb-1">
+                  6-Digit Token Phrase or Master PIN/Password:
+                </label>
+                <input
+                  type="text"
+                  value={unlockTokenOrPass}
+                  onChange={(e) => setUnlockTokenOrPass(e.target.value)}
+                  placeholder="e.g. 849201"
+                  className="w-full px-3 py-2 rounded-lg bg-[#0E0F14] border border-[#2C2E3C] text-white focus:outline-none focus:border-blue-500 font-mono text-center tracking-widest text-sm"
+                  autoFocus
+                />
+              </div>
+
+              {unlockError && (
+                <div className="p-2 rounded bg-rose-950/60 border border-rose-500/40 text-rose-300 text-[11px] flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{unlockError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#232530]">
+                <button
+                  type="button"
+                  onClick={() => setIsUnlockModalOpen(false)}
+                  className="px-3 py-1.5 rounded-md text-xs text-gray-400 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUnlocking || !unlockTokenOrPass.trim()}
+                  className="px-4 py-1.5 rounded-md text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition-all disabled:opacity-50"
+                >
+                  {isUnlocking ? "Verifying..." : "Unlock Edit"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
