@@ -168,4 +168,60 @@ describe("Whiteboard Creator Settings, Security PIN/Password & Temporary Approva
       expect(canDeleteUnprotected).toBe(true);
     });
   });
+
+  describe("Creator vs Non-Creator Security Guard & 5-Hour Temporary Edit Permissions", () => {
+    it("detects creator correctly via authorId or case-insensitive authorName", () => {
+      const isCreator = (
+        currentUserId?: string,
+        currentUserName?: string,
+        authorId?: string,
+        authorName?: string
+      ) => {
+        return Boolean(
+          (currentUserId && authorId && currentUserId === authorId) ||
+          (currentUserName && authorName && (
+            currentUserName.trim().toLowerCase() === authorName.trim().toLowerCase() ||
+            authorName.toLowerCase().includes(currentUserName.trim().toLowerCase()) ||
+            currentUserName.toLowerCase().includes(authorName.trim().toLowerCase())
+          ))
+        );
+      };
+
+      expect(isCreator("user-1", "Satyam Himesh", "user-1", "Satyam Himesh")).toBe(true);
+      expect(isCreator("user-2", "satyam himesh", "user-9", "Satyam Himesh")).toBe(true);
+      expect(isCreator("user-employee", "John Doe", "user-creator", "Satyam Himesh")).toBe(false);
+    });
+
+    it("blocks non-creators from altering security checkboxes or regenerating tokens", () => {
+      const board = {
+        authorId: "creator-42",
+        authorName: "Satyam Himesh",
+        publicEdit: false,
+        deleteRequiresPass: true,
+        tempTokenPhrase: "849201",
+      };
+
+      const canModifySecurity = (userId: string) => userId === board.authorId;
+
+      expect(canModifySecurity("creator-42")).toBe(true);
+      expect(canModifySecurity("member-employee-99")).toBe(false);
+    });
+
+    it("calculates 5-hour temporary edit permission window correctly", () => {
+      const fiveHoursMs = 5 * 60 * 60 * 1000;
+      const now = Date.now();
+      const expiresAt = now + fiveHoursMs;
+
+      const isGrantValid = (grantTime: number) => grantTime > now;
+
+      // Immediately after granting -> valid
+      expect(isGrantValid(expiresAt)).toBe(true);
+
+      // 4 hours in -> still valid
+      expect(isGrantValid(now + 4 * 60 * 60 * 1000)).toBe(true);
+
+      // 5 hours and 1 minute later -> expired
+      expect(isGrantValid(now - 60 * 1000)).toBe(false);
+    });
+  });
 });

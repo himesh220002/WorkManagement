@@ -1023,6 +1023,8 @@ export default function WhiteboardsDashboardClient({
           isOpen={Boolean(settingsModalBoard)}
           onClose={() => setSettingsModalBoard(null)}
           board={settingsModalBoard}
+          currentUserId={currentUserId}
+          currentUserName={currentUserName}
           onSaveSuccess={(updated: WhiteboardSecuritySettings) => {
             setWhiteboards((prev) =>
               prev.map((b) => (b._id === updated._id ? { ...b, ...updated } : b))

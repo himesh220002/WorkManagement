@@ -115,6 +115,7 @@ import {
   NoteFormat,
 } from "@/lib/whiteboardMarkdownAndJson";
 import { RxReset } from "react-icons/rx";
+import WhiteboardSettingsModal from "./WhiteboardSettingsModal";
 
 interface WhiteboardCanvasProps {
   initialBoard: {
@@ -469,6 +470,24 @@ export default function WhiteboardCanvas({
     boardIdRef.current = boardId;
   }, [boardId]);
 
+  // Restore active 5-hour edit permissions grant from localStorage for non-creators
+  useEffect(() => {
+    if (isCreator || typeof window === "undefined") return;
+    const activeId = boardId || initialBoard._id;
+    try {
+      const grantStr = localStorage.getItem(`wb_edit_grant_${activeId}`);
+      if (grantStr) {
+        const grant = JSON.parse(grantStr);
+        if (grant?.expiresAt && grant.expiresAt > Date.now() && grant?.token) {
+          verifiedTokenRef.current = grant.token;
+          setIsEditUnlocked(true);
+        } else {
+          localStorage.removeItem(`wb_edit_grant_${activeId}`);
+        }
+      }
+    } catch {}
+  }, [boardId, initialBoard._id, isCreator]);
+
   const [title, setTitle] = useState(initialBoard.title || "Organizational Chart");
   const titleRef = useRef<string>(title);
   useEffect(() => {
@@ -812,11 +831,15 @@ export default function WhiteboardCanvas({
         return;
       }
 
+      const fiveHoursMs = 5 * 60 * 60 * 1000;
+      const expiresAt = data.expiresAt || Date.now() + fiveHoursMs;
+      localStorage.setItem(`wb_edit_grant_${activeId}`, JSON.stringify({ token: unlockTokenOrPass.trim(), expiresAt }));
+      localStorage.setItem(`wb_edit_token_${activeId}`, unlockTokenOrPass.trim());
       verifiedTokenRef.current = unlockTokenOrPass.trim();
       setIsEditUnlocked(true);
       setIsUnlockModalOpen(false);
       setUnlockTokenOrPass("");
-      showTemporaryToast(data.message || "Edit access granted!");
+      showTemporaryToast(data.message || "✓ 5-Hour Edit Permission Granted!");
     } catch (err: any) {
       setUnlockError(err.message || "Verification request failed.");
     } finally {
@@ -10663,316 +10686,35 @@ export default function WhiteboardCanvas({
       )}
 
       {/* 5. WHITEBOARD SETTINGS POPUP MODAL (Appears after creation & via Settings button) */}
-      {isSettingsModalOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-[10000000] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in-50"
-          onClick={() => {
-            if (!isSavingSettings) setIsSettingsModalOpen(false);
-          }}
-        >
-          <div
-            className="bg-[#15161C] border border-[#2B2D38] rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 text-[#E1DFDD]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-[#232530] flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400">
-                  <Settings className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white">Whiteboard Settings & Access</h3>
-                  <p className="text-[11px] text-gray-400">Configure security permissions and edit approval token</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsSettingsModalOpen(false)}
-                className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-[#20222B] transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
-              {/* Creator Banner */}
-              <div className="p-3 rounded-xl bg-[#1A1C24] border border-[#2B2E3C] flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-blue-600/25 border border-blue-500/40 text-blue-400 flex items-center justify-center font-bold text-xs shrink-0">
-                    <User className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold block">
-                      Whiteboard Creator
-                    </span>
-                    <span className="text-xs font-bold text-white">
-                      {initialBoard.authorName || currentUserName}
-                    </span>
-                  </div>
-                </div>
-                <span className="text-[10px] text-gray-400 text-right max-w-[190px]">
-                  Office teammates can ask the creator for edit approval when needed.
-                </span>
-              </div>
-
-              {/* Checkboxes Section */}
-              <div className="space-y-3 pt-1">
-                {/* 1. Delete whiteboard needed pass [checked] */}
-                <label className="flex items-start gap-3 p-3 rounded-xl bg-[#1A1C24] border border-[#2B2E3C] cursor-pointer hover:border-[#383C4E] transition-colors select-none">
-                  <input
-                    type="checkbox"
-                    checked={deleteRequiresPass}
-                    onChange={(e) => setDeleteRequiresPass(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded bg-[#0F1015] border-[#323646] text-blue-600 focus:ring-0 cursor-pointer"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 font-bold text-white text-xs">
-                      <Lock className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Delete whiteboard needed pass</span>
-                      {deleteRequiresPass && (
-                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold border border-emerald-500/30">
-                          Checked
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
-                      Requires entering the PIN or password before anyone can permanently delete this whiteboard.
-                    </p>
-                  </div>
-                </label>
-
-                {/* 2. Public edit [checked] */}
-                <label className="flex items-start gap-3 p-3 rounded-xl bg-[#1A1C24] border border-[#2B2E3C] cursor-pointer hover:border-[#383C4E] transition-colors select-none">
-                  <input
-                    type="checkbox"
-                    checked={publicEdit}
-                    onChange={(e) => setPublicEdit(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded bg-[#0F1015] border-[#323646] text-blue-600 focus:ring-0 cursor-pointer"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 font-bold text-white text-xs">
-                      <Edit3 className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>Public edit</span>
-                      {publicEdit && (
-                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold border border-emerald-500/30">
-                          Checked
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
-                      When checked, all office colleagues can freely edit. When unchecked, others need the 6-digit temporary token phrase or PIN.
-                    </p>
-                  </div>
-                </label>
-              </div>
-
-              {/* 3. Temporary Token Phrase 6-digit */}
-              <div className="p-3.5 rounded-xl bg-[#121318] border border-[#2B2E3C] space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Key className="w-3.5 h-3.5 text-purple-400" />
-                    <span className="text-xs font-bold text-white">Temporary Token Phrase (6-Digit)</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleRegenerateToken}
-                    className="text-[11px] text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1 cursor-pointer"
-                  >
-                    <RefreshCcwIcon className="w-3 h-3" />
-                    <span>Regenerate</span>
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-[#0A0B0E] border border-[#242632]">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base font-mono font-bold tracking-widest text-cyan-300 px-2">
-                      {tempTokenPhrase || "849201"}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyToken}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#22242D] hover:bg-[#2C2F3B] text-white text-xs font-semibold border border-[#363946] transition-colors cursor-pointer"
-                  >
-                    {copiedToken ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-emerald-400">Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 text-gray-300" />
-                        <span>Copy Phrase</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <p className="text-[11px] text-gray-400 leading-relaxed">
-                  If someone in the office needs edit permission, they can enter this 6-digit phrase asked from the whiteboard creator (<strong>{initialBoard.authorName || currentUserName}</strong>).
-                </p>
-              </div>
-
-              {/* 4. Password Change Section */}
-              <div className="rounded-xl bg-[#1A1C24] border border-[#2B2E3C] overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordChange(!showPasswordChange)}
-                  className="w-full px-3.5 py-3 flex items-center justify-between text-left hover:bg-[#20222B] transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-2">
-                    <Shield className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="font-bold text-white text-xs">
-                      {isProtected ? "Change Password / PIN" : "Set Whiteboard Password / PIN"}
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-blue-400 font-semibold">
-                    {showPasswordChange ? "Hide" : "Configure"}
-                  </span>
-                </button>
-
-                {showPasswordChange && (
-                  <div className="p-3.5 pt-1 border-t border-[#252834] space-y-3 bg-[#131419]">
-                    <div>
-                      <span className="block text-[11px] font-semibold text-gray-300 mb-1.5">
-                        Security Format:
-                      </span>
-                      <div className="grid grid-cols-2 gap-2">
-                        <label
-                          className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer ${
-                            changePassSecType === "pin"
-                              ? "bg-blue-950/40 border-blue-500/60 text-white"
-                              : "bg-[#181920] border-[#292B36] text-gray-400"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="changePassSecType"
-                            checked={changePassSecType === "pin"}
-                            onChange={() => setChangePassSecType("pin")}
-                            className="sr-only"
-                          />
-                          <Key className="w-3.5 h-3.5 text-blue-400" />
-                          <span className="font-semibold text-[11px]">4-Digit PIN</span>
-                        </label>
-                        <label
-                          className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer ${
-                            changePassSecType === "password"
-                              ? "bg-blue-950/40 border-blue-500/60 text-white"
-                              : "bg-[#181920] border-[#292B36] text-gray-400"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="changePassSecType"
-                            checked={changePassSecType === "password"}
-                            onChange={() => setChangePassSecType("password")}
-                            className="sr-only"
-                          />
-                          <Lock className="w-3.5 h-3.5 text-amber-400" />
-                          <span className="font-semibold text-[11px]">6-Char Password</span>
-                        </label>
-                      </div>
-                    </div>
-
-                    {isProtected && (
-                      <div>
-                        <label className="block text-[11px] font-medium text-gray-400 mb-1">
-                          Current PIN / Password:
-                        </label>
-                        <input
-                          type="password"
-                          value={changePassCurrent}
-                          onChange={(e) => setChangePassCurrent(e.target.value)}
-                          placeholder="Enter current PIN/pass"
-                          className="w-full px-3 py-1.5 rounded-md bg-[#0D0E12] border border-[#2B2D38] text-white focus:outline-none focus:border-blue-500 font-mono text-xs"
-                        />
-                      </div>
-                    )}
-
-                    <div>
-                      <label className="block text-[11px] font-medium text-gray-400 mb-1">
-                        New {changePassSecType === "pin" ? "4-Digit PIN" : "6-Char Password"}:
-                      </label>
-                      <input
-                        type="password"
-                        value={changePassNew}
-                        maxLength={changePassSecType === "pin" ? 4 : undefined}
-                        onChange={(e) => {
-                          const val = changePassSecType === "pin" ? e.target.value.replace(/\D/g, "") : e.target.value;
-                          setChangePassNew(val);
-                        }}
-                        placeholder={changePassSecType === "pin" ? "e.g. 5920" : "New password (min 6 chars)"}
-                        className="w-full px-3 py-1.5 rounded-md bg-[#0D0E12] border border-[#2B2D38] text-white focus:outline-none focus:border-blue-500 font-mono text-xs"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-medium text-gray-400 mb-1">
-                        Confirm New {changePassSecType === "pin" ? "PIN" : "Password"}:
-                      </label>
-                      <input
-                        type="password"
-                        value={changePassConfirm}
-                        maxLength={changePassSecType === "pin" ? 4 : undefined}
-                        onChange={(e) => {
-                          const val = changePassSecType === "pin" ? e.target.value.replace(/\D/g, "") : e.target.value;
-                          setChangePassConfirm(val);
-                        }}
-                        placeholder="Re-enter new code"
-                        className="w-full px-3 py-1.5 rounded-md bg-[#0D0E12] border border-[#2B2D38] text-white focus:outline-none focus:border-blue-500 font-mono text-xs"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Feedback messages */}
-              {settingsError && (
-                <div className="p-2.5 rounded-lg bg-rose-950/60 border border-rose-500/40 text-rose-300 text-[11px] flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
-                  <span>{settingsError}</span>
-                </div>
-              )}
-              {settingsSuccess && (
-                <div className="p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-[11px] flex items-center gap-2">
-                  <Check className="w-4 h-4 shrink-0 text-emerald-400" />
-                  <span>{settingsSuccess}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-6 py-3.5 border-t border-[#232530] flex items-center justify-end gap-2.5 bg-[#121318]">
-              <button
-                type="button"
-                onClick={() => setIsSettingsModalOpen(false)}
-                className="px-3.5 py-1.5 rounded-md text-xs text-gray-400 hover:text-white transition-colors cursor-pointer"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                disabled={isSavingSettings}
-                onClick={handleSaveSettings}
-                className="px-4 py-1.5 rounded-md text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
-              >
-                {isSavingSettings ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <span>Save Settings</span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <WhiteboardSettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        board={{
+          _id: String(boardId || initialBoard._id),
+          title: title,
+          authorName: initialBoard.authorName,
+          authorId: initialBoard.authorId,
+          isProtected: isProtected,
+          securityType: securityType,
+          deleteRequiresPass: deleteRequiresPass,
+          publicEdit: publicEdit,
+          tempTokenPhrase: tempTokenPhrase,
+        }}
+        currentUserId={currentUserId}
+        currentUserName={currentUserName}
+        onSaveSuccess={(updated) => {
+          if (updated.publicEdit !== undefined) setPublicEdit(updated.publicEdit);
+          if (updated.deleteRequiresPass !== undefined) setDeleteRequiresPass(updated.deleteRequiresPass);
+          if (updated.tempTokenPhrase !== undefined) setTempTokenPhrase(updated.tempTokenPhrase);
+          if (updated.isProtected !== undefined) setIsProtected(updated.isProtected);
+          if (updated.securityType !== undefined) setSecurityType(updated.securityType);
+        }}
+        onUnlockSuccess={(token) => {
+          verifiedTokenRef.current = token;
+          setIsEditUnlocked(true);
+          showTemporaryToast("✓ 5-Hour Edit Permission Granted!");
+        }}
+      />
 
       {/* 6. UNLOCK EDIT MODAL (For colleagues using temporary 6-digit phrase or PIN) */}
       {isUnlockModalOpen && (

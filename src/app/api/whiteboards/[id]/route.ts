@@ -145,19 +145,6 @@ export async function PUT(
       passCode,
     } = body;
 
-    const updateFields: any = { updatedAt: new Date() };
-    if (title !== undefined) updateFields.title = title;
-    if (nodes !== undefined) updateFields.nodes = nodes;
-    if (edges !== undefined) updateFields.edges = edges;
-    if (isFavorite !== undefined) updateFields.isFavorite = isFavorite;
-    if (description !== undefined) updateFields.description = description;
-    if (backgroundColor !== undefined) updateFields.backgroundColor = backgroundColor;
-    if (deleteRequiresPass !== undefined) updateFields.deleteRequiresPass = Boolean(deleteRequiresPass);
-    if (publicEdit !== undefined) updateFields.publicEdit = Boolean(publicEdit);
-    if (tempTokenPhrase !== undefined && /^\d{6}$/.test(String(tempTokenPhrase).trim())) {
-      updateFields.tempTokenPhrase = String(tempTokenPhrase).trim();
-    }
-
     let existing: any = null;
     if (id && mongoose.Types.ObjectId.isValid(id)) {
       existing = await Whiteboard.findById(id);
@@ -172,16 +159,61 @@ export async function PUT(
       });
     }
 
-    // Check edit permission if publicEdit is false on existing board
-    if (existing && existing.isProtected && existing.publicEdit === false && (nodes !== undefined || edges !== undefined)) {
-      const isCreator = existing.authorId && session.userId && existing.authorId === session.userId;
-      let hasValidToken = false;
+    const isCreator = Boolean(
+      !existing ||
+      (existing.authorId && session.userId && String(existing.authorId) === String(session.userId)) ||
+      (existing.authorName && (session.name || session.email) && (
+        existing.authorName.trim().toLowerCase() === (session.name || "").trim().toLowerCase() ||
+        existing.authorName.trim().toLowerCase() === (session.email?.split("@")[0] || "").trim().toLowerCase()
+      ))
+    );
 
-      if (!isCreator) {
+    // Block non-creators from altering security settings, checkboxes, or tokens
+    const isModifyingSecurity = (
+      deleteRequiresPass !== undefined ||
+      publicEdit !== undefined ||
+      tempTokenPhrase !== undefined ||
+      Boolean(changePassword)
+    );
+
+    if (existing && !isCreator && isModifyingSecurity) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Only the whiteboard creator (${existing.authorName || "the creator"}) can alter security policies, edit permissions, or regenerate tokens.`,
+        },
+        { status: 403 }
+      );
+    }
+
+    const updateFields: any = { updatedAt: new Date() };
+    if (title !== undefined) updateFields.title = title;
+    if (nodes !== undefined) updateFields.nodes = nodes;
+    if (edges !== undefined) updateFields.edges = edges;
+    if (isFavorite !== undefined) updateFields.isFavorite = isFavorite;
+    if (description !== undefined) updateFields.description = description;
+    if (backgroundColor !== undefined) updateFields.backgroundColor = backgroundColor;
+
+    // Only allow updating security fields if creator
+    if (isCreator) {
+      if (deleteRequiresPass !== undefined) updateFields.deleteRequiresPass = Boolean(deleteRequiresPass);
+      if (publicEdit !== undefined) updateFields.publicEdit = Boolean(publicEdit);
+      if (tempTokenPhrase !== undefined && /^\d{6}$/.test(String(tempTokenPhrase).trim())) {
+        updateFields.tempTokenPhrase = String(tempTokenPhrase).trim();
+      }
+    }
+
+    // Check edit permission if publicEdit is false on existing board
+    if (existing && existing.publicEdit === false && (nodes !== undefined || edges !== undefined)) {
+      let hasValidToken = isCreator;
+
+      if (!hasValidToken) {
         if (editToken && existing.tempTokenPhrase && editToken.trim() === existing.tempTokenPhrase.trim()) {
           hasValidToken = true;
         } else if (passCode && existing.passwordHash) {
           hasValidToken = await bcrypt.compare(passCode.trim(), existing.passwordHash);
+        } else if (editToken && existing.passwordHash) {
+          hasValidToken = await bcrypt.compare(editToken.trim(), existing.passwordHash);
         }
 
         if (!hasValidToken) {
@@ -196,8 +228,15 @@ export async function PUT(
       }
     }
 
-    // Handle password change request
+    // Handle password change request (creator only)
     if (changePassword && newPassword) {
+      if (!isCreator) {
+        return NextResponse.json(
+          { success: false, error: "Only the whiteboard creator can modify the security PIN or password" },
+          { status: 403 }
+        );
+      }
+
       if (existing && existing.passwordHash) {
         if (!currentPassword) {
           return NextResponse.json(

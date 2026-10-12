@@ -48,13 +48,17 @@ export async function POST(
     }
 
     if (matchesPass || matchesToken) {
+      const expiresInHours = 5;
+      const expiresAt = Date.now() + expiresInHours * 60 * 60 * 1000;
       return NextResponse.json({
         success: true,
         canEdit: true,
         isMaster: matchesPass,
+        expiresInHours,
+        expiresAt,
         message: matchesPass
-          ? "Master access granted (PIN/Password verified)."
-          : "Temporary edit permission granted via 6-digit phrase.",
+          ? "Master access granted (PIN/Password verified) for 5 hours."
+          : "Temporary 5-hour edit permission granted via 6-digit approval phrase.",
       });
     }
 
