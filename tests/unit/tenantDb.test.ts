@@ -78,10 +78,11 @@ describe("Database-per-Tenant Architecture", () => {
 
     // 1. Create operation
     const mockCycle = { _id: "cycle123", name: "Sprint Alpha", companyId: "comp123" };
+    const { _id: cycleId, ...cycleRest } = mockCycle;
     await syncTenantWrite("Cycle", "create", mockCycle, undefined, "ORGTTV");
     expect(fakeUpdateOne).toHaveBeenCalledWith(
       { _id: "cycle123" },
-      { $set: mockCycle },
+      { $set: cycleRest },
       { upsert: true }
     );
 

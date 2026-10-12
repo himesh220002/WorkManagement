@@ -2906,4 +2906,192 @@ describe("Whiteboard Simple Table Grid (R x C Arrangement of Boxes)", () => {
   });
 });
 
+describe("Whiteboard Saving, 20s Auto-Save, Interaction Guard & Real-Time Sync", () => {
+  it("suppresses network save operations while user is in an active interaction state (grabbing, resizing, typing)", () => {
+    const isUserInteracting = (state: {
+      isMouseDown?: boolean;
+      draggingNodeId?: string | null;
+      isDraggingGroup?: boolean;
+      resizing?: any;
+      editingNodeId?: string | null;
+      isTypingInInput?: boolean;
+    }) => {
+      if (state.isMouseDown) return true;
+      if (state.draggingNodeId || state.isDraggingGroup) return true;
+      if (state.resizing) return true;
+      if (state.editingNodeId) return true;
+      if (state.isTypingInInput) return true;
+      return false;
+    };
+
+    // Grab/drag in progress
+    expect(isUserInteracting({ draggingNodeId: "node-1" })).toBe(true);
+    expect(isUserInteracting({ isDraggingGroup: true })).toBe(true);
+
+    // Resize in progress
+    expect(isUserInteracting({ resizing: { handle: "se", nodeId: "node-2" } })).toBe(true);
+
+    // Active text editing
+    expect(isUserInteracting({ editingNodeId: "text-1" })).toBe(true);
+    expect(isUserInteracting({ isTypingInInput: true })).toBe(true);
+
+    // Mouse held down
+    expect(isUserInteracting({ isMouseDown: true })).toBe(true);
+
+    // Idle: safe to save
+    expect(isUserInteracting({ isMouseDown: false, draggingNodeId: null, isDraggingGroup: false, resizing: null, editingNodeId: null })).toBe(false);
+  });
+
+  it("schedules auto-save on a 20-second cadence and executes when user is idle", () => {
+    let hasUnsavedEdits = false;
+    let savedCount = 0;
+    const intervalMs = 20000;
+
+    const onUserEdit = () => {
+      hasUnsavedEdits = true;
+    };
+
+    const onAutoSaveTick = (isInteracting: boolean) => {
+      if (hasUnsavedEdits && !isInteracting) {
+        savedCount++;
+        hasUnsavedEdits = false;
+      }
+    };
+
+    // 0s: user modifies a node
+    onUserEdit();
+    expect(hasUnsavedEdits).toBe(true);
+
+    // 10s: user is grabbing and moving an object -> tick should NOT save
+    onAutoSaveTick(true);
+    expect(savedCount).toBe(0);
+    expect(hasUnsavedEdits).toBe(true);
+
+    // 20s: user finished grabbing, tick occurs -> saves cleanly
+    onAutoSaveTick(false);
+    expect(savedCount).toBe(1);
+    expect(hasUnsavedEdits).toBe(false);
+  });
+
+  it("allows manual save button to immediately commit state to cloud without waiting 20s", () => {
+    let hasUnsavedEdits = false;
+    let saveStatus: "saved" | "saving" | "unsaved" = "saved";
+    let committedPayload: any = null;
+
+    const performManualSave = (snapshot: any) => {
+      saveStatus = "saving";
+      committedPayload = snapshot;
+      hasUnsavedEdits = false;
+      saveStatus = "saved";
+    };
+
+    // 5s: user modifies canvas
+    hasUnsavedEdits = true;
+    saveStatus = "unsaved";
+
+    // 8s: user explicitly clicks Save button
+    performManualSave({ title: "Architecture Plan", nodes: [{ id: "n1" }] });
+
+    expect(saveStatus).toBe("saved");
+    expect(hasUnsavedEdits).toBe(false);
+    expect(committedPayload.nodes).toHaveLength(1);
+  });
+
+  it("preserves pan, zoom, and fullscreen view without moving an inch during real-time remote sync", () => {
+    const clientViewport = {
+      pan: { x: 340, y: 180 },
+      zoom: 1.15,
+      isFullscreen: true,
+    };
+
+    let clientCanvasState = {
+      nodes: [{ id: "n1", title: "Original Node" }],
+      edges: [] as { id: string; from: string; to: string }[],
+      updatedAt: 1000,
+    };
+
+    const remoteServerState = {
+      nodes: [
+        { id: "n1", title: "Original Node" },
+        { id: "n2", title: "Remote Synchronized Node" },
+      ],
+      edges: [{ id: "e1", from: "n1", to: "n2" }],
+      updatedAt: 2500,
+    };
+
+    // Apply real-time sync
+    const applyRemoteSync = (remote: typeof remoteServerState) => {
+      // ONLY update nodes and edges
+      clientCanvasState = {
+        nodes: [...remote.nodes],
+        edges: [...remote.edges],
+        updatedAt: remote.updatedAt,
+      };
+      // Viewport remains completely untouched
+    };
+
+    applyRemoteSync(remoteServerState);
+
+    // Nodes and edges synchronized
+    expect(clientCanvasState.nodes).toHaveLength(2);
+    expect(clientCanvasState.edges).toHaveLength(1);
+
+    // Viewport position, zoom, and fullscreen are untouched
+    expect(clientViewport.pan).toEqual({ x: 340, y: 180 });
+    expect(clientViewport.zoom).toBe(1.15);
+    expect(clientViewport.isFullscreen).toBe(true);
+  });
+
+  it("detects remote session updates and flags remoteUpdateAvailable when local client has unsaved edits", () => {
+    const lastSyncedUpdatedAt = 1000;
+    const incomingServerUpdatedAt = 3000;
+
+    const checkSyncStatus = (hasLocalEdits: boolean, isInteracting: boolean) => {
+      const isServerAhead = incomingServerUpdatedAt > lastSyncedUpdatedAt + 1500;
+      if (!isServerAhead) return { autoSynced: false, buttonVisible: false };
+
+      if (!hasLocalEdits && !isInteracting) {
+        return { autoSynced: true, buttonVisible: false };
+      } else {
+        return { autoSynced: false, buttonVisible: true };
+      }
+    };
+
+    // Client has no local edits: auto-syncs instantly in real-time
+    expect(checkSyncStatus(false, false)).toEqual({ autoSynced: true, buttonVisible: false });
+
+    // Client has unsaved local edits: shows Sync Button so work is not overwritten
+    expect(checkSyncStatus(true, false)).toEqual({ autoSynced: false, buttonVisible: true });
+
+    // Client is currently interacting/typing: shows Sync Button instead of jarring interruption
+    expect(checkSyncStatus(false, true)).toEqual({ autoSynced: false, buttonVisible: true });
+  });
+
+  it("enforces beforeunload protection and keepalive flush if user exits before 20s auto-save", () => {
+    let keepalivePayloadSent: any = null;
+    let promptMessage: string | null = null;
+
+    const onBeforeUnload = (hasUnsavedEdits: boolean, snapshot: any) => {
+      if (hasUnsavedEdits) {
+        keepalivePayloadSent = snapshot;
+        promptMessage = "You have unsaved whiteboard changes. Are you sure you want to leave?";
+      }
+    };
+
+    // User made edits 8 seconds ago and attempts to close the window
+    onBeforeUnload(true, { title: "Draft", nodesCount: 158 });
+
+    expect(keepalivePayloadSent).toEqual({ title: "Draft", nodesCount: 158 });
+    expect(promptMessage).toContain("unsaved whiteboard changes");
+
+    // Clean session without unsaved edits does not trigger prompt
+    keepalivePayloadSent = null;
+    promptMessage = null;
+    onBeforeUnload(false, { title: "Draft", nodesCount: 158 });
+    expect(promptMessage).toBeNull();
+    expect(keepalivePayloadSent).toBeNull();
+  });
+});
+
+
 

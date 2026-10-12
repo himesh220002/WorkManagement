@@ -15,6 +15,21 @@ export async function GET(
     const session = await getCurrentSession();
     const { id } = await context.params;
 
+    const metaOnly = req.nextUrl.searchParams.get("metaOnly") === "true";
+    if (metaOnly && id && mongoose.Types.ObjectId.isValid(id)) {
+      const meta: any = await Whiteboard.findById(id).select("_id updatedAt nodes").lean();
+      if (meta) {
+        return NextResponse.json({
+          success: true,
+          meta: {
+            _id: String(meta._id),
+            updatedAt: meta.updatedAt,
+            nodesCount: Array.isArray(meta.nodes) ? meta.nodes.length : 0,
+          },
+        });
+      }
+    }
+
     if (id === "org-chart" || id === "default" || id === "default-org-chart") {
       const tenantFilter = getTenantQueryFilter(session);
       let existing: any = await Whiteboard.findOne({
@@ -108,10 +123,26 @@ export async function PUT(
     let updatedBoard: any = null;
 
     if (id && mongoose.Types.ObjectId.isValid(id)) {
+      const existing = await Whiteboard.findById(id).lean();
+      if (
+        existing &&
+        Array.isArray((existing as any).nodes) &&
+        (existing as any).nodes.length >= 100 &&
+        Array.isArray(nodes) &&
+        nodes.length < (existing as any).nodes.length - 10 &&
+        !body.forceOverwrite
+      ) {
+        console.warn(
+          `[PROTECTION] Blocked accidental node truncation for ${id}: DB has ${(existing as any).nodes.length} nodes, incoming has ${nodes.length} nodes.`
+        );
+        delete updateFields.nodes;
+        delete updateFields.edges;
+      }
+
       updatedBoard = await Whiteboard.findByIdAndUpdate(
         id,
         { $set: updateFields },
-        { new: true }
+        { returnDocument: "after" }
       );
     }
 
@@ -162,7 +193,7 @@ export async function PUT(
       }
     }
 
-    if (session.companyCode && updatedBoard) {
+    if (updatedBoard) {
       await syncTenantWrite("Whiteboard", "update", updatedBoard, undefined, session.companyCode);
     }
 

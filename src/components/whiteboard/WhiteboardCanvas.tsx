@@ -648,8 +648,139 @@ export default function WhiteboardCanvas({
     nodes: IWhiteboardNode[];
     edges: IWhiteboardEdge[];
   } | null>(null);
+  const hasUnsavedEditsRef = useRef<boolean>(false);
+  const isSavingRef = useRef<boolean>(false);
+  const isMouseDownRef = useRef<boolean>(false);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [isPushing, setIsPushing] = useState<boolean>(false);
+  const [isPulling, setIsPulling] = useState<boolean>(false);
+  const [pushBlink, setPushBlink] = useState<boolean>(false); // Up Blink: local changes ready to push
+  const [pullBlink, setPullBlink] = useState<boolean>(false); // Down Blink: cloud updates available
+  const [showInitialPullModal, setShowInitialPullModal] = useState<boolean>(false);
+  const [showExitPushModal, setShowExitPushModal] = useState<boolean>(false);
+  const [remoteUpdateAvailable, setRemoteUpdateAvailable] = useState<boolean>(false);
+  const lastSyncedUpdatedAtRef = useRef<number>(
+    initialBoard.updatedAt ? new Date(initialBoard.updatedAt).getTime() : Date.now()
+  );
 
-  // Auto-save with instant localStorage cache and debounced server sync
+  // Track global mouse button state to detect happening/interacting state
+  useEffect(() => {
+    const handleWinDown = () => {
+      isMouseDownRef.current = true;
+    };
+    const handleWinUp = () => {
+      isMouseDownRef.current = false;
+    };
+    window.addEventListener("mousedown", handleWinDown, true);
+    window.addEventListener("mouseup", handleWinUp, true);
+    return () => {
+      window.removeEventListener("mousedown", handleWinDown, true);
+      window.removeEventListener("mouseup", handleWinUp, true);
+    };
+  }, []);
+
+  // Helper: check if any object is currently being grabbed, resized, or text typed ("happening state")
+  const isUserInteracting = useCallback(() => {
+    if (isMouseDownRef.current) return true;
+    if (draggingNodeId || isDraggingGroup) return true;
+    if (resizing || resizingDivider) return true;
+    if (draggingLineTip || draggingLineMiddle || interactiveLineDrawing) return true;
+    if (isDrawingPen || isSelectingBox || connectingFromNodeId || editingNodeId) return true;
+
+    if (typeof document !== "undefined") {
+      const el = document.activeElement;
+      if (
+        el &&
+        (el.tagName === "INPUT" ||
+          el.tagName === "TEXTAREA" ||
+          el.getAttribute("contenteditable") === "true")
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }, [
+    draggingNodeId,
+    isDraggingGroup,
+    resizing,
+    resizingDivider,
+    draggingLineTip,
+    draggingLineMiddle,
+    interactiveLineDrawing,
+    isDrawingPen,
+    isSelectingBox,
+    connectingFromNodeId,
+    editingNodeId,
+  ]);
+
+  // Synchronous network commit to MongoDB
+  const performServerSave = useCallback(
+    async (isExiting: boolean = false) => {
+      if (isSavingRef.current && !isExiting) return;
+      const activeId = boardIdRef.current || boardId || "default-org-chart";
+      if (!activeId) return;
+
+      // Do NOT save if currently in an active happening/interaction state (unless exiting)
+      if (!isExiting && isUserInteracting()) {
+        return;
+      }
+
+      try {
+        isSavingRef.current = true;
+        setSaveStatus("saving");
+
+        const currentBg = canvasBgColorRef.current;
+        const currentTitle = titleRef.current;
+        const currentNodes = nodesRef.current;
+        const currentEdges = edgesRef.current;
+
+        const res = await fetch(`/api/whiteboards/${activeId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: currentTitle,
+            nodes: currentNodes,
+            edges: currentEdges,
+            isFavorite,
+            backgroundColor: currentBg,
+          }),
+          keepalive: isExiting,
+        });
+
+        if (res.ok) {
+          hasUnsavedEditsRef.current = false;
+          const data = await res.json();
+          const serverTime = data?.whiteboard?.updatedAt
+            ? new Date(data.whiteboard.updatedAt).getTime()
+            : Date.now();
+          lastSyncedUpdatedAtRef.current = serverTime;
+
+          if (data?.whiteboard?._id) {
+            const newServerId = String(data.whiteboard._id);
+            if (newServerId !== activeId && activeId === "default-org-chart") {
+              setBoardId(newServerId);
+              boardIdRef.current = newServerId;
+            }
+          }
+          setSaveStatus("saved");
+          setRemoteUpdateAvailable(false);
+        } else {
+          hasUnsavedEditsRef.current = true;
+          setSaveStatus("unsaved");
+        }
+      } catch (err) {
+        console.error("Save failed:", err);
+        hasUnsavedEditsRef.current = true;
+        setSaveStatus("unsaved");
+      } finally {
+        isSavingRef.current = false;
+      }
+    },
+    [boardId, isFavorite, isUserInteracting]
+  );
+
+  // Auto-save with instant local cache.
+  // Modifying an object marks dirty state; network save happens every 20s or via Save button when not interacting
   const triggerAutoSave = useCallback(
     (
       newNodes: IWhiteboardNode[],
@@ -658,6 +789,8 @@ export default function WhiteboardCanvas({
       newBgColor?: string,
       immediate?: boolean
     ) => {
+      hasUnsavedEditsRef.current = true;
+      setPushBlink(true);
       setSaveStatus("unsaved");
       const currentBg = newBgColor !== undefined ? newBgColor : canvasBgColorRef.current;
       const currentTitle = newTitle !== undefined ? newTitle : titleRef.current;
@@ -701,76 +834,315 @@ export default function WhiteboardCanvas({
         // Handle storage quota exceeded gracefully
       }
 
-      // 2. Background sync to MongoDB (0ms if immediate, else 400ms debounce)
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-
-      const doSync = async () => {
-        const activeId = boardIdRef.current || boardId || "default-org-chart";
-        try {
-          setSaveStatus("saving");
-          const res = await fetch(`/api/whiteboards/${activeId}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              title: currentTitle,
-              nodes: newNodes,
-              edges: newEdges,
-              isFavorite,
-              backgroundColor: currentBg,
-            }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data?.whiteboard?._id) {
-              const newServerId = String(data.whiteboard._id);
-              if (newServerId !== activeId && activeId === "default-org-chart") {
-                setBoardId(newServerId);
-                boardIdRef.current = newServerId;
-                try {
-                  if (typeof window !== "undefined") {
-                    localStorage.setItem(
-                      `taskflow_wb_cache_${newServerId}`,
-                      JSON.stringify({
-                        title: currentTitle,
-                        nodes: newNodes,
-                        edges: newEdges,
-                        backgroundColor: currentBg,
-                        savedAt: Date.now(),
-                      })
-                    );
-                  }
-                } catch { }
-              }
-            }
-            setSaveStatus("saved");
-          } else {
-            setSaveStatus("unsaved");
-          }
-        } catch (err) {
-          console.error("Auto-save failed:", err);
-          setSaveStatus("unsaved");
-        }
-      };
-
+      // 2. Perform immediate save if requested (e.g. Save button clicked)
       if (immediate) {
-        doSync();
-      } else {
-        saveTimeoutRef.current = setTimeout(doSync, 400);
+        performServerSave();
       }
     },
-    [boardId, isFavorite]
+    [boardId, performServerSave]
   );
+
+  // Real-time synchronization method (preserves pan, zoom, and fullscreen without moving an inch)
+  const applyRemoteSync = useCallback(
+    async (targetId?: string) => {
+      const activeId = targetId || boardIdRef.current || boardId;
+      if (
+        !activeId ||
+        activeId === "default-org-chart" ||
+        activeId === "org-chart" ||
+        activeId === "default"
+      ) {
+        return;
+      }
+
+      try {
+        setIsSyncing(true);
+        const res = await fetch(`/api/whiteboards/${activeId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.success && data?.whiteboard) {
+          const remote = data.whiteboard;
+          const remoteTime = remote.updatedAt ? new Date(remote.updatedAt).getTime() : Date.now();
+
+          const currentCount = nodesRef.current.length;
+          const remoteCount = Array.isArray(remote.nodes) ? remote.nodes.length : 0;
+
+          // Safety check: Prevent accidental downgrade if current canvas has 100+ objects and remote has fewer
+          if (currentCount >= 100 && remoteCount < currentCount - 10) {
+            console.warn(
+              `Sync aborted: current canvas has ${currentCount} nodes but remote has only ${remoteCount} nodes.`
+            );
+            showTemporaryToast("Remote has fewer objects than current board; sync aborted to protect your work");
+            setRemoteUpdateAvailable(false);
+            return;
+          }
+
+          // Push snapshot to undo stack before sync so user can always Ctrl+Z
+          historyStackRef.current.push({
+            nodes: JSON.parse(JSON.stringify(nodesRef.current)),
+            edges: JSON.parse(JSON.stringify(edgesRef.current)),
+          });
+          historyIndexRef.current = historyStackRef.current.length - 1;
+          setCanUndo(true);
+
+          // ONLY update objects (nodes, edges, title, backgroundColor)
+          // NEVER touch pan, zoom, or fullscreen (preserves exact canvas view)
+          if (Array.isArray(remote.nodes)) {
+            setNodes(remote.nodes);
+            nodesRef.current = remote.nodes;
+          }
+          if (Array.isArray(remote.edges)) {
+            setEdges(remote.edges);
+            edgesRef.current = remote.edges;
+          }
+          if (remote.title) {
+            setTitle(remote.title);
+            titleRef.current = remote.title;
+          }
+          if (remote.backgroundColor) {
+            setCanvasBgColor(remote.backgroundColor);
+            canvasBgColorRef.current = remote.backgroundColor;
+          }
+
+          // Update local cache
+          try {
+            if (typeof window !== "undefined") {
+              localStorage.setItem(
+                `taskflow_wb_cache_${activeId}`,
+                JSON.stringify({
+                  title: remote.title,
+                  nodes: remote.nodes,
+                  edges: remote.edges,
+                  backgroundColor: remote.backgroundColor,
+                  savedAt: remoteTime,
+                })
+              );
+            }
+          } catch { }
+
+          lastSyncedUpdatedAtRef.current = remoteTime;
+          hasUnsavedEditsRef.current = false;
+          setSaveStatus("saved");
+          setRemoteUpdateAvailable(false);
+          showTemporaryToast("Real-time sync: updated canvas from remote session");
+        }
+      } catch (err) {
+        console.error("Failed to sync remote whiteboard:", err);
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [boardId, showTemporaryToast]
+  );
+
+  // Explicit Force Push: uploads current canvas directly into MongoDB Atlas & tenant DB with forceOverwrite: true
+  const handleForcePush = useCallback(async () => {
+    const activeId = boardIdRef.current || boardId;
+    if (
+      !activeId ||
+      activeId === "default-org-chart" ||
+      activeId === "org-chart" ||
+      activeId === "default"
+    ) {
+      showTemporaryToast("Cannot push template/default board");
+      return;
+    }
+
+    try {
+      setIsPushing(true);
+      const res = await fetch(`/api/whiteboards/${activeId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: titleRef.current,
+          nodes: nodesRef.current,
+          edges: edgesRef.current,
+          backgroundColor: canvasBgColorRef.current,
+          isFavorite,
+          forceOverwrite: true,
+        }),
+      });
+
+      if (!res.ok) {
+        showTemporaryToast("Force Push failed: server returned error");
+        return;
+      }
+
+      const data = await res.json();
+      const serverTime = data?.whiteboard?.updatedAt
+        ? new Date(data.whiteboard.updatedAt).getTime()
+        : Date.now();
+      lastSyncedUpdatedAtRef.current = serverTime;
+      hasUnsavedEditsRef.current = false;
+      setSaveStatus("saved");
+      setRemoteUpdateAvailable(false);
+
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            `taskflow_wb_cache_${activeId}`,
+            JSON.stringify({
+              title: titleRef.current,
+              nodes: nodesRef.current,
+              edges: edgesRef.current,
+              backgroundColor: canvasBgColorRef.current,
+              savedAt: serverTime,
+            })
+          );
+        }
+      } catch { }
+
+      showTemporaryToast(`Force Push Successful: ${nodesRef.current.length} objects saved to Global Cloud DB!`);
+    } catch (err: any) {
+      console.error("Force push failed:", err);
+      showTemporaryToast("Force Push Error: " + (err.message || "Failed"));
+    } finally {
+      setIsPushing(false);
+    }
+  }, [boardId, isFavorite, showTemporaryToast]);
+
+  // Explicit Force Pull: pulls latest state from MongoDB Atlas into local canvas
+  const handleForcePull = useCallback(async () => {
+    const activeId = boardIdRef.current || boardId;
+    if (
+      !activeId ||
+      activeId === "default-org-chart" ||
+      activeId === "org-chart" ||
+      activeId === "default"
+    ) {
+      showTemporaryToast("Cannot pull template/default board");
+      return;
+    }
+
+    try {
+      setIsPulling(true);
+      const res = await fetch(`/api/whiteboards/${activeId}`);
+      if (!res.ok) {
+        showTemporaryToast("Force Pull failed: server returned error");
+        return;
+      }
+      const data = await res.json();
+      if (data?.success && data?.whiteboard) {
+        const remote = data.whiteboard;
+
+        // Push snapshot to undo stack first so user can undo anytime!
+        historyStackRef.current.push({
+          nodes: JSON.parse(JSON.stringify(nodesRef.current)),
+          edges: JSON.parse(JSON.stringify(edgesRef.current)),
+        });
+        historyIndexRef.current = historyStackRef.current.length - 1;
+        setCanUndo(true);
+
+        if (Array.isArray(remote.nodes)) {
+          setNodes(remote.nodes);
+          nodesRef.current = remote.nodes;
+        }
+        if (Array.isArray(remote.edges)) {
+          setEdges(remote.edges);
+          edgesRef.current = remote.edges;
+        }
+        if (remote.title) {
+          setTitle(remote.title);
+          titleRef.current = remote.title;
+        }
+        if (remote.backgroundColor) {
+          setCanvasBgColor(remote.backgroundColor);
+          canvasBgColorRef.current = remote.backgroundColor;
+        }
+
+        const remoteTime = remote.updatedAt
+          ? new Date(remote.updatedAt).getTime()
+          : Date.now();
+        lastSyncedUpdatedAtRef.current = remoteTime;
+        hasUnsavedEditsRef.current = false;
+        setSaveStatus("saved");
+        setRemoteUpdateAvailable(false);
+
+        try {
+          if (typeof window !== "undefined") {
+            localStorage.setItem(
+              `taskflow_wb_cache_${activeId}`,
+              JSON.stringify({
+                title: remote.title,
+                nodes: remote.nodes,
+                edges: remote.edges,
+                backgroundColor: remote.backgroundColor,
+                savedAt: remoteTime,
+              })
+            );
+          }
+        } catch { }
+
+        showTemporaryToast(`Force Pull Successful: Loaded ${remote.nodes?.length || 0} objects from Global Cloud DB!`);
+      }
+    } catch (err: any) {
+      console.error("Force pull failed:", err);
+      showTemporaryToast("Force Pull Error: " + (err.message || "Failed"));
+    } finally {
+      setIsPulling(false);
+    }
+  }, [boardId, showTemporaryToast]);
+
+  // Background polling (every 5s) to detect parallel updates from another session / browser
+  useEffect(() => {
+    const checkRemoteUpdates = async () => {
+      const activeId = boardIdRef.current || boardId;
+      if (
+        !activeId ||
+        activeId === "default-org-chart" ||
+        activeId === "org-chart" ||
+        activeId === "default"
+      ) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/whiteboards/${activeId}?metaOnly=true`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const serverUpdatedAt = data?.meta?.updatedAt
+          ? new Date(data.meta.updatedAt).getTime()
+          : 0;
+
+        if (serverUpdatedAt > lastSyncedUpdatedAtRef.current + 1500) {
+          // The server has newer changes!
+          if (!hasUnsavedEditsRef.current && !isUserInteracting()) {
+            // No unsaved local changes and user is not currently dragging/resizing/typing:
+            // Auto-sync instantly in real-time without touching pan, zoom, or fullscreen!
+            await applyRemoteSync(activeId);
+          } else {
+            // Local changes exist or user is interacting: notify with Sync button
+            setRemoteUpdateAvailable(true);
+          }
+        } else {
+          setRemoteUpdateAvailable(false);
+        }
+      } catch { }
+    };
+
+    const syncInterval = setInterval(checkRemoteUpdates, 5000);
+    return () => clearInterval(syncInterval);
+  }, [boardId, isUserInteracting, applyRemoteSync]);
 
   // Hydrate from localStorage on initial load if local cache is valid
   useEffect(() => {
     try {
       if (typeof window !== "undefined") {
         const activeId = boardId || "default-org-chart";
-        const cacheKeys = [
-          `taskflow_wb_cache_${activeId}`,
-          "taskflow_wb_cache_default-org-chart",
-          "taskflow_wb_cache_org-chart",
-        ];
+        const isDefaultOrTemplate =
+          !activeId ||
+          activeId === "default-org-chart" ||
+          activeId === "org-chart" ||
+          activeId === "default" ||
+          !initialBoard.updatedAt;
+
+        const cacheKeys = isDefaultOrTemplate
+          ? [
+              `taskflow_wb_cache_${activeId}`,
+              "taskflow_wb_cache_default-org-chart",
+              "taskflow_wb_cache_org-chart",
+            ]
+          : [`taskflow_wb_cache_${activeId}`];
 
         let cached: any = null;
         for (const key of cacheKeys) {
@@ -789,7 +1161,27 @@ export default function WhiteboardCanvas({
           }
         }
 
-        if (cached) {
+        const initialTime = initialBoard.updatedAt
+          ? new Date(initialBoard.updatedAt).getTime()
+          : 0;
+        const initialNodesCount = Array.isArray(initialBoard.nodes) ? initialBoard.nodes.length : 0;
+        const cacheTime = cached?.savedAt || 0;
+        const cachedNodesCount = Array.isArray(cached?.nodes) ? cached.nodes.length : 0;
+
+        // Determine if server data takes priority over local cache:
+        // 1. If server has strictly more nodes than local cache, ALWAYS prefer server!
+        // 2. If server data was updated more recently than local cache, prefer server!
+        const preferServer =
+          !isDefaultOrTemplate &&
+          (initialNodesCount > cachedNodesCount || initialTime > cacheTime);
+
+        if (preferServer) {
+          lastSyncedUpdatedAtRef.current = initialTime;
+        } else if (cached) {
+          lastSyncedUpdatedAtRef.current = Math.max(initialTime, cacheTime);
+        }
+
+        if (cached && !preferServer) {
           // 1. Restore canvas background color if present in cache
           if (cached.backgroundColor) {
             setCanvasBgColor(cached.backgroundColor);
@@ -798,19 +1190,7 @@ export default function WhiteboardCanvas({
 
           // 2. Restore nodes, edges & title if cache exists
           if (Array.isArray(cached.nodes) && cached.nodes.length > 0) {
-            const initialTime = initialBoard.updatedAt
-              ? new Date(initialBoard.updatedAt).getTime()
-              : 0;
-            const cacheTime = cached.savedAt || 0;
-
-            const isDefaultOrTemplate =
-              !activeId ||
-              activeId === "default-org-chart" ||
-              activeId === "org-chart" ||
-              activeId === "default" ||
-              !initialBoard.updatedAt;
-
-            if (isDefaultOrTemplate || cacheTime >= initialTime - 5000) {
+            if (isDefaultOrTemplate || cacheTime >= initialTime) {
               setNodes(cached.nodes);
               nodesRef.current = cached.nodes;
               if (Array.isArray(cached.edges)) {
@@ -830,6 +1210,45 @@ export default function WhiteboardCanvas({
               historyIndexRef.current = 0;
             }
           }
+        } else if (preferServer && initialNodesCount > 0) {
+          // Ensure React state and refs are explicitly set to the richer server state
+          if (Array.isArray(initialBoard.nodes)) {
+            setNodes(initialBoard.nodes);
+            nodesRef.current = initialBoard.nodes;
+          }
+          if (Array.isArray(initialBoard.edges)) {
+            setEdges(initialBoard.edges);
+            edgesRef.current = initialBoard.edges;
+          }
+          if (initialBoard.title) {
+            setTitle(initialBoard.title);
+            titleRef.current = initialBoard.title;
+          }
+          if (initialBoard.backgroundColor) {
+            setCanvasBgColor(initialBoard.backgroundColor);
+            canvasBgColorRef.current = initialBoard.backgroundColor;
+          }
+          historyStackRef.current = [
+            {
+              nodes: JSON.parse(JSON.stringify(initialBoard.nodes || [])),
+              edges: JSON.parse(JSON.stringify(initialBoard.edges || [])),
+            },
+          ];
+          historyIndexRef.current = 0;
+
+          // Sync richer server state into localStorage cache so local cache is up to date
+          try {
+            localStorage.setItem(
+              `taskflow_wb_cache_${activeId}`,
+              JSON.stringify({
+                title: initialBoard.title,
+                nodes: initialBoard.nodes,
+                edges: initialBoard.edges,
+                backgroundColor: initialBoard.backgroundColor,
+                savedAt: Date.now(),
+              })
+            );
+          } catch { }
         }
       }
     } catch (err) {
@@ -837,9 +1256,9 @@ export default function WhiteboardCanvas({
     }
   }, [boardId, initialBoard.updatedAt]);
 
-  // Flush latest canvas state on page refresh or unload to guarantee zero data loss
+  // Exit protection: warn user if unsaved changes exist and flush keepalive save
   useEffect(() => {
-    const handleBeforeUnload = () => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       try {
         if (typeof window !== "undefined") {
           const activeId = boardIdRef.current || boardId || "default-org-chart";
@@ -852,21 +1271,31 @@ export default function WhiteboardCanvas({
           };
           const jsonSnap = JSON.stringify(snapshot);
           localStorage.setItem(`taskflow_wb_cache_${activeId}`, jsonSnap);
-          localStorage.setItem("taskflow_wb_cache_default-org-chart", jsonSnap);
-          localStorage.setItem("taskflow_wb_cache_org-chart", jsonSnap);
 
-          fetch(`/api/whiteboards/${activeId}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              title: titleRef.current,
-              nodes: nodesRef.current,
-              edges: edgesRef.current,
-              isFavorite,
-              backgroundColor: canvasBgColorRef.current,
-            }),
-            keepalive: true,
-          }).catch(() => { });
+          const isDefault =
+            activeId === "default-org-chart" ||
+            activeId === "org-chart" ||
+            activeId === "default";
+
+          if (isDefault) {
+            localStorage.setItem("taskflow_wb_cache_default-org-chart", jsonSnap);
+            localStorage.setItem("taskflow_wb_cache_org-chart", jsonSnap);
+          }
+
+          if (hasUnsavedEditsRef.current) {
+            // 1. Flush save to protect unsaved work on exit
+            fetch(`/api/whiteboards/${activeId}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: jsonSnap,
+              keepalive: true,
+            }).catch(() => { });
+
+            // 2. Prompt user before leaving
+            e.preventDefault();
+            e.returnValue = "You have unsaved whiteboard changes. Are you sure you want to leave?";
+            return e.returnValue;
+          }
         }
       } catch { }
     };
@@ -4349,28 +4778,118 @@ export default function WhiteboardCanvas({
           </div>
 
           {/* Auto-save telemetry status */}
-          <button
-            type="button"
-            onClick={() => {
-              triggerAutoSave(nodesRef.current, edgesRef.current, undefined, undefined, true);
-            }}
-            className="text-[10px] text-gray-500 hover:text-gray-300 flex items-center gap-1 font-mono cursor-pointer transition-colors"
-            title="Click to force immediate save"
-          >
+          <div className="text-[10px] text-gray-400 flex items-center gap-1 font-mono transition-colors">
             {saveStatus === "saving" ? (
-              <span className="text-amber-400">Saving...</span>
+              <span className="text-amber-400 flex items-center gap-1">
+                <Loader2 className="w-2.5 h-2.5 animate-spin" /> Saving to cloud...
+              </span>
             ) : saveStatus === "saved" ? (
               <span className="text-emerald-400 flex items-center gap-0.5">
                 <Check className="w-3 h-3" /> Saved
               </span>
             ) : (
-              <span className="text-gray-400">Unsaved edits (click to save)</span>
+              <span className="text-amber-300/80">Unsaved edits (auto-saves in 20s)</span>
             )}
-          </button>
+          </div>
         </div>
 
         {/* Header Right Tools */}
         <div className="flex items-center gap-2.5">
+          {/* Remote updates detected alert banner / button */}
+          {remoteUpdateAvailable && (
+            <button
+              onClick={() => applyRemoteSync()}
+              disabled={isSyncing}
+              className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/60 rounded-md transition-all animate-pulse shadow-sm"
+              title="Remote changes detected from another open session. Click to sync instantly without moving your canvas!"
+            >
+              <RefreshCcwIcon className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+              <span>Remote Updates Detected · Sync</span>
+            </button>
+          )}
+
+          {/* Push Button (Force Save local to Cloud DB) */}
+          <button
+            onClick={handleForcePush}
+            disabled={isPushing}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600/35 text-emerald-300 hover:text-emerald-200 border border-emerald-500/50 rounded-md transition-all shadow-xs cursor-pointer ${
+              isPushing ? "opacity-70 cursor-not-allowed" : ""
+            }`}
+            title="Push: Force save this local canvas (all objects) to the global cloud database"
+          >
+            {isPushing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-300" />
+            ) : (
+              <Upload className="w-3.5 h-3.5 text-emerald-400" />
+            )}
+            <span>{isPushing ? "Pushing..." : "Push"}</span>
+          </button>
+
+          {/* Pull Button (Force Load latest from Cloud DB) */}
+          <button
+            onClick={handleForcePull}
+            disabled={isPulling}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-[#202228] hover:bg-[#282B33] text-gray-300 hover:text-white border border-[#30333D] rounded-md transition-colors cursor-pointer ${
+              isPulling ? "opacity-70 cursor-not-allowed" : ""
+            }`}
+            title="Pull: Load latest objects from global cloud database into this canvas"
+          >
+            {isPulling ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-300" />
+            ) : (
+              <Download className="w-3.5 h-3.5 text-cyan-400" />
+            )}
+            <span>{isPulling ? "Pulling..." : "Pull"}</span>
+          </button>
+
+          {/* Sync Button */}
+          <button
+            onClick={() => applyRemoteSync()}
+            disabled={isSyncing}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-[#202228] hover:bg-[#282B33] text-gray-300 hover:text-white border border-[#30333D] rounded-md transition-colors ${
+              isSyncing ? "opacity-70 cursor-not-allowed" : ""
+            }`}
+            title="Sync latest changes from cloud (preserves canvas position & zoom without moving an inch)"
+          >
+            <RefreshCcwIcon className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin text-cyan-400" : ""}`} />
+            <span>{isSyncing ? "Syncing..." : "Sync"}</span>
+          </button>
+
+          {/* Manual Save Button */}
+          <button
+            onClick={() => triggerAutoSave(nodesRef.current, edgesRef.current, undefined, undefined, true)}
+            disabled={saveStatus === "saving"}
+            className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all shadow-xs ${
+              saveStatus === "unsaved"
+                ? "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/25 border border-blue-400/50 cursor-pointer"
+                : saveStatus === "saving"
+                ? "bg-amber-600/30 text-amber-200 border border-amber-500/40 cursor-not-allowed"
+                : "bg-[#202228] hover:bg-[#282B33] text-gray-300 border border-[#30333D] cursor-pointer"
+            }`}
+            title={
+              saveStatus === "unsaved"
+                ? "Unsaved modifications. Click to save now or auto-saves every 20s"
+                : "All modifications saved"
+            }
+          >
+            {saveStatus === "saving" ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-300" />
+                <span>Saving...</span>
+              </>
+            ) : saveStatus === "unsaved" ? (
+              <>
+                <Save className="w-3.5 h-3.5 text-white" />
+                <span>Save</span>
+              </>
+            ) : (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-emerald-400">Saved</span>
+              </>
+            )}
+          </button>
+
           {/* Author avatar from screenshot ("HS") */}
           <div
             className="w-7 h-7 rounded-full bg-[#2A2D36] border border-[#3A3D49] text-gray-200 font-bold text-[10px] flex items-center justify-center shadow-xs"
