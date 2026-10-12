@@ -27,13 +27,14 @@ export interface WhiteboardSecuritySettings {
   tempTokenPhrase?: string;
 }
 
-interface WhiteboardSettingsModalProps {
+export interface WhiteboardSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   board: WhiteboardSecuritySettings;
   onSaveSuccess?: (updated: WhiteboardSecuritySettings) => void;
 }
 
+export { WhiteboardSettingsModal };
 export default function WhiteboardSettingsModal({
   isOpen,
   onClose,

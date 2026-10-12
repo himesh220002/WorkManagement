@@ -33,7 +33,9 @@ import {
   Settings,
 } from "lucide-react";
 import { WHITEBOARD_TEMPLATES } from "@/lib/whiteboardTemplates";
-import WhiteboardSettingsModal from "./WhiteboardSettingsModal";
+import WhiteboardSettingsModal, {
+  WhiteboardSecuritySettings,
+} from "./WhiteboardSettingsModal";
 
 interface WhiteboardListItem {
   _id: string;
@@ -1020,8 +1022,8 @@ export default function WhiteboardsDashboardClient({
         <WhiteboardSettingsModal
           isOpen={Boolean(settingsModalBoard)}
           onClose={() => setSettingsModalBoard(null)}
-          board={settingsModalBoard as any}
-          onSaveSuccess={(updated) => {
+          board={settingsModalBoard}
+          onSaveSuccess={(updated: WhiteboardSecuritySettings) => {
             setWhiteboards((prev) =>
               prev.map((b) => (b._id === updated._id ? { ...b, ...updated } : b))
             );
