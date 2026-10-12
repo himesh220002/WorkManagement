@@ -127,7 +127,7 @@ export default function FormEditor({ initialForm, orgCode = "", onSaved }: FormE
     const duplicated: IFormQuestion = {
       ...targetQ,
       id: `q_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-      title: `${targetQ.title} (Copy)`,
+      title: `${targetQ.title}`,
     };
     const nextQuestions = [...form.questions];
     nextQuestions.splice(qIndex + 1, 0, duplicated);
@@ -724,8 +724,8 @@ export default function FormEditor({ initialForm, orgCode = "", onSaved }: FormE
                                     setPreviewAnswers({ ...previewAnswers, [q.id]: next });
                                   }}
                                   className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${isChecked
-                                      ? "bg-[#0078D4] text-white border-[#0078D4]"
-                                      : "bg-[#1E1E24] text-gray-300 border-[#2E2E36] hover:bg-[#282830]"
+                                    ? "bg-[#0078D4] text-white border-[#0078D4]"
+                                    : "bg-[#1E1E24] text-gray-300 border-[#2E2E36] hover:bg-[#282830]"
                                     }`}
                                 >
                                   {opt}

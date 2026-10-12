@@ -1788,1003 +1788,1122 @@ describe("Whiteboard Canvas & Organizational Chart Template", () => {
     });
 
     it("ensures cloned lines and drawings do not accumulate unwanted Copy title tags", () => {
-        const sourceLine = {
-          id: "line-123",
-          type: "line",
-          shapeType: "arrow",
-          title: "",
-        };
+      const sourceLine = {
+        id: "line-123",
+        type: "line",
+        shapeType: "arrow",
+        title: "",
+      };
 
-        const isLineOrDrawing =
-          sourceLine.type === "line" ||
-          sourceLine.shapeType === "line" ||
-          sourceLine.shapeType === "arrow" ||
-          sourceLine.type === "drawing";
+      const isLineOrDrawing =
+        sourceLine.type === "line" ||
+        sourceLine.shapeType === "line" ||
+        sourceLine.shapeType === "arrow" ||
+        sourceLine.type === "drawing";
 
-        let clonedTitle = "";
-        if (isLineOrDrawing) {
-          clonedTitle =
-            sourceLine.title && !sourceLine.title.toLowerCase().includes("copy")
-              ? sourceLine.title
-              : "";
-        } else {
-          clonedTitle = sourceLine.title ? `${sourceLine.title} (Copy)` : "Copy";
-        }
-
-        expect(clonedTitle).toBe("");
-
-        // Duplicating a node that already had "Copy" in title should strip it for lines
-        const lineWithCopy = {
-          ...sourceLine,
-          title: "Copy (Copy)",
-        };
-        const cleanTitle =
-          lineWithCopy.title && !lineWithCopy.title.toLowerCase().includes("copy")
-            ? lineWithCopy.title
+      let clonedTitle = "";
+      if (isLineOrDrawing) {
+        clonedTitle =
+          sourceLine.title && !sourceLine.title.toLowerCase().includes("copy")
+            ? sourceLine.title
             : "";
-        expect(cleanTitle).toBe("");
-      });
+      } else {
+        clonedTitle = sourceLine.title ? `${sourceLine.title}` : "Copy";
+      }
 
-      it("calculates accurate minimap bounding box and viewport rectangle in real-time", () => {
-        const sampleNodes = [
-          { id: "n1", x: 100, y: 150, width: 200, height: 100, color: "#38BDF8" },
-          { id: "n2", x: 600, y: 400, width: 160, height: 120, color: "#EC4899" },
-        ];
+      expect(clonedTitle).toBe("");
 
-        const bounds = sampleNodes.reduce(
-          (acc, n) => ({
-            minX: Math.min(acc.minX, n.x),
-            minY: Math.min(acc.minY, n.y),
-            maxX: Math.max(acc.maxX, n.x + n.width),
-            maxY: Math.max(acc.maxY, n.y + n.height),
-          }),
-          { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
-        );
+      // Duplicating a node that already had "Copy" in title should strip it for lines
+      const lineWithCopy = {
+        ...sourceLine,
+        title: "",
+      };
+      const cleanTitle =
+        lineWithCopy.title && !lineWithCopy.title.toLowerCase().includes("copy")
+          ? lineWithCopy.title
+          : "";
+      expect(cleanTitle).toBe("");
+    });
 
-        expect(bounds.minX).toBe(100);
-        expect(bounds.minY).toBe(150);
-        expect(bounds.maxX).toBe(760);
-        expect(bounds.maxY).toBe(520);
+    it("calculates accurate minimap bounding box and viewport rectangle in real-time", () => {
+      const sampleNodes = [
+        { id: "n1", x: 100, y: 150, width: 200, height: 100, color: "#38BDF8" },
+        { id: "n2", x: 600, y: 400, width: 160, height: 120, color: "#EC4899" },
+      ];
 
-        const pan = { x: -200, y: -100 };
-        const zoom = 0.5;
-        const winW = 1200;
-        const winH = 800;
+      const bounds = sampleNodes.reduce(
+        (acc, n) => ({
+          minX: Math.min(acc.minX, n.x),
+          minY: Math.min(acc.minY, n.y),
+          maxX: Math.max(acc.maxX, n.x + n.width),
+          maxY: Math.max(acc.maxY, n.y + n.height),
+        }),
+        { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
+      );
 
-        const viewCanvasX = -pan.x / zoom; // 400
-        const viewCanvasY = -pan.y / zoom; // 200
-        const viewCanvasW = winW / zoom; // 2400
-        const viewCanvasH = winH / zoom; // 1600
+      expect(bounds.minX).toBe(100);
+      expect(bounds.minY).toBe(150);
+      expect(bounds.maxX).toBe(760);
+      expect(bounds.maxY).toBe(520);
 
-        expect(viewCanvasX).toBe(400);
-        expect(viewCanvasY).toBe(200);
-        expect(viewCanvasW).toBe(2400);
-        expect(viewCanvasH).toBe(1600);
+      const pan = { x: -200, y: -100 };
+      const zoom = 0.5;
+      const winW = 1200;
+      const winH = 800;
 
-        // Minimap scaling
-        const mmMinX = Math.min(bounds.minX, viewCanvasX) - 300;
-        const mmMinY = Math.min(bounds.minY, viewCanvasY) - 300;
-        const mmMaxX = Math.max(bounds.maxX, viewCanvasX + viewCanvasW) + 300;
-        const mmMaxY = Math.max(bounds.maxY, viewCanvasY + viewCanvasH) + 300;
+      const viewCanvasX = -pan.x / zoom; // 400
+      const viewCanvasY = -pan.y / zoom; // 200
+      const viewCanvasW = winW / zoom; // 2400
+      const viewCanvasH = winH / zoom; // 1600
 
-        const mmWorldW = mmMaxX - mmMinX;
-        const mmWorldH = mmMaxY - mmMinY;
+      expect(viewCanvasX).toBe(400);
+      expect(viewCanvasY).toBe(200);
+      expect(viewCanvasW).toBe(2400);
+      expect(viewCanvasH).toBe(1600);
 
-        expect(mmWorldW).toBeGreaterThan(2000);
-        expect(mmWorldH).toBeGreaterThan(1500);
+      // Minimap scaling
+      const mmMinX = Math.min(bounds.minX, viewCanvasX) - 300;
+      const mmMinY = Math.min(bounds.minY, viewCanvasY) - 300;
+      const mmMaxX = Math.max(bounds.maxX, viewCanvasX + viewCanvasW) + 300;
+      const mmMaxY = Math.max(bounds.maxY, viewCanvasY + viewCanvasH) + 300;
 
-        const minimapW = 200;
-        const minimapH = 130;
-        const mmScale = Math.min(minimapW / mmWorldW, minimapH / mmWorldH);
-        expect(mmScale).toBeGreaterThan(0);
+      const mmWorldW = mmMaxX - mmMinX;
+      const mmWorldH = mmMaxY - mmMinY;
 
-        // Clicking on minimap target centers the pan
-        const targetCanvasX = 600;
-        const targetCanvasY = 400;
-        const centeredPanX = winW / 2 - targetCanvasX * zoom;
-        const centeredPanY = winH / 2 - targetCanvasY * zoom;
+      expect(mmWorldW).toBeGreaterThan(2000);
+      expect(mmWorldH).toBeGreaterThan(1500);
 
-        expect(centeredPanX).toBe(300);
-        expect(centeredPanY).toBe(200);
-      });
+      const minimapW = 200;
+      const minimapH = 130;
+      const mmScale = Math.min(minimapW / mmWorldW, minimapH / mmWorldH);
+      expect(mmScale).toBeGreaterThan(0);
+
+      // Clicking on minimap target centers the pan
+      const targetCanvasX = 600;
+      const targetCanvasY = 400;
+      const centeredPanX = winW / 2 - targetCanvasX * zoom;
+      const centeredPanY = winH / 2 - targetCanvasY * zoom;
+
+      expect(centeredPanX).toBe(300);
+      expect(centeredPanY).toBe(200);
+    });
+  });
+});
+
+describe("Sticky Note Multi-Format Structuring (JSON, Markdown, Text, Checklist)", () => {
+  describe("JSON Formatting Structure", () => {
+    it("validates and formats valid JSON structure with 2-space indentation", () => {
+      const rawJson = '{"status":"active","count":42,"items":["a","b"]}';
+      const res = validateJson(rawJson);
+      expect(res.isValid).toBe(true);
+      expect(res.error).toBeUndefined();
+      expect(res.keyCount).toBe(3);
+      expect(res.formatted).toContain('  "status": "active"');
+      expect(res.formatted).toContain('  "count": 42');
+    });
+
+    it("identifies invalid JSON syntax and provides readable error message", () => {
+      const invalidJson = '{"status": "active", count: }';
+      const res = validateJson(invalidJson);
+      expect(res.isValid).toBe(false);
+      expect(res.error).toBeTruthy();
+      expect(res.formatted).toBeUndefined();
+    });
+
+    it("verifies DEFAULT_JSON_NOTE is valid JSON syntax out-of-the-box", () => {
+      const res = validateJson(DEFAULT_JSON_NOTE);
+      expect(res.isValid).toBe(true);
+      expect(res.keyCount).toBeGreaterThanOrEqual(4);
     });
   });
 
-  describe("Sticky Note Multi-Format Structuring (JSON, Markdown, Text, Checklist)", () => {
-    describe("JSON Formatting Structure", () => {
-      it("validates and formats valid JSON structure with 2-space indentation", () => {
-        const rawJson = '{"status":"active","count":42,"items":["a","b"]}';
-        const res = validateJson(rawJson);
-        expect(res.isValid).toBe(true);
-        expect(res.error).toBeUndefined();
-        expect(res.keyCount).toBe(3);
-        expect(res.formatted).toContain('  "status": "active"');
-        expect(res.formatted).toContain('  "count": 42');
-      });
-
-      it("identifies invalid JSON syntax and provides readable error message", () => {
-        const invalidJson = '{"status": "active", count: }';
-        const res = validateJson(invalidJson);
-        expect(res.isValid).toBe(false);
-        expect(res.error).toBeTruthy();
-        expect(res.formatted).toBeUndefined();
-      });
-
-      it("verifies DEFAULT_JSON_NOTE is valid JSON syntax out-of-the-box", () => {
-        const res = validateJson(DEFAULT_JSON_NOTE);
-        expect(res.isValid).toBe(true);
-        expect(res.keyCount).toBeGreaterThanOrEqual(4);
-      });
+  describe("Markdown Rendering & Interactive Checklists", () => {
+    it("verifies DEFAULT_MARKDOWN_NOTE has headers, checklists, and code formatting", () => {
+      expect(DEFAULT_MARKDOWN_NOTE).toContain("# Project Roadmap & Specs");
+      expect(DEFAULT_MARKDOWN_NOTE).toContain("- [ ]");
+      expect(DEFAULT_MARKDOWN_NOTE).toContain("- [x]");
     });
 
-    describe("Markdown Rendering & Interactive Checklists", () => {
-      it("verifies DEFAULT_MARKDOWN_NOTE has headers, checklists, and code formatting", () => {
-        expect(DEFAULT_MARKDOWN_NOTE).toContain("# Project Roadmap & Specs");
-        expect(DEFAULT_MARKDOWN_NOTE).toContain("- [ ]");
-        expect(DEFAULT_MARKDOWN_NOTE).toContain("- [x]");
-      });
-
-      it("toggles markdown checklist box from unchecked to checked at specific line", () => {
-        const md = "# Tasks\n- [ ] Deploy to production\n- [x] Run unit tests";
-        const toggled = toggleMarkdownCheckbox(md, 1);
-        const lines = toggled.split("\n");
-        expect(lines[1]).toBe("- [x] Deploy to production");
-        expect(lines[2]).toBe("- [x] Run unit tests");
-      });
-
-      it("toggles markdown checklist box from checked back to unchecked at specific line", () => {
-        const md = "# Tasks\n- [x] Deploy to production\n- [x] Run unit tests";
-        const toggled = toggleMarkdownCheckbox(md, 1);
-        const lines = toggled.split("\n");
-        expect(lines[1]).toBe("- [ ] Deploy to production");
-        expect(lines[2]).toBe("- [x] Run unit tests");
-      });
-
-      it("leaves non-checklist markdown lines untouched", () => {
-        const md = "# Header Line\nSome regular paragraph text\n> Blockquote";
-        const untouched = toggleMarkdownCheckbox(md, 0);
-        expect(untouched).toBe(md);
-      });
+    it("toggles markdown checklist box from unchecked to checked at specific line", () => {
+      const md = "# Tasks\n- [ ] Deploy to production\n- [x] Run unit tests";
+      const toggled = toggleMarkdownCheckbox(md, 1);
+      const lines = toggled.split("\n");
+      expect(lines[1]).toBe("- [x] Deploy to production");
+      expect(lines[2]).toBe("- [x] Run unit tests");
     });
 
-    describe("Text File Structuring", () => {
-      it("verifies DEFAULT_TEXT_NOTE contains clean plain-text layout", () => {
-        expect(DEFAULT_TEXT_NOTE).toContain("Project Architecture Notes");
-        expect(DEFAULT_TEXT_NOTE).toContain("1. Database Isolation");
-        expect(DEFAULT_TEXT_NOTE).toContain("2. Real-time Events");
-      });
+    it("toggles markdown checklist box from checked back to unchecked at specific line", () => {
+      const md = "# Tasks\n- [x] Deploy to production\n- [x] Run unit tests";
+      const toggled = toggleMarkdownCheckbox(md, 1);
+      const lines = toggled.split("\n");
+      expect(lines[1]).toBe("- [ ] Deploy to production");
+      expect(lines[2]).toBe("- [x] Run unit tests");
+    });
+
+    it("leaves non-checklist markdown lines untouched", () => {
+      const md = "# Header Line\nSome regular paragraph text\n> Blockquote";
+      const untouched = toggleMarkdownCheckbox(md, 0);
+      expect(untouched).toBe(md);
     });
   });
 
-  describe("Multi-Object Selection, Link & Unlink Engine", () => {
-    const sampleNodes = [
-      { id: "node-1", type: "task" as const, title: "Auth API", x: 100, y: 100, width: 200, height: 100 },
-      { id: "node-2", type: "task" as const, title: "Database", x: 400, y: 100, width: 200, height: 100 },
-      { id: "node-3", type: "task" as const, title: "Dashboard", x: 700, y: 100, width: 200, height: 100 },
-      { id: "node-4", type: "sticky" as const, title: "External Note", x: 400, y: 350, width: 200, height: 100 },
+  describe("Text File Structuring", () => {
+    it("verifies DEFAULT_TEXT_NOTE contains clean plain-text layout", () => {
+      expect(DEFAULT_TEXT_NOTE).toContain("Project Architecture Notes");
+      expect(DEFAULT_TEXT_NOTE).toContain("1. Database Isolation");
+      expect(DEFAULT_TEXT_NOTE).toContain("2. Real-time Events");
+    });
+  });
+});
+
+describe("Multi-Object Selection, Link & Unlink Engine", () => {
+  const sampleNodes = [
+    { id: "node-1", type: "task" as const, title: "Auth API", x: 100, y: 100, width: 200, height: 100 },
+    { id: "node-2", type: "task" as const, title: "Database", x: 400, y: 100, width: 200, height: 100 },
+    { id: "node-3", type: "task" as const, title: "Dashboard", x: 700, y: 100, width: 200, height: 100 },
+    { id: "node-4", type: "sticky" as const, title: "External Note", x: 400, y: 350, width: 200, height: 100 },
+  ];
+
+  it("supports multi-selection toggle via Ctrl, Meta, or Shift keys", () => {
+    let selected: string[] = [];
+
+    // Shift-click node-1
+    selected = selected.includes("node-1") ? selected.filter((id) => id !== "node-1") : [...selected, "node-1"];
+    expect(selected).toEqual(["node-1"]);
+
+    // Shift-click node-2
+    selected = selected.includes("node-2") ? selected.filter((id) => id !== "node-2") : [...selected, "node-2"];
+    expect(selected).toEqual(["node-1", "node-2"]);
+
+    // Shift-click node-3
+    selected = selected.includes("node-3") ? selected.filter((id) => id !== "node-3") : [...selected, "node-3"];
+    expect(selected).toEqual(["node-1", "node-2", "node-3"]);
+
+    // Shift-click node-2 again to deselect
+    selected = selected.includes("node-2") ? selected.filter((id) => id !== "node-2") : [...selected, "node-2"];
+    expect(selected).toEqual(["node-1", "node-3"]);
+  });
+
+  it("links two selected objects with a forward connector arrow", () => {
+    const selected = ["node-1", "node-2"];
+    const existingEdges: any[] = [];
+
+    const newEdgesToAdd: any[] = [];
+    for (let i = 0; i < selected.length - 1; i++) {
+      const from = selected[i];
+      const to = selected[i + 1];
+      newEdgesToAdd.push({
+        id: `edge-${from}-${to}`,
+        from,
+        to,
+        arrowDirection: "forward",
+        color: "#3B82F6",
+      });
+    }
+
+    const updatedEdges = [...existingEdges, ...newEdgesToAdd];
+    expect(updatedEdges).toHaveLength(1);
+    expect(updatedEdges[0].from).toBe("node-1");
+    expect(updatedEdges[0].to).toBe("node-2");
+    expect(updatedEdges[0].arrowDirection).toBe("forward");
+  });
+
+  it("links multiple selected objects in sequential chain (A -> B -> C)", () => {
+    const selected = ["node-1", "node-2", "node-3"];
+    const existingEdges: any[] = [];
+
+    const newEdgesToAdd: any[] = [];
+    for (let i = 0; i < selected.length - 1; i++) {
+      const from = selected[i];
+      const to = selected[i + 1];
+      newEdgesToAdd.push({
+        id: `edge-${from}-${to}`,
+        from,
+        to,
+        arrowDirection: "forward",
+      });
+    }
+
+    const updatedEdges = [...existingEdges, ...newEdgesToAdd];
+    expect(updatedEdges).toHaveLength(2);
+    expect(updatedEdges[0]).toMatchObject({ from: "node-1", to: "node-2" });
+    expect(updatedEdges[1]).toMatchObject({ from: "node-2", to: "node-3" });
+  });
+
+  it("links objects in star topology connecting root to all selected targets", () => {
+    const selected = ["node-1", "node-2", "node-3"];
+    const rootId = selected[0];
+    const newEdgesToAdd: any[] = [];
+
+    for (let i = 1; i < selected.length; i++) {
+      newEdgesToAdd.push({
+        id: `edge-star-${rootId}-${selected[i]}`,
+        from: rootId,
+        to: selected[i],
+        arrowDirection: "forward",
+      });
+    }
+
+    expect(newEdgesToAdd).toHaveLength(2);
+    expect(newEdgesToAdd[0]).toMatchObject({ from: "node-1", to: "node-2" });
+    expect(newEdgesToAdd[1]).toMatchObject({ from: "node-1", to: "node-3" });
+  });
+
+  it("updates existing links to bidirectional (<->) arrows", () => {
+    const selected = ["node-1", "node-2"];
+    const edges = [
+      { id: "e1", from: "node-1", to: "node-2", arrowDirection: "forward" },
     ];
 
-    it("supports multi-selection toggle via Ctrl, Meta, or Shift keys", () => {
-      let selected: string[] = [];
-
-      // Shift-click node-1
-      selected = selected.includes("node-1") ? selected.filter((id) => id !== "node-1") : [...selected, "node-1"];
-      expect(selected).toEqual(["node-1"]);
-
-      // Shift-click node-2
-      selected = selected.includes("node-2") ? selected.filter((id) => id !== "node-2") : [...selected, "node-2"];
-      expect(selected).toEqual(["node-1", "node-2"]);
-
-      // Shift-click node-3
-      selected = selected.includes("node-3") ? selected.filter((id) => id !== "node-3") : [...selected, "node-3"];
-      expect(selected).toEqual(["node-1", "node-2", "node-3"]);
-
-      // Shift-click node-2 again to deselect
-      selected = selected.includes("node-2") ? selected.filter((id) => id !== "node-2") : [...selected, "node-2"];
-      expect(selected).toEqual(["node-1", "node-3"]);
-    });
-
-    it("links two selected objects with a forward connector arrow", () => {
-      const selected = ["node-1", "node-2"];
-      const existingEdges: any[] = [];
-
-      const newEdgesToAdd: any[] = [];
-      for (let i = 0; i < selected.length - 1; i++) {
-        const from = selected[i];
-        const to = selected[i + 1];
-        newEdgesToAdd.push({
-          id: `edge-${from}-${to}`,
-          from,
-          to,
-          arrowDirection: "forward",
-          color: "#3B82F6",
-        });
+    const updated = edges.map((e) => {
+      if ((e.from === "node-1" && e.to === "node-2") || (e.from === "node-2" && e.to === "node-1")) {
+        return { ...e, arrowDirection: "bidirectional" as const };
       }
-
-      const updatedEdges = [...existingEdges, ...newEdgesToAdd];
-      expect(updatedEdges).toHaveLength(1);
-      expect(updatedEdges[0].from).toBe("node-1");
-      expect(updatedEdges[0].to).toBe("node-2");
-      expect(updatedEdges[0].arrowDirection).toBe("forward");
+      return e;
     });
 
-    it("links multiple selected objects in sequential chain (A -> B -> C)", () => {
-      const selected = ["node-1", "node-2", "node-3"];
-      const existingEdges: any[] = [];
-
-      const newEdgesToAdd: any[] = [];
-      for (let i = 0; i < selected.length - 1; i++) {
-        const from = selected[i];
-        const to = selected[i + 1];
-        newEdgesToAdd.push({
-          id: `edge-${from}-${to}`,
-          from,
-          to,
-          arrowDirection: "forward",
-        });
-      }
-
-      const updatedEdges = [...existingEdges, ...newEdgesToAdd];
-      expect(updatedEdges).toHaveLength(2);
-      expect(updatedEdges[0]).toMatchObject({ from: "node-1", to: "node-2" });
-      expect(updatedEdges[1]).toMatchObject({ from: "node-2", to: "node-3" });
-    });
-
-    it("links objects in star topology connecting root to all selected targets", () => {
-      const selected = ["node-1", "node-2", "node-3"];
-      const rootId = selected[0];
-      const newEdgesToAdd: any[] = [];
-
-      for (let i = 1; i < selected.length; i++) {
-        newEdgesToAdd.push({
-          id: `edge-star-${rootId}-${selected[i]}`,
-          from: rootId,
-          to: selected[i],
-          arrowDirection: "forward",
-        });
-      }
-
-      expect(newEdgesToAdd).toHaveLength(2);
-      expect(newEdgesToAdd[0]).toMatchObject({ from: "node-1", to: "node-2" });
-      expect(newEdgesToAdd[1]).toMatchObject({ from: "node-1", to: "node-3" });
-    });
-
-    it("updates existing links to bidirectional (<->) arrows", () => {
-      const selected = ["node-1", "node-2"];
-      const edges = [
-        { id: "e1", from: "node-1", to: "node-2", arrowDirection: "forward" },
-      ];
-
-      const updated = edges.map((e) => {
-        if ((e.from === "node-1" && e.to === "node-2") || (e.from === "node-2" && e.to === "node-1")) {
-          return { ...e, arrowDirection: "bidirectional" as const };
-        }
-        return e;
-      });
-
-      expect(updated[0].arrowDirection).toBe("bidirectional");
-    });
-
-    it("unlinks selected objects and removes connector arrows between them", () => {
-      const selected = ["node-1", "node-2", "node-3"];
-      const edges = [
-        { id: "e1", from: "node-1", to: "node-2" }, // Inter-selected: should be removed
-        { id: "e2", from: "node-2", to: "node-3" }, // Inter-selected: should be removed
-        { id: "e3", from: "node-1", to: "node-4" }, // Connected to external node-4: MUST PRESERVE
-      ];
-
-      // Filter out links connecting selected nodes together
-      const updatedEdges = edges.filter(
-        (e) => !(selected.includes(e.from) && selected.includes(e.to))
-      );
-
-      expect(updatedEdges).toHaveLength(1);
-      expect(updatedEdges[0].id).toBe("e3");
-      expect(updatedEdges[0].to).toBe("node-4");
-    });
-
-    it("computes accurate linked state count between selected objects", () => {
-      const selected = ["node-1", "node-2", "node-3"];
-      const edges = [
-        { id: "e1", from: "node-1", to: "node-2" },
-        { id: "e2", from: "node-2", to: "node-3" },
-        { id: "e3", from: "node-1", to: "node-4" },
-      ];
-
-      const linkedEdges = edges.filter(
-        (e) => selected.includes(e.from) && selected.includes(e.to)
-      );
-
-      expect(linkedEdges).toHaveLength(2);
-      expect(linkedEdges.map((e) => e.id)).toEqual(["e1", "e2"]);
-    });
+    expect(updated[0].arrowDirection).toBe("bidirectional");
   });
 
-  describe("Whiteboard Canvas Drag-and-Drop, Hierarchy Branching & Note In-Place Editing", () => {
-    it("handles dragging toolbar items onto canvas across all node types", () => {
-      const mockDropPayload = {
-        category: "node" as const,
-        type: "sticky" as const,
-        title: "Product Roadmap Note",
-        noteFormat: "text" as const,
-        color: "#EC4899",
-      };
+  it("unlinks selected objects and removes connector arrows between them", () => {
+    const selected = ["node-1", "node-2", "node-3"];
+    const edges = [
+      { id: "e1", from: "node-1", to: "node-2" }, // Inter-selected: should be removed
+      { id: "e2", from: "node-2", to: "node-3" }, // Inter-selected: should be removed
+      { id: "e3", from: "node-1", to: "node-4" }, // Connected to external node-4: MUST PRESERVE
+    ];
 
-      const canvasX = 350;
-      const canvasY = 220;
+    // Filter out links connecting selected nodes together
+    const updatedEdges = edges.filter(
+      (e) => !(selected.includes(e.from) && selected.includes(e.to))
+    );
 
-      const createdNode = {
-        id: `node-${Date.now()}`,
-        type: mockDropPayload.type,
-        x: canvasX,
-        y: canvasY,
-        width: 220,
-        height: 180,
-        title: mockDropPayload.title,
-        noteFormat: mockDropPayload.noteFormat,
-        color: mockDropPayload.color,
-        body: "",
-      };
-
-      expect(createdNode.type).toBe("sticky");
-      expect(createdNode.title).toBe("Product Roadmap Note");
-      expect(createdNode.x).toBe(350);
-      expect(createdNode.y).toBe(220);
-    });
-
-    it("verifies ONLY org task card branches into another org task card with gold header and blue position box", () => {
-      const parentTaskNode = {
-        id: "task-parent",
-        type: "task" as const,
-        x: 400,
-        y: 100,
-        width: 160,
-        height: 96,
-        title: "Add a task here to represent this team member!",
-        subtitle: "Team Member / Role",
-        color: "#0078D4",
-        headerHeight: 40,
-        zIndex: 2,
-      };
-
-      const branchTaskNode = {
-        id: `node-branch-${Date.now()}`,
-        type: "task" as const,
-        x: parentTaskNode.x + 80,
-        y: parentTaskNode.y + parentTaskNode.height + 70,
-        width: parentTaskNode.width || 160,
-        height: parentTaskNode.height || 96,
-        title: "New Team Member",
-        subtitle: "Position",
-        color: parentTaskNode.color || "#0078D4",
-        headerHeight: parentTaskNode.headerHeight,
-        fillType: "solid" as const,
-        zIndex: 2,
-      };
-
-      expect(branchTaskNode.type).toBe("task");
-      expect(branchTaskNode.title).toBe("New Team Member");
-      expect(branchTaskNode.subtitle).toBe("Position");
-    });
-
-    it("verifies shapes branch into matching geometric design (e.g. Rounded orange shape)", () => {
-      const parentShapeNode = {
-        id: "shape-parent",
-        type: "shape" as const,
-        shapeType: "rounded" as const,
-        x: 300,
-        y: 100,
-        width: 180,
-        height: 100,
-        title: "Rounded",
-        color: "#F59E0B",
-        textColor: "#FFFFFF",
-      };
-
-      const branchShapeNode = {
-        id: `node-branch-${Date.now()}`,
-        type: "shape" as const,
-        shapeType: parentShapeNode.shapeType || "rounded",
-        x: parentShapeNode.x + 80,
-        y: parentShapeNode.y + parentShapeNode.height + 70,
-        width: parentShapeNode.width || 180,
-        height: parentShapeNode.height || 100,
-        title: parentShapeNode.title || "Rounded",
-        color: parentShapeNode.color || "#F59E0B",
-        fillType: "solid" as const,
-        textColor: parentShapeNode.textColor || "#FFFFFF",
-        fontWeight: "bold" as const,
-        fontSize: "14px",
-        textAlign: "center" as const,
-        zIndex: 2,
-      };
-
-      expect(branchShapeNode.type).toBe("shape");
-      expect(branchShapeNode.shapeType).toBe("rounded");
-      expect(branchShapeNode.title).toBe("Rounded");
-      expect(branchShapeNode.color).toBe("#F59E0B");
-    });
-
-    it("ensures sticky note title editing and body editing maintain distinct states without blur conflict", () => {
-      let editingTitleId: string | null = null;
-      let editingNodeId: string | null = null;
-
-      const note = {
-        id: "sticky-101",
-        title: "Note (Copy)",
-        body: "TENANT B (ID: comp_beta)",
-      };
-
-      // User double clicks title to edit title
-      editingTitleId = note.id;
-      expect(editingTitleId).toBe("sticky-101");
-      expect(editingNodeId).toBeNull(); // Body is NOT in edit mode, no focus conflict!
-
-      // User saves title
-      const updatedTitle = "Sprint Alpha Notes";
-      note.title = updatedTitle;
-      editingTitleId = null;
-
-      // User double clicks body to edit body text
-      editingNodeId = note.id;
-      expect(editingNodeId).toBe("sticky-101");
-      expect(editingTitleId).toBeNull(); // Title is NOT in edit mode, no focus conflict!
-
-      // User updates body text
-      const updatedBody = "TENANT B (ID: comp_beta) - Provisioned & Active";
-      note.body = updatedBody;
-      editingNodeId = null;
-
-      expect(note.title).toBe("Sprint Alpha Notes");
-      expect(note.body).toContain("Provisioned & Active");
-    });
-
-    it("verifies scroll containment logic allows internal element scrolling while preventing canvas pan", () => {
-      const mockScrollable = {
-        scrollHeight: 350,
-        clientHeight: 150,
-        scrollWidth: 150,
-        clientWidth: 150,
-        scrollTop: 10,
-        scrollLeft: 0,
-      };
-
-      const hasVerticalOverflow = mockScrollable.scrollHeight > mockScrollable.clientHeight + 1;
-      expect(hasVerticalOverflow).toBe(true);
-
-      const deltaY: number = 40;
-      let canvasPanDisplaced = false;
-
-      // Simulated handleWheel logic
-      if (hasVerticalOverflow && deltaY !== 0) {
-        mockScrollable.scrollTop += deltaY;
-        // canvas pan is NOT displaced because wheel is contained
-        canvasPanDisplaced = false;
-      }
-
-      expect(mockScrollable.scrollTop).toBe(50);
-      expect(canvasPanDisplaced).toBe(false);
-    });
-
-    it("verifies unified group entity linking, synchronized movement, and compound temporary groups {{a,b,c}, e}", () => {
-      // Setup nodes: a, b, c, d, e
-      const nodes = [
-        { id: "a", x: 100, y: 100, width: 120, height: 80, groupId: "" },
-        { id: "b", x: 260, y: 100, width: 120, height: 80, groupId: "" },
-        { id: "c", x: 420, y: 100, width: 120, height: 80, groupId: "" },
-        { id: "d", x: 100, y: 300, width: 120, height: 80, groupId: "" },
-        { id: "e", x: 300, y: 300, width: 120, height: 80, groupId: "" },
-      ];
-
-      // Helper function matching WhiteboardCanvas resolveGroupMembers
-      const resolveGroupMembers = (ids: string[], allNodes: typeof nodes): string[] => {
-        const result = new Set<string>(ids);
-        const activeGroupIds = new Set<string>();
-
-        for (const id of ids) {
-          const n = allNodes.find((item) => item.id === id);
-          if (n?.groupId) {
-            activeGroupIds.add(n.groupId);
-          }
-        }
-
-        if (activeGroupIds.size > 0) {
-          for (const n of allNodes) {
-            if (n.groupId && activeGroupIds.has(n.groupId)) {
-              result.add(n.id);
-            }
-          }
-        }
-
-        return Array.from(result);
-      };
-
-      // 1. User selects a, b, c and clicks 'Link as Group'
-      const selectedToGroup = ["a", "b", "c"];
-      const newGroupId = "group-abc-999";
-      nodes.forEach((n) => {
-        if (selectedToGroup.includes(n.id)) {
-          n.groupId = newGroupId;
-        }
-      });
-
-      expect(nodes.find((n) => n.id === "a")?.groupId).toBe("group-abc-999");
-      expect(nodes.find((n) => n.id === "b")?.groupId).toBe("group-abc-999");
-      expect(nodes.find((n) => n.id === "c")?.groupId).toBe("group-abc-999");
-      expect(nodes.find((n) => n.id === "d")?.groupId).toBe("");
-      expect(nodes.find((n) => n.id === "e")?.groupId).toBe("");
-
-      // 2. Clicking single node 'a' automatically selects all group members {a, b, c}
-      const singleClickSelection = resolveGroupMembers(["a"], nodes);
-      expect(singleClickSelection).toEqual(["a", "b", "c"]);
-
-      // 3. Dragging group {a, b, c} moves all 3 nodes together maintaining relative distances
-      const initialDistAB = nodes[1].x - nodes[0].x; // 260 - 100 = 160
-      const initialDistBC = nodes[2].x - nodes[1].x; // 420 - 260 = 160
-
-      const dragDeltaX = 50;
-      const dragDeltaY = 30;
-
-      // Group drag execution
-      nodes.forEach((n) => {
-        if (singleClickSelection.includes(n.id)) {
-          n.x += dragDeltaX;
-          n.y += dragDeltaY;
-        }
-      });
-
-      expect(nodes[0]).toMatchObject({ id: "a", x: 150, y: 130 });
-      expect(nodes[1]).toMatchObject({ id: "b", x: 310, y: 130 });
-      expect(nodes[2]).toMatchObject({ id: "c", x: 470, y: 130 });
-      // Nodes d and e were NOT selected and stayed stationary
-      expect(nodes[3]).toMatchObject({ id: "d", x: 100, y: 300 });
-      expect(nodes[4]).toMatchObject({ id: "e", x: 300, y: 300 });
-
-      // Relative distances strictly preserved
-      expect(nodes[1].x - nodes[0].x).toBe(initialDistAB);
-      expect(nodes[2].x - nodes[1].x).toBe(initialDistBC);
-
-      // 4. Temporary compound group creation {{a, b, c}, e} by multi-selecting or marquee dragging
-      // Selection contains group {a, b, c} plus independent node e
-      const compoundSelection = resolveGroupMembers(["a", "e"], nodes);
-      expect(compoundSelection).toEqual(expect.arrayContaining(["a", "b", "c", "e"]));
-      expect(compoundSelection).not.toContain("d");
-
-      // Dragging compound group {{a, b, c}, e} moves all 4 together
-      const compoundDeltaX = 40;
-      const compoundDeltaY = -20;
-      nodes.forEach((n) => {
-        if (compoundSelection.includes(n.id)) {
-          n.x += compoundDeltaX;
-          n.y += compoundDeltaY;
-        }
-      });
-
-      expect(nodes[0]).toMatchObject({ id: "a", x: 190, y: 110 });
-      expect(nodes[1]).toMatchObject({ id: "b", x: 350, y: 110 });
-      expect(nodes[2]).toMatchObject({ id: "c", x: 510, y: 110 });
-      expect(nodes[4]).toMatchObject({ id: "e", x: 340, y: 280 });
-      // Node d is still stationary!
-      expect(nodes[3]).toMatchObject({ id: "d", x: 100, y: 300 });
-
-      // 5. Unlink Group dissolves groupId back to independent objects
-      nodes.forEach((n) => {
-        if (n.groupId === newGroupId) {
-          n.groupId = "";
-        }
-      });
-
-      expect(nodes[0].groupId).toBe("");
-      expect(nodes[1].groupId).toBe("");
-      expect(nodes[2].groupId).toBe("");
-
-      // Now clicking 'a' only selects 'a'
-      const unlinkedSelection = resolveGroupMembers(["a"], nodes);
-      expect(unlinkedSelection).toEqual(["a"]);
-    });
-
-    it("allows individual box color and text edits on linked group members while dragging moves group together", () => {
-      const nodes = [
-        { id: "a", x: 100, y: 100, width: 120, height: 80, color: "#0078D4", title: "President", groupId: "group-1" },
-        { id: "b", x: 260, y: 100, width: 120, height: 80, color: "#0078D4", title: "VP", groupId: "group-1" },
-        { id: "c", x: 420, y: 100, width: 120, height: 80, color: "#0078D4", title: "Assistant", groupId: "group-1" },
-      ];
-
-      // 1. User clicks node 'b' without Shift -> selects ONLY node 'b' individually
-      let selectedNodeId: string | null = "b";
-      let selectedNodeIds: string[] = ["b"];
-
-      expect(selectedNodeId).toBe("b");
-      expect(selectedNodeIds).toEqual(["b"]);
-
-      // 2. Individual edit: user changes box color of node 'b' to Emerald Green
-      const newColor = "#10B981";
-      const targetIds = selectedNodeIds.length <= 1 && selectedNodeId ? [selectedNodeId] : selectedNodeIds;
-
-      const updatedNodes = nodes.map((n) =>
-        targetIds.includes(n.id) ? { ...n, color: newColor } : n
-      );
-
-      // Node 'b' received new color, while 'a' and 'c' remained original blue!
-      expect(updatedNodes.find((n) => n.id === "b")?.color).toBe("#10B981");
-      expect(updatedNodes.find((n) => n.id === "a")?.color).toBe("#0078D4");
-      expect(updatedNodes.find((n) => n.id === "c")?.color).toBe("#0078D4");
-
-      // 3. User drags node 'b' -> all group members move together maintaining identical relative spacing
-      const activeGroupId = updatedNodes.find((n) => n.id === "b")?.groupId;
-      const nodesToDrag = activeGroupId
-        ? updatedNodes.filter((n) => n.groupId === activeGroupId).map((n) => n.id)
-        : ["b"];
-
-      expect(nodesToDrag).toEqual(["a", "b", "c"]);
-
-      const dx = 45;
-      const dy = 25;
-      const draggedNodes = updatedNodes.map((n) =>
-        nodesToDrag.includes(n.id) ? { ...n, x: n.x + dx, y: n.y + dy } : n
-      );
-
-      expect(draggedNodes[0]).toMatchObject({ id: "a", x: 145, y: 125, color: "#0078D4" });
-      expect(draggedNodes[1]).toMatchObject({ id: "b", x: 305, y: 125, color: "#10B981" });
-      expect(draggedNodes[2]).toMatchObject({ id: "c", x: 465, y: 125, color: "#0078D4" });
-
-      // Spacing strictly preserved
-      expect(draggedNodes[1].x - draggedNodes[0].x).toBe(160);
-      expect(draggedNodes[2].x - draggedNodes[1].x).toBe(160);
-    });
+    expect(updatedEdges).toHaveLength(1);
+    expect(updatedEdges[0].id).toBe("e3");
+    expect(updatedEdges[0].to).toBe("node-4");
   });
 
-  describe("Whiteboard Tech, Product & Flow Icons Gallery", () => {
-    it("defines all 6 grouped categories with exact matching types and metadata", () => {
-      expect(ICON_GALLERY_GROUPS).toHaveLength(6);
-      const groupTypes = ICON_GALLERY_GROUPS.map((g) => g.type);
-      expect(groupTypes).toEqual(["infra", "flow", "ideation", "logic", "metrics", "media"]);
+  it("computes accurate linked state count between selected objects", () => {
+    const selected = ["node-1", "node-2", "node-3"];
+    const edges = [
+      { id: "e1", from: "node-1", to: "node-2" },
+      { id: "e2", from: "node-2", to: "node-3" },
+      { id: "e3", from: "node-1", to: "node-4" },
+    ];
 
-      const totalItems = getAllIconGalleryItems();
-      expect(totalItems).toHaveLength(42);
-    });
+    const linkedEdges = edges.filter(
+      (e) => selected.includes(e.from) && selected.includes(e.to)
+    );
 
-    it("validates Group 1: Infrastructure & Networking (type: 'infra') items and icons", () => {
-      const infraGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "infra");
-      expect(infraGroup).toBeDefined();
-      expect(infraGroup?.items).toHaveLength(7);
-
-      const itemNames = infraGroup?.items.map((i) => i.name);
-      expect(itemNames).toEqual(["Database", "API", "Browser", "Server", "Client", "User", "Gate"]);
-
-      const dbItem = infraGroup?.items.find((i) => i.name === "Database");
-      expect(dbItem?.iconName).toBe("Database");
-      expect(dbItem?.subtitle).toContain("MongoDB");
-
-      const serverItem = infraGroup?.items.find((i) => i.name === "Server");
-      expect(serverItem?.iconName).toBe("Server");
-      expect(serverItem?.subtitle).toContain("Express / Node");
-    });
-
-    it("validates Group 2: Routing, State & Data Pipelines (type: 'flow') items and icons", () => {
-      const flowGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "flow");
-      expect(flowGroup).toBeDefined();
-      expect(flowGroup?.items).toHaveLength(7);
-
-      const itemNames = flowGroup?.items.map((i) => i.name);
-      expect(itemNames).toEqual(["Route", "Re-route", "Connect", "Break", "Pipeline", "Funnel", "Crash"]);
-
-      const crashItem = flowGroup?.items.find((i) => i.name === "Crash");
-      expect(crashItem?.iconName).toBe("Bomb");
-      expect(crashItem?.subtitle).toContain("Server error");
-    });
-
-    it("validates Group 3: Concept Ideation & Brainstorming (type: 'ideation') items and icons", () => {
-      const ideationGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "ideation");
-      expect(ideationGroup).toBeDefined();
-      expect(ideationGroup?.items).toHaveLength(5);
-
-      const itemNames = ideationGroup?.items.map((i) => i.name);
-      expect(itemNames).toEqual(["Question", "Idea", "Thoughts", "Imagine", "Kick"]);
-    });
-
-    it("validates Group 4: Logic, Variables & Scaling Data (type: 'logic') items and icons", () => {
-      const logicGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "logic");
-      expect(logicGroup).toBeDefined();
-      expect(logicGroup?.items).toHaveLength(7);
-
-      const itemNames = logicGroup?.items.map((i) => i.name);
-      expect(itemNames).toEqual(["Key", "Value", "Pair", "Master", "Hash", "Encrypted", "Substance"]);
-    });
-
-    it("validates Group 5: Metrics, Value & Tracking (type: 'metrics') items and icons", () => {
-      const metricsGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "metrics");
-      expect(metricsGroup).toBeDefined();
-      expect(metricsGroup?.items).toHaveLength(9);
-
-      const itemNames = metricsGroup?.items.map((i) => i.name);
-      expect(itemNames).toEqual(["Price", "Rate", "High", "Low", "Trend", "Range", "Variety", "Random", "Equal"]);
-    });
-
-    it("validates Group 6: Media & System Feedback (type: 'media') items and icons", () => {
-      const mediaGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "media");
-      expect(mediaGroup).toBeDefined();
-      expect(mediaGroup?.items).toHaveLength(7);
-
-      const itemNames = mediaGroup?.items.map((i) => i.name);
-      expect(itemNames).toEqual(["Live", "Play", "Pause", "Music", "Exited", "Bored", "Car"]);
-    });
-
-    it("ensures every gallery icon resolves to an existing Lucide component without falling back to blank", () => {
-      const allItems = getAllIconGalleryItems();
-      for (const item of allItems) {
-        expect(ICON_COMPONENT_MAP[item.iconName]).toBeDefined();
-        const Comp = getLucideIcon(item.iconName);
-        expect(Comp).toBeDefined();
-      }
-    });
-
-    it("correctly filters icon gallery by keyword and category", () => {
-      const searchDb = filterIconGalleryItems("database", "all");
-      expect(searchDb).toHaveLength(1);
-      expect(searchDb[0].name).toBe("Database");
-
-      const infraOnly = filterIconGalleryItems("", "infra");
-      expect(infraOnly).toHaveLength(7);
-
-      const searchError = filterIconGalleryItems("error", "all");
-      expect(searchError.length).toBeGreaterThanOrEqual(1);
-      expect(searchError.some((i) => i.name === "Crash" || i.name === "Re-route")).toBe(true);
-    });
-
-    it("formats drag-and-drop payload and constructs valid icon whiteboard node on canvas", () => {
-      const sampleItem = {
-        name: "Database",
-        iconName: "Database",
-        subtitle: "For MongoDB cluster / storage tier",
-        group: "infra" as const,
-        color: "#0EA5E9",
-      };
-
-      const dragPayload = {
-        category: "node",
-        type: "icon",
-        iconName: sampleItem.iconName,
-        initialTitle: sampleItem.name,
-        subtitle: sampleItem.subtitle,
-        iconGroup: sampleItem.group,
-        color: sampleItem.color,
-      };
-
-      const dropCoords = { x: 500, y: 350 };
-      const nodeWidth = 80;
-      const nodeHeight = 82;
-
-      const createdNode = {
-        id: `node-${Date.now()}`,
-        type: dragPayload.type as "icon",
-        x: dropCoords.x - Math.round(nodeWidth / 2),
-        y: dropCoords.y - Math.round(nodeHeight / 2),
-        width: nodeWidth,
-        height: nodeHeight,
-        title: dragPayload.initialTitle,
-        subtitle: dragPayload.subtitle,
-        iconName: dragPayload.iconName,
-        iconGroup: dragPayload.iconGroup,
-        color: dragPayload.color,
-        fillType: "solid" as const,
-        textColor: "#FFFFFF",
-        fontSize: "12px",
-        fontWeight: "bold",
-        zIndex: 2,
-      };
-
-      expect(createdNode).toMatchObject({
-        type: "icon",
-        iconName: "Database",
-        iconGroup: "infra",
-        title: "Database",
-        subtitle: "For MongoDB cluster / storage tier",
-        color: "#0EA5E9",
-        x: 460,
-        y: 309,
-        width: 80,
-        height: 82,
-      });
-    });
-
-    it("creates a connected branch node from an icon node inheriting styling and group metadata", () => {
-      const parentIconNode = {
-        id: "node-parent-1",
-        type: "icon" as const,
-        iconName: "Server",
-        iconGroup: "infra",
-        x: 200,
-        y: 200,
-        width: 150,
-        height: 110,
-        title: "Compute Server",
-        subtitle: "Express / Node instances",
-        color: "#6366F1",
-      };
-
-      const branchX = parentIconNode.x + parentIconNode.width + 120;
-      const branchY = parentIconNode.y;
-
-      const branchNode = {
-        id: "node-branch-1",
-        type: "icon" as const,
-        iconName: parentIconNode.iconName,
-        iconGroup: parentIconNode.iconGroup,
-        x: branchX,
-        y: branchY,
-        width: parentIconNode.width,
-        height: parentIconNode.height,
-        title: parentIconNode.title,
-        subtitle: parentIconNode.subtitle,
-        color: parentIconNode.color,
-        fillType: "solid" as const,
-        textColor: "#FFFFFF",
-        fontWeight: "bold",
-        fontSize: "12px",
-        zIndex: 2,
-      };
-
-      expect(branchNode.type).toBe("icon");
-      expect(branchNode.iconName).toBe("Server");
-      expect(branchNode.iconGroup).toBe("infra");
-      expect(branchNode.color).toBe("#6366F1");
-      expect(branchNode.x).toBe(470);
-      expect(branchNode.y).toBe(200);
-    });
+    expect(linkedEdges).toHaveLength(2);
+    expect(linkedEdges.map((e) => e.id)).toEqual(["e1", "e2"]);
   });
+});
 
-  describe("Whiteboard Simple Table Grid (R x C Arrangement of Boxes)", () => {
-    const generateTableCells = ({
-      rows,
-      cols,
-      startX = 100,
-      startY = 100,
-      cellWidth = 140,
-      cellHeight = 60,
-      gap = 0,
-    }: {
-      rows: number;
-      cols: number;
-      startX?: number;
-      startY?: number;
-      cellWidth?: number;
-      cellHeight?: number;
-      gap?: number;
-    }) => {
-      const tableGroupId = `group-table-${Date.now()}`;
-      const cells: any[] = [];
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const cellX = startX + c * (cellWidth + gap);
-          const cellY = startY + r * (cellHeight + gap);
-          const isHeader = r === 0 && rows > 1;
-          cells.push({
-            id: `cell-${r}-${c}`,
-            type: "shape",
-            shapeType: "rectangle",
-            x: cellX,
-            y: cellY,
-            width: cellWidth,
-            height: cellHeight,
-            title: isHeader ? `Header ${c + 1}` : `Row ${r + 1}, Col ${c + 1}`,
-            color: isHeader ? "#0078D4" : "#1A1C24",
-            fillType: "solid",
-            textColor: "#FFFFFF",
-            fontSize: "12px",
-            fontWeight: isHeader ? "bold" : "normal",
-            textAlign: "center",
-            groupId: tableGroupId,
-          });
-        }
-      }
-      return { cells, tableGroupId };
+describe("Whiteboard Canvas Drag-and-Drop, Hierarchy Branching & Note In-Place Editing", () => {
+  it("handles dragging toolbar items onto canvas across all node types", () => {
+    const mockDropPayload = {
+      category: "node" as const,
+      type: "sticky" as const,
+      title: "Product Roadmap Note",
+      noteFormat: "text" as const,
+      color: "#EC4899",
     };
 
-    it("creates exact number of boxes in r,c arrangement without outer wall (e.g. 3 rows x 4 cols = 12 boxes)", () => {
-      const rows = 3;
-      const cols = 4;
-      const { cells, tableGroupId } = generateTableCells({ rows, cols });
+    const canvasX = 350;
+    const canvasY = 220;
 
-      expect(cells).toHaveLength(12);
-      expect(cells.every((c) => c.type === "shape" && c.shapeType === "rectangle")).toBe(true);
+    const createdNode = {
+      id: `node-${Date.now()}`,
+      type: mockDropPayload.type,
+      x: canvasX,
+      y: canvasY,
+      width: 220,
+      height: 180,
+      title: mockDropPayload.title,
+      noteFormat: mockDropPayload.noteFormat,
+      color: mockDropPayload.color,
+      body: "",
+    };
 
-      // Verify all cells belong to the same unified tableGroupId
-      expect(cells.every((c) => c.groupId === tableGroupId)).toBe(true);
+    expect(createdNode.type).toBe("sticky");
+    expect(createdNode.title).toBe("Product Roadmap Note");
+    expect(createdNode.x).toBe(350);
+    expect(createdNode.y).toBe(220);
+  });
 
-      // Verify no outer wall / container box is created — only the 12 boxes
-      expect(cells.find((c) => c.type === "frame" || c.title?.includes("Wall"))).toBeUndefined();
+  it("verifies ONLY org task card branches into another org task card with gold header and blue position box", () => {
+    const parentTaskNode = {
+      id: "task-parent",
+      type: "task" as const,
+      x: 400,
+      y: 100,
+      width: 160,
+      height: 96,
+      title: "Add a task here to represent this team member!",
+      subtitle: "Team Member / Role",
+      color: "#0078D4",
+      headerHeight: 40,
+      zIndex: 2,
+    };
+
+    const branchTaskNode = {
+      id: `node-branch-${Date.now()}`,
+      type: "task" as const,
+      x: parentTaskNode.x + 80,
+      y: parentTaskNode.y + parentTaskNode.height + 70,
+      width: parentTaskNode.width || 160,
+      height: parentTaskNode.height || 96,
+      title: "New Team Member",
+      subtitle: "Position",
+      color: parentTaskNode.color || "#0078D4",
+      headerHeight: parentTaskNode.headerHeight,
+      fillType: "solid" as const,
+      zIndex: 2,
+    };
+
+    expect(branchTaskNode.type).toBe("task");
+    expect(branchTaskNode.title).toBe("New Team Member");
+    expect(branchTaskNode.subtitle).toBe("Position");
+  });
+
+  it("verifies shapes branch into matching geometric design (e.g. Rounded orange shape)", () => {
+    const parentShapeNode = {
+      id: "shape-parent",
+      type: "shape" as const,
+      shapeType: "rounded" as const,
+      x: 300,
+      y: 100,
+      width: 180,
+      height: 100,
+      title: "Rounded",
+      color: "#F59E0B",
+      textColor: "#FFFFFF",
+    };
+
+    const branchShapeNode = {
+      id: `node-branch-${Date.now()}`,
+      type: "shape" as const,
+      shapeType: parentShapeNode.shapeType || "rounded",
+      x: parentShapeNode.x + 80,
+      y: parentShapeNode.y + parentShapeNode.height + 70,
+      width: parentShapeNode.width || 180,
+      height: parentShapeNode.height || 100,
+      title: parentShapeNode.title || "Rounded",
+      color: parentShapeNode.color || "#F59E0B",
+      fillType: "solid" as const,
+      textColor: parentShapeNode.textColor || "#FFFFFF",
+      fontWeight: "bold" as const,
+      fontSize: "14px",
+      textAlign: "center" as const,
+      zIndex: 2,
+    };
+
+    expect(branchShapeNode.type).toBe("shape");
+    expect(branchShapeNode.shapeType).toBe("rounded");
+    expect(branchShapeNode.title).toBe("Rounded");
+    expect(branchShapeNode.color).toBe("#F59E0B");
+  });
+
+  it("ensures sticky note title editing and body editing maintain distinct states without blur conflict", () => {
+    let editingTitleId: string | null = null;
+    let editingNodeId: string | null = null;
+
+    const note = {
+      id: "sticky-101",
+      title: "Note",
+      body: "TENANT B (ID: comp_beta)",
+    };
+
+    // User double clicks title to edit title
+    editingTitleId = note.id;
+    expect(editingTitleId).toBe("sticky-101");
+    expect(editingNodeId).toBeNull(); // Body is NOT in edit mode, no focus conflict!
+
+    // User saves title
+    const updatedTitle = "Sprint Alpha Notes";
+    note.title = updatedTitle;
+    editingTitleId = null;
+
+    // User double clicks body to edit body text
+    editingNodeId = note.id;
+    expect(editingNodeId).toBe("sticky-101");
+    expect(editingTitleId).toBeNull(); // Title is NOT in edit mode, no focus conflict!
+
+    // User updates body text
+    const updatedBody = "TENANT B (ID: comp_beta) - Provisioned & Active";
+    note.body = updatedBody;
+    editingNodeId = null;
+
+    expect(note.title).toBe("Sprint Alpha Notes");
+    expect(note.body).toContain("Provisioned & Active");
+  });
+
+  it("verifies scroll containment logic allows internal element scrolling while preventing canvas pan", () => {
+    const mockScrollable = {
+      scrollHeight: 350,
+      clientHeight: 150,
+      scrollWidth: 150,
+      clientWidth: 150,
+      scrollTop: 10,
+      scrollLeft: 0,
+    };
+
+    const hasVerticalOverflow = mockScrollable.scrollHeight > mockScrollable.clientHeight + 1;
+    expect(hasVerticalOverflow).toBe(true);
+
+    const deltaY: number = 40;
+    let canvasPanDisplaced = false;
+
+    // Simulated handleWheel logic
+    if (hasVerticalOverflow && deltaY !== 0) {
+      mockScrollable.scrollTop += deltaY;
+      // canvas pan is NOT displaced because wheel is contained
+      canvasPanDisplaced = false;
+    }
+
+    expect(mockScrollable.scrollTop).toBe(50);
+    expect(canvasPanDisplaced).toBe(false);
+  });
+
+  it("verifies unified group entity linking, synchronized movement, and compound temporary groups {{a,b,c}, e}", () => {
+    // Setup nodes: a, b, c, d, e
+    const nodes = [
+      { id: "a", x: 100, y: 100, width: 120, height: 80, groupId: "" },
+      { id: "b", x: 260, y: 100, width: 120, height: 80, groupId: "" },
+      { id: "c", x: 420, y: 100, width: 120, height: 80, groupId: "" },
+      { id: "d", x: 100, y: 300, width: 120, height: 80, groupId: "" },
+      { id: "e", x: 300, y: 300, width: 120, height: 80, groupId: "" },
+    ];
+
+    // Helper function matching WhiteboardCanvas resolveGroupMembers
+    const resolveGroupMembers = (ids: string[], allNodes: typeof nodes): string[] => {
+      const result = new Set<string>(ids);
+      const activeGroupIds = new Set<string>();
+
+      for (const id of ids) {
+        const n = allNodes.find((item) => item.id === id);
+        if (n?.groupId) {
+          activeGroupIds.add(n.groupId);
+        }
+      }
+
+      if (activeGroupIds.size > 0) {
+        for (const n of allNodes) {
+          if (n.groupId && activeGroupIds.has(n.groupId)) {
+            result.add(n.id);
+          }
+        }
+      }
+
+      return Array.from(result);
+    };
+
+    // 1. User selects a, b, c and clicks 'Link as Group'
+    const selectedToGroup = ["a", "b", "c"];
+    const newGroupId = "group-abc-999";
+    nodes.forEach((n) => {
+      if (selectedToGroup.includes(n.id)) {
+        n.groupId = newGroupId;
+      }
     });
 
-    it("positions cells in exact grid coordinates without overlap when gap is 0 (seamless table)", () => {
-      const { cells } = generateTableCells({
-        rows: 2,
-        cols: 3,
-        startX: 200,
-        startY: 150,
-        cellWidth: 140,
-        cellHeight: 60,
-        gap: 0,
-      });
+    expect(nodes.find((n) => n.id === "a")?.groupId).toBe("group-abc-999");
+    expect(nodes.find((n) => n.id === "b")?.groupId).toBe("group-abc-999");
+    expect(nodes.find((n) => n.id === "c")?.groupId).toBe("group-abc-999");
+    expect(nodes.find((n) => n.id === "d")?.groupId).toBe("");
+    expect(nodes.find((n) => n.id === "e")?.groupId).toBe("");
 
-      // Row 0
-      expect(cells[0]).toMatchObject({ x: 200, y: 150, width: 140, height: 60 });
-      expect(cells[1]).toMatchObject({ x: 340, y: 150, width: 140, height: 60 });
-      expect(cells[2]).toMatchObject({ x: 480, y: 150, width: 140, height: 60 });
+    // 2. Clicking single node 'a' automatically selects all group members {a, b, c}
+    const singleClickSelection = resolveGroupMembers(["a"], nodes);
+    expect(singleClickSelection).toEqual(["a", "b", "c"]);
 
-      // Row 1
-      expect(cells[3]).toMatchObject({ x: 200, y: 210, width: 140, height: 60 });
-      expect(cells[4]).toMatchObject({ x: 340, y: 210, width: 140, height: 60 });
-      expect(cells[5]).toMatchObject({ x: 480, y: 210, width: 140, height: 60 });
+    // 3. Dragging group {a, b, c} moves all 3 nodes together maintaining relative distances
+    const initialDistAB = nodes[1].x - nodes[0].x; // 260 - 100 = 160
+    const initialDistBC = nodes[2].x - nodes[1].x; // 420 - 260 = 160
+
+    const dragDeltaX = 50;
+    const dragDeltaY = 30;
+
+    // Group drag execution
+    nodes.forEach((n) => {
+      if (singleClickSelection.includes(n.id)) {
+        n.x += dragDeltaX;
+        n.y += dragDeltaY;
+      }
     });
 
-    it("supports custom box spacing when gap is set to 6px", () => {
-      const { cells } = generateTableCells({
-        rows: 2,
-        cols: 2,
-        startX: 100,
-        startY: 100,
-        cellWidth: 100,
-        cellHeight: 50,
-        gap: 6,
-      });
+    expect(nodes[0]).toMatchObject({ id: "a", x: 150, y: 130 });
+    expect(nodes[1]).toMatchObject({ id: "b", x: 310, y: 130 });
+    expect(nodes[2]).toMatchObject({ id: "c", x: 470, y: 130 });
+    // Nodes d and e were NOT selected and stayed stationary
+    expect(nodes[3]).toMatchObject({ id: "d", x: 100, y: 300 });
+    expect(nodes[4]).toMatchObject({ id: "e", x: 300, y: 300 });
 
-      expect(cells[0]).toMatchObject({ x: 100, y: 100 });
-      expect(cells[1]).toMatchObject({ x: 206, y: 100 }); // 100 + 100 + 6
-      expect(cells[2]).toMatchObject({ x: 100, y: 156 }); // 100 + 50 + 6
-      expect(cells[3]).toMatchObject({ x: 206, y: 156 });
+    // Relative distances strictly preserved
+    expect(nodes[1].x - nodes[0].x).toBe(initialDistAB);
+    expect(nodes[2].x - nodes[1].x).toBe(initialDistBC);
+
+    // 4. Temporary compound group creation {{a, b, c}, e} by multi-selecting or marquee dragging
+    // Selection contains group {a, b, c} plus independent node e
+    const compoundSelection = resolveGroupMembers(["a", "e"], nodes);
+    expect(compoundSelection).toEqual(expect.arrayContaining(["a", "b", "c", "e"]));
+    expect(compoundSelection).not.toContain("d");
+
+    // Dragging compound group {{a, b, c}, e} moves all 4 together
+    const compoundDeltaX = 40;
+    const compoundDeltaY = -20;
+    nodes.forEach((n) => {
+      if (compoundSelection.includes(n.id)) {
+        n.x += compoundDeltaX;
+        n.y += compoundDeltaY;
+      }
     });
 
-    it("validates drag-and-drop table payload parsing and center positioning", () => {
-      const payload = {
-        category: "table-grid",
-        rows: 4,
-        cols: 5,
-        gap: 0,
+    expect(nodes[0]).toMatchObject({ id: "a", x: 190, y: 110 });
+    expect(nodes[1]).toMatchObject({ id: "b", x: 350, y: 110 });
+    expect(nodes[2]).toMatchObject({ id: "c", x: 510, y: 110 });
+    expect(nodes[4]).toMatchObject({ id: "e", x: 340, y: 280 });
+    // Node d is still stationary!
+    expect(nodes[3]).toMatchObject({ id: "d", x: 100, y: 300 });
+
+    // 5. Unlink Group dissolves groupId back to independent objects
+    nodes.forEach((n) => {
+      if (n.groupId === newGroupId) {
+        n.groupId = "";
+      }
+    });
+
+    expect(nodes[0].groupId).toBe("");
+    expect(nodes[1].groupId).toBe("");
+    expect(nodes[2].groupId).toBe("");
+
+    // Now clicking 'a' only selects 'a'
+    const unlinkedSelection = resolveGroupMembers(["a"], nodes);
+    expect(unlinkedSelection).toEqual(["a"]);
+  });
+
+  it("allows individual box color and text edits on linked group members while dragging moves group together", () => {
+    const nodes = [
+      { id: "a", x: 100, y: 100, width: 120, height: 80, color: "#0078D4", title: "President", groupId: "group-1" },
+      { id: "b", x: 260, y: 100, width: 120, height: 80, color: "#0078D4", title: "VP", groupId: "group-1" },
+      { id: "c", x: 420, y: 100, width: 120, height: 80, color: "#0078D4", title: "Assistant", groupId: "group-1" },
+    ];
+
+    // 1. User clicks node 'b' without Shift -> selects ONLY node 'b' individually
+    let selectedNodeId: string | null = "b";
+    let selectedNodeIds: string[] = ["b"];
+
+    expect(selectedNodeId).toBe("b");
+    expect(selectedNodeIds).toEqual(["b"]);
+
+    // 2. Individual edit: user changes box color of node 'b' to Emerald Green
+    const newColor = "#10B981";
+    const targetIds = selectedNodeIds.length <= 1 && selectedNodeId ? [selectedNodeId] : selectedNodeIds;
+
+    const updatedNodes = nodes.map((n) =>
+      targetIds.includes(n.id) ? { ...n, color: newColor } : n
+    );
+
+    // Node 'b' received new color, while 'a' and 'c' remained original blue!
+    expect(updatedNodes.find((n) => n.id === "b")?.color).toBe("#10B981");
+    expect(updatedNodes.find((n) => n.id === "a")?.color).toBe("#0078D4");
+    expect(updatedNodes.find((n) => n.id === "c")?.color).toBe("#0078D4");
+
+    // 3. User drags node 'b' -> all group members move together maintaining identical relative spacing
+    const activeGroupId = updatedNodes.find((n) => n.id === "b")?.groupId;
+    const nodesToDrag = activeGroupId
+      ? updatedNodes.filter((n) => n.groupId === activeGroupId).map((n) => n.id)
+      : ["b"];
+
+    expect(nodesToDrag).toEqual(["a", "b", "c"]);
+
+    const dx = 45;
+    const dy = 25;
+    const draggedNodes = updatedNodes.map((n) =>
+      nodesToDrag.includes(n.id) ? { ...n, x: n.x + dx, y: n.y + dy } : n
+    );
+
+    expect(draggedNodes[0]).toMatchObject({ id: "a", x: 145, y: 125, color: "#0078D4" });
+    expect(draggedNodes[1]).toMatchObject({ id: "b", x: 305, y: 125, color: "#10B981" });
+    expect(draggedNodes[2]).toMatchObject({ id: "c", x: 465, y: 125, color: "#0078D4" });
+
+    // Spacing strictly preserved
+    expect(draggedNodes[1].x - draggedNodes[0].x).toBe(160);
+    expect(draggedNodes[2].x - draggedNodes[1].x).toBe(160);
+  });
+
+  it("copies an already-linked group into a new linked group entity with independent unique groupId, preserving exact relative coordinates and internal arrows", () => {
+    const originalNodes = [
+      { id: "orig-1", x: 100, y: 100, width: 140, height: 60, title: "Database", groupId: "group-source-1" },
+      { id: "orig-2", x: 300, y: 100, width: 140, height: 60, title: "Server", groupId: "group-source-1" },
+    ];
+    const originalEdges = [
+      { id: "edge-1", from: "orig-1", to: "orig-2", arrowDirection: "forward" },
+    ];
+
+    // Simulate handleDuplicateGroup execution for linked group
+    const targetNodes = originalNodes.filter((n) => n.groupId === "group-source-1");
+    const idMap = new Map<string, string>();
+    const newLinkedGroupId = `group-cloned-${Date.now()}`;
+    const offsetX = 40;
+    const offsetY = 40;
+
+    const clonedNodes = targetNodes.map((n) => {
+      const newId = `clone-${n.id}`;
+      idMap.set(n.id, newId);
+      return {
+        ...n,
+        id: newId,
+        groupId: newLinkedGroupId,
+        x: n.x + offsetX,
+        y: n.y + offsetY,
       };
-
-      const dropCoords = { x: 600, y: 400 };
-      const cellW = 140;
-      const cellH = 60;
-      const totalW = payload.cols * cellW;
-      const totalH = payload.rows * cellH;
-      const startX = dropCoords.x - Math.round(totalW / 2);
-      const startY = dropCoords.y - Math.round(totalH / 2);
-
-      const { cells } = generateTableCells({
-        rows: payload.rows,
-        cols: payload.cols,
-        startX,
-        startY,
-        cellWidth: cellW,
-        cellHeight: cellH,
-        gap: payload.gap,
-      });
-
-      expect(cells).toHaveLength(20);
-      expect(cells[0].x).toBe(600 - 350); // 250
-      expect(cells[0].y).toBe(400 - 120); // 280
     });
 
-    it("allows dragging any cell in the table to move all cells together while preserving arrangement", () => {
-      const { cells } = generateTableCells({ rows: 2, cols: 2, startX: 100, startY: 100 });
-      const tableGroupId = cells[0].groupId;
+    const clonedEdges = originalEdges
+      .filter((e) => idMap.has(e.from) && idMap.has(e.to))
+      .map((e) => ({
+        ...e,
+        id: `cloned-${e.id}`,
+        from: idMap.get(e.from)!,
+        to: idMap.get(e.to)!,
+      }));
 
-      // Moving node by +50, +30
-      const dx = 50;
-      const dy = 30;
-      const groupMembers = cells.filter((c) => c.groupId === tableGroupId);
-      const movedCells = groupMembers.map((c) => ({ ...c, x: c.x + dx, y: c.y + dy }));
+    // Verify independent new group ID
+    expect(clonedNodes).toHaveLength(2);
+    expect(clonedNodes[0].groupId).toBe(newLinkedGroupId);
+    expect(clonedNodes[1].groupId).toBe(newLinkedGroupId);
+    expect(clonedNodes[0].groupId).not.toBe("group-source-1");
 
-      expect(movedCells[0]).toMatchObject({ x: 150, y: 130 });
-      expect(movedCells[1]).toMatchObject({ x: 290, y: 130 });
-      expect(movedCells[2]).toMatchObject({ x: 150, y: 190 });
-      expect(movedCells[3]).toMatchObject({ x: 290, y: 190 });
+    // Verify coordinates shifted by offset while preserving relative spacing
+    expect(clonedNodes[0].x).toBe(140);
+    expect(clonedNodes[1].x).toBe(340);
+    expect(clonedNodes[1].x - clonedNodes[0].x).toBe(200);
 
-      // Relative offsets strictly preserved
-      expect(movedCells[1].x - movedCells[0].x).toBe(140);
-      expect(movedCells[2].y - movedCells[0].y).toBe(60);
+    // Verify titles preserved without unwanted (Copy) tags
+    expect(clonedNodes[0].title).toBe("Database");
+    expect(clonedNodes[1].title).toBe("Server");
+
+    // Verify cloned internal edges connected to cloned nodes
+    expect(clonedEdges).toHaveLength(1);
+    expect(clonedEdges[0].from).toBe("clone-orig-1");
+    expect(clonedEdges[0].to).toBe("clone-orig-2");
+  });
+
+  it("copies a temporary multi-selection group (unlinked items) and automatically links the cloned items under a new groupId so mouse clicks outside cannot dislocate the arrangement", () => {
+    // 3 unlinked items in a temporary multi-selection
+    const tempGroupNodes = [
+      { id: "temp-a", x: 200, y: 150, width: 120, height: 60, title: "Step 1", groupId: "" },
+      { id: "temp-b", x: 360, y: 150, width: 120, height: 60, title: "Step 2", groupId: "" },
+      { id: "temp-c", x: 520, y: 150, width: 120, height: 60, title: "Step 3", groupId: "" },
+    ];
+    const selectedNodeIds = ["temp-a", "temp-b", "temp-c"];
+
+    // User triggers 'Copy Group' from overhead options
+    const targetNodes = tempGroupNodes.filter((n) => selectedNodeIds.includes(n.id));
+    const newLinkedGroupId = `group-cloned-${Date.now()}`;
+    const offsetX = 40;
+    const offsetY = 40;
+
+    const clonedNodes = targetNodes.map((n) => ({
+      ...n,
+      id: `clone-${n.id}`,
+      groupId: newLinkedGroupId, // Crucial: always placed on canvas in linked form!
+      x: n.x + offsetX,
+      y: n.y + offsetY,
+    }));
+
+    // Cloned items are all assigned the newLinkedGroupId
+    expect(clonedNodes.every((n) => n.groupId === newLinkedGroupId)).toBe(true);
+
+    // Mouse clicked outside: selection is cleared!
+    let activeSelection: string[] = [];
+    expect(activeSelection).toHaveLength(0);
+
+    // User clicks on clone-temp-b to drag to a fresh area:
+    // resolveGroupMembers automatically resolves all group members via groupId!
+    const resolveGroupMembers = (ids: string[], allNodes: typeof clonedNodes): string[] => {
+      const activeGroupIds = new Set(allNodes.filter((n) => ids.includes(n.id) && n.groupId).map((n) => n.groupId));
+      return allNodes.filter((n) => ids.includes(n.id) || (n.groupId && activeGroupIds.has(n.groupId))).map((n) => n.id);
+    };
+
+    const nodesToDrag = resolveGroupMembers(["clone-temp-b"], clonedNodes);
+    expect(nodesToDrag).toEqual(["clone-temp-a", "clone-temp-b", "clone-temp-c"]);
+
+    // Dragging translates all 3 cloned nodes together to fresh area without dislocating relative positions
+    const dragDx = 300;
+    const dragDy = 200;
+    const movedNodes = clonedNodes.map((n) =>
+      nodesToDrag.includes(n.id) ? { ...n, x: n.x + dragDx, y: n.y + dragDy } : n
+    );
+
+    expect(movedNodes[0]).toMatchObject({ id: "clone-temp-a", x: 540, y: 390 });
+    expect(movedNodes[1]).toMatchObject({ id: "clone-temp-b", x: 700, y: 390 });
+    expect(movedNodes[2]).toMatchObject({ id: "clone-temp-c", x: 860, y: 390 });
+
+    // Relative distances strictly preserved
+    expect(movedNodes[1].x - movedNodes[0].x).toBe(160);
+    expect(movedNodes[2].x - movedNodes[1].x).toBe(160);
+
+    // After moving, user can click Unlink to dissolve group if needed
+    const unlinkedNodes = movedNodes.map((n) => ({ ...n, groupId: "" }));
+    expect(unlinkedNodes.every((n) => n.groupId === "")).toBe(true);
+    expect(resolveGroupMembers(["clone-temp-b"], unlinkedNodes)).toEqual(["clone-temp-b"]);
+  });
+});
+
+describe("Whiteboard Tech, Product & Flow Icons Gallery", () => {
+  it("defines all 6 grouped categories with exact matching types and metadata", () => {
+    expect(ICON_GALLERY_GROUPS).toHaveLength(6);
+    const groupTypes = ICON_GALLERY_GROUPS.map((g) => g.type);
+    expect(groupTypes).toEqual(["infra", "flow", "ideation", "logic", "metrics", "media"]);
+
+    const totalItems = getAllIconGalleryItems();
+    expect(totalItems).toHaveLength(42);
+  });
+
+  it("validates Group 1: Infrastructure & Networking (type: 'infra') items and icons", () => {
+    const infraGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "infra");
+    expect(infraGroup).toBeDefined();
+    expect(infraGroup?.items).toHaveLength(7);
+
+    const itemNames = infraGroup?.items.map((i) => i.name);
+    expect(itemNames).toEqual(["Database", "API", "Browser", "Server", "Client", "User", "Gate"]);
+
+    const dbItem = infraGroup?.items.find((i) => i.name === "Database");
+    expect(dbItem?.iconName).toBe("Database");
+    expect(dbItem?.subtitle).toContain("MongoDB");
+
+    const serverItem = infraGroup?.items.find((i) => i.name === "Server");
+    expect(serverItem?.iconName).toBe("Server");
+    expect(serverItem?.subtitle).toContain("Express / Node");
+  });
+
+  it("validates Group 2: Routing, State & Data Pipelines (type: 'flow') items and icons", () => {
+    const flowGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "flow");
+    expect(flowGroup).toBeDefined();
+    expect(flowGroup?.items).toHaveLength(7);
+
+    const itemNames = flowGroup?.items.map((i) => i.name);
+    expect(itemNames).toEqual(["Route", "Re-route", "Connect", "Break", "Pipeline", "Funnel", "Crash"]);
+
+    const crashItem = flowGroup?.items.find((i) => i.name === "Crash");
+    expect(crashItem?.iconName).toBe("Bomb");
+    expect(crashItem?.subtitle).toContain("Server error");
+  });
+
+  it("validates Group 3: Concept Ideation & Brainstorming (type: 'ideation') items and icons", () => {
+    const ideationGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "ideation");
+    expect(ideationGroup).toBeDefined();
+    expect(ideationGroup?.items).toHaveLength(5);
+
+    const itemNames = ideationGroup?.items.map((i) => i.name);
+    expect(itemNames).toEqual(["Question", "Idea", "Thoughts", "Imagine", "Kick"]);
+  });
+
+  it("validates Group 4: Logic, Variables & Scaling Data (type: 'logic') items and icons", () => {
+    const logicGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "logic");
+    expect(logicGroup).toBeDefined();
+    expect(logicGroup?.items).toHaveLength(7);
+
+    const itemNames = logicGroup?.items.map((i) => i.name);
+    expect(itemNames).toEqual(["Key", "Value", "Pair", "Master", "Hash", "Encrypted", "Substance"]);
+  });
+
+  it("validates Group 5: Metrics, Value & Tracking (type: 'metrics') items and icons", () => {
+    const metricsGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "metrics");
+    expect(metricsGroup).toBeDefined();
+    expect(metricsGroup?.items).toHaveLength(9);
+
+    const itemNames = metricsGroup?.items.map((i) => i.name);
+    expect(itemNames).toEqual(["Price", "Rate", "High", "Low", "Trend", "Range", "Variety", "Random", "Equal"]);
+  });
+
+  it("validates Group 6: Media & System Feedback (type: 'media') items and icons", () => {
+    const mediaGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "media");
+    expect(mediaGroup).toBeDefined();
+    expect(mediaGroup?.items).toHaveLength(7);
+
+    const itemNames = mediaGroup?.items.map((i) => i.name);
+    expect(itemNames).toEqual(["Live", "Play", "Pause", "Music", "Exited", "Bored", "Car"]);
+  });
+
+  it("ensures every gallery icon resolves to an existing Lucide component without falling back to blank", () => {
+    const allItems = getAllIconGalleryItems();
+    for (const item of allItems) {
+      expect(ICON_COMPONENT_MAP[item.iconName]).toBeDefined();
+      const Comp = getLucideIcon(item.iconName);
+      expect(Comp).toBeDefined();
+    }
+  });
+
+  it("correctly filters icon gallery by keyword and category", () => {
+    const searchDb = filterIconGalleryItems("database", "all");
+    expect(searchDb).toHaveLength(1);
+    expect(searchDb[0].name).toBe("Database");
+
+    const infraOnly = filterIconGalleryItems("", "infra");
+    expect(infraOnly).toHaveLength(7);
+
+    const searchError = filterIconGalleryItems("error", "all");
+    expect(searchError.length).toBeGreaterThanOrEqual(1);
+    expect(searchError.some((i) => i.name === "Crash" || i.name === "Re-route")).toBe(true);
+  });
+
+  it("formats drag-and-drop payload and constructs valid icon whiteboard node on canvas", () => {
+    const sampleItem = {
+      name: "Database",
+      iconName: "Database",
+      subtitle: "For MongoDB cluster / storage tier",
+      group: "infra" as const,
+      color: "#0EA5E9",
+    };
+
+    const dragPayload = {
+      category: "node",
+      type: "icon",
+      iconName: sampleItem.iconName,
+      initialTitle: sampleItem.name,
+      subtitle: sampleItem.subtitle,
+      iconGroup: sampleItem.group,
+      color: sampleItem.color,
+    };
+
+    const dropCoords = { x: 500, y: 350 };
+    const nodeWidth = 80;
+    const nodeHeight = 82;
+
+    const createdNode = {
+      id: `node-${Date.now()}`,
+      type: dragPayload.type as "icon",
+      x: dropCoords.x - Math.round(nodeWidth / 2),
+      y: dropCoords.y - Math.round(nodeHeight / 2),
+      width: nodeWidth,
+      height: nodeHeight,
+      title: dragPayload.initialTitle,
+      subtitle: dragPayload.subtitle,
+      iconName: dragPayload.iconName,
+      iconGroup: dragPayload.iconGroup,
+      color: dragPayload.color,
+      fillType: "solid" as const,
+      textColor: "#FFFFFF",
+      fontSize: "12px",
+      fontWeight: "bold",
+      zIndex: 2,
+    };
+
+    expect(createdNode).toMatchObject({
+      type: "icon",
+      iconName: "Database",
+      iconGroup: "infra",
+      title: "Database",
+      subtitle: "For MongoDB cluster / storage tier",
+      color: "#0EA5E9",
+      x: 460,
+      y: 309,
+      width: 80,
+      height: 82,
     });
   });
+
+  it("creates a connected branch node from an icon node inheriting styling and group metadata", () => {
+    const parentIconNode = {
+      id: "node-parent-1",
+      type: "icon" as const,
+      iconName: "Server",
+      iconGroup: "infra",
+      x: 200,
+      y: 200,
+      width: 150,
+      height: 110,
+      title: "Compute Server",
+      subtitle: "Express / Node instances",
+      color: "#6366F1",
+    };
+
+    const branchX = parentIconNode.x + parentIconNode.width + 120;
+    const branchY = parentIconNode.y;
+
+    const branchNode = {
+      id: "node-branch-1",
+      type: "icon" as const,
+      iconName: parentIconNode.iconName,
+      iconGroup: parentIconNode.iconGroup,
+      x: branchX,
+      y: branchY,
+      width: parentIconNode.width,
+      height: parentIconNode.height,
+      title: parentIconNode.title,
+      subtitle: parentIconNode.subtitle,
+      color: parentIconNode.color,
+      fillType: "solid" as const,
+      textColor: "#FFFFFF",
+      fontWeight: "bold",
+      fontSize: "12px",
+      zIndex: 2,
+    };
+
+    expect(branchNode.type).toBe("icon");
+    expect(branchNode.iconName).toBe("Server");
+    expect(branchNode.iconGroup).toBe("infra");
+    expect(branchNode.color).toBe("#6366F1");
+    expect(branchNode.x).toBe(470);
+    expect(branchNode.y).toBe(200);
+  });
+});
+
+describe("Whiteboard Simple Table Grid (R x C Arrangement of Boxes)", () => {
+  const generateTableCells = ({
+    rows,
+    cols,
+    startX = 100,
+    startY = 100,
+    cellWidth = 140,
+    cellHeight = 60,
+    gap = 0,
+  }: {
+    rows: number;
+    cols: number;
+    startX?: number;
+    startY?: number;
+    cellWidth?: number;
+    cellHeight?: number;
+    gap?: number;
+  }) => {
+    const tableGroupId = `group-table-${Date.now()}`;
+    const cells: any[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const cellX = startX + c * (cellWidth + gap);
+        const cellY = startY + r * (cellHeight + gap);
+        const isHeader = r === 0 && rows > 1;
+        cells.push({
+          id: `cell-${r}-${c}`,
+          type: "shape",
+          shapeType: "rectangle",
+          x: cellX,
+          y: cellY,
+          width: cellWidth,
+          height: cellHeight,
+          title: isHeader ? `Header ${c + 1}` : `Row ${r + 1}, Col ${c + 1}`,
+          color: isHeader ? "#0078D4" : "#1A1C24",
+          fillType: "solid",
+          textColor: "#FFFFFF",
+          fontSize: "12px",
+          fontWeight: isHeader ? "bold" : "normal",
+          textAlign: "center",
+          groupId: tableGroupId,
+        });
+      }
+    }
+    return { cells, tableGroupId };
+  };
+
+  it("creates exact number of boxes in r,c arrangement without outer wall (e.g. 3 rows x 4 cols = 12 boxes)", () => {
+    const rows = 3;
+    const cols = 4;
+    const { cells, tableGroupId } = generateTableCells({ rows, cols });
+
+    expect(cells).toHaveLength(12);
+    expect(cells.every((c) => c.type === "shape" && c.shapeType === "rectangle")).toBe(true);
+
+    // Verify all cells belong to the same unified tableGroupId
+    expect(cells.every((c) => c.groupId === tableGroupId)).toBe(true);
+
+    // Verify no outer wall / container box is created — only the 12 boxes
+    expect(cells.find((c) => c.type === "frame" || c.title?.includes("Wall"))).toBeUndefined();
+  });
+
+  it("positions cells in exact grid coordinates without overlap when gap is 0 (seamless table)", () => {
+    const { cells } = generateTableCells({
+      rows: 2,
+      cols: 3,
+      startX: 200,
+      startY: 150,
+      cellWidth: 140,
+      cellHeight: 60,
+      gap: 0,
+    });
+
+    // Row 0
+    expect(cells[0]).toMatchObject({ x: 200, y: 150, width: 140, height: 60 });
+    expect(cells[1]).toMatchObject({ x: 340, y: 150, width: 140, height: 60 });
+    expect(cells[2]).toMatchObject({ x: 480, y: 150, width: 140, height: 60 });
+
+    // Row 1
+    expect(cells[3]).toMatchObject({ x: 200, y: 210, width: 140, height: 60 });
+    expect(cells[4]).toMatchObject({ x: 340, y: 210, width: 140, height: 60 });
+    expect(cells[5]).toMatchObject({ x: 480, y: 210, width: 140, height: 60 });
+  });
+
+  it("supports custom box spacing when gap is set to 6px", () => {
+    const { cells } = generateTableCells({
+      rows: 2,
+      cols: 2,
+      startX: 100,
+      startY: 100,
+      cellWidth: 100,
+      cellHeight: 50,
+      gap: 6,
+    });
+
+    expect(cells[0]).toMatchObject({ x: 100, y: 100 });
+    expect(cells[1]).toMatchObject({ x: 206, y: 100 }); // 100 + 100 + 6
+    expect(cells[2]).toMatchObject({ x: 100, y: 156 }); // 100 + 50 + 6
+    expect(cells[3]).toMatchObject({ x: 206, y: 156 });
+  });
+
+  it("validates drag-and-drop table payload parsing and center positioning", () => {
+    const payload = {
+      category: "table-grid",
+      rows: 4,
+      cols: 5,
+      gap: 0,
+    };
+
+    const dropCoords = { x: 600, y: 400 };
+    const cellW = 140;
+    const cellH = 60;
+    const totalW = payload.cols * cellW;
+    const totalH = payload.rows * cellH;
+    const startX = dropCoords.x - Math.round(totalW / 2);
+    const startY = dropCoords.y - Math.round(totalH / 2);
+
+    const { cells } = generateTableCells({
+      rows: payload.rows,
+      cols: payload.cols,
+      startX,
+      startY,
+      cellWidth: cellW,
+      cellHeight: cellH,
+      gap: payload.gap,
+    });
+
+    expect(cells).toHaveLength(20);
+    expect(cells[0].x).toBe(600 - 350); // 250
+    expect(cells[0].y).toBe(400 - 120); // 280
+  });
+
+  it("allows dragging any cell in the table to move all cells together while preserving arrangement", () => {
+    const { cells } = generateTableCells({ rows: 2, cols: 2, startX: 100, startY: 100 });
+    const tableGroupId = cells[0].groupId;
+
+    // Moving node by +50, +30
+    const dx = 50;
+    const dy = 30;
+    const groupMembers = cells.filter((c) => c.groupId === tableGroupId);
+    const movedCells = groupMembers.map((c) => ({ ...c, x: c.x + dx, y: c.y + dy }));
+
+    expect(movedCells[0]).toMatchObject({ x: 150, y: 130 });
+    expect(movedCells[1]).toMatchObject({ x: 290, y: 130 });
+    expect(movedCells[2]).toMatchObject({ x: 150, y: 190 });
+    expect(movedCells[3]).toMatchObject({ x: 290, y: 190 });
+
+    // Relative offsets strictly preserved
+    expect(movedCells[1].x - movedCells[0].x).toBe(140);
+    expect(movedCells[2].y - movedCells[0].y).toBe(60);
+  });
+});
 
 

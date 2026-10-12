@@ -632,9 +632,22 @@ export default function WhiteboardCanvas({
   const [deleteToastMessage, setDeleteToastMessage] = useState<string | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Temporary toast banner notification for user feedback
+  const showTemporaryToast = useCallback((msg: string) => {
+    setDeleteToastMessage(msg);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => {
+      setDeleteToastMessage(null);
+    }, 4500);
+  }, []);
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const rafIdRef = useRef<number | null>(null);
+  const clipboardGroupRef = useRef<{
+    nodes: IWhiteboardNode[];
+    edges: IWhiteboardEdge[];
+  } | null>(null);
 
   // Auto-save with instant localStorage cache and debounced server sync
   const triggerAutoSave = useCallback(
@@ -1348,7 +1361,7 @@ export default function WhiteboardCanvas({
           ? sourceNode.title
           : "";
     } else {
-      clonedTitle = sourceNode.title ? `${sourceNode.title} (Copy)` : "Copy";
+      clonedTitle = sourceNode.title ? `${sourceNode.title}` : "Copy";
     }
 
     const clonedNode: IWhiteboardNode = {
@@ -2133,6 +2146,159 @@ export default function WhiteboardCanvas({
     []
   );
 
+  // Group & Node Duplicate / Copy Handler
+  // Clones group or selected nodes into linked form so relative arrangement is safe
+  const handleDuplicateGroup = useCallback(
+    (explicitGroupId?: string) => {
+      let targetNodes: IWhiteboardNode[] = [];
+
+      if (explicitGroupId) {
+        targetNodes = nodes.filter((n) => n.groupId === explicitGroupId);
+      } else if (selectedNodeIds.length > 1) {
+        const expandedIds = resolveGroupMembers(selectedNodeIds, nodes);
+        targetNodes = nodes.filter((n) => expandedIds.includes(n.id));
+      } else if (selectedNodeId) {
+        const single = nodes.find((n) => n.id === selectedNodeId);
+        if (single?.groupId) {
+          targetNodes = nodes.filter((n) => n.groupId === single.groupId);
+        } else if (single) {
+          targetNodes = [single];
+        }
+      }
+
+      if (targetNodes.length === 0) return;
+
+      const idMap = new Map<string, string>();
+      // Cloned group nodes ALWAYS receive a unified groupId so they move together safely without dislocation
+      const newLinkedGroupId =
+        targetNodes.length > 1
+          ? `group-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+          : undefined;
+
+      const offsetX = 40;
+      const offsetY = 40;
+
+      const clonedNodes: IWhiteboardNode[] = targetNodes.map((sourceNode) => {
+        const newId = `${sourceNode.type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        idMap.set(sourceNode.id, newId);
+
+        return {
+          ...sourceNode,
+          id: newId,
+          groupId: newLinkedGroupId,
+          x: sourceNode.x + offsetX,
+          y: sourceNode.y + offsetY,
+          title: sourceNode.title || "",
+          zIndex: nodes.length + 2,
+        };
+      });
+
+      // Clone internal connector arrows that connect nodes within this group
+      const clonedEdges: IWhiteboardEdge[] = edges
+        .filter((e) => idMap.has(e.from) && idMap.has(e.to))
+        .map((e) => ({
+          ...e,
+          id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          from: idMap.get(e.from)!,
+          to: idMap.get(e.to)!,
+        }));
+
+      const updatedNodes = [...nodes, ...clonedNodes];
+      const updatedEdges = [...edges, ...clonedEdges];
+
+      setNodes(updatedNodes);
+      setEdges(updatedEdges);
+      pushHistory(updatedNodes, updatedEdges);
+      triggerAutoSave(updatedNodes, updatedEdges);
+
+      const clonedIds = clonedNodes.map((n) => n.id);
+      setSelectedNodeId(clonedIds[0] || null);
+      setSelectedNodeIds(clonedIds);
+
+      // Save to clipboard buffer for consecutive pasting
+      clipboardGroupRef.current = {
+        nodes: targetNodes,
+        edges: edges.filter((e) =>
+          targetNodes.some((tn) => tn.id === e.from) && targetNodes.some((tn) => tn.id === e.to)
+        ),
+      };
+
+      if (clonedNodes.length > 1) {
+        showTemporaryToast(
+          `Copied ${clonedNodes.length} items as a Linked Group. Safely drag anywhere without dislocation!`
+        );
+      } else {
+        showTemporaryToast("Duplicated item");
+      }
+    },
+    [nodes, edges, selectedNodeId, selectedNodeIds, resolveGroupMembers, pushHistory, triggerAutoSave, showTemporaryToast]
+  );
+
+  // Paste from clipboard in linked group form
+  const handlePasteGroupFromClipboard = useCallback(() => {
+    if (!clipboardGroupRef.current || clipboardGroupRef.current.nodes.length === 0) return;
+    const { nodes: clipNodes, edges: clipEdges } = clipboardGroupRef.current;
+
+    const idMap = new Map<string, string>();
+    const newLinkedGroupId =
+      clipNodes.length > 1
+        ? `group-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+        : undefined;
+
+    const offsetX = 40;
+    const offsetY = 40;
+
+    const clonedNodes: IWhiteboardNode[] = clipNodes.map((sourceNode) => {
+      const newId = `${sourceNode.type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      idMap.set(sourceNode.id, newId);
+
+      return {
+        ...sourceNode,
+        id: newId,
+        groupId: newLinkedGroupId,
+        x: sourceNode.x + offsetX,
+        y: sourceNode.y + offsetY,
+        title: sourceNode.title || "",
+        zIndex: nodesRef.current.length + 2,
+      };
+    });
+
+    const clonedEdges: IWhiteboardEdge[] = clipEdges
+      .filter((e) => idMap.has(e.from) && idMap.has(e.to))
+      .map((e) => ({
+        ...e,
+        id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        from: idMap.get(e.from)!,
+        to: idMap.get(e.to)!,
+      }));
+
+    const updatedNodes = [...nodesRef.current, ...clonedNodes];
+    const updatedEdges = [...edgesRef.current, ...clonedEdges];
+
+    setNodes(updatedNodes);
+    setEdges(updatedEdges);
+    pushHistory(updatedNodes, updatedEdges);
+    triggerAutoSave(updatedNodes, updatedEdges);
+
+    const clonedIds = clonedNodes.map((n) => n.id);
+    setSelectedNodeId(clonedIds[0] || null);
+    setSelectedNodeIds(clonedIds);
+
+    // Update clipboard coordinates for staggered future pastes
+    clipboardGroupRef.current = {
+      nodes: clonedNodes.map((n) => ({ ...n })),
+      edges: clonedEdges,
+    };
+
+    if (clonedNodes.length > 1) {
+      showTemporaryToast(
+        `Pasted ${clonedNodes.length} items as a Linked Group entity`
+      );
+    } else {
+      showTemporaryToast("Pasted item from clipboard");
+    }
+  }, [pushHistory, triggerAutoSave, showTemporaryToast]);
+
   // Node Dragging Start (Supports linked groups, Ctrl+Click multi-select, and compound temporary groups)
   const handleNodeMouseDown = (node: IWhiteboardNode, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -2710,15 +2876,6 @@ export default function WhiteboardCanvas({
     [nodes, edges, pushHistory, triggerAutoSave]
   );
 
-  // Temporary toast banner notification for user feedback
-  const showTemporaryToast = useCallback((msg: string) => {
-    setDeleteToastMessage(msg);
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    toastTimeoutRef.current = setTimeout(() => {
-      setDeleteToastMessage(null);
-    }, 4500);
-  }, []);
-
   // Delete Selected Node(s) - Supports Multi-Delete & S3 confirmation for external uploaded files
   const handleDeleteSelected = useCallback(() => {
     const idsToDelete =
@@ -3037,6 +3194,41 @@ export default function WhiteboardCanvas({
             handleGroupSelectedNodes();
           }
           return;
+        } else if (e.key === "d" || e.key === "D") {
+          e.preventDefault();
+          handleDuplicateGroup();
+          return;
+        } else if (e.key === "c" || e.key === "C") {
+          let nodesToCopy: IWhiteboardNode[] = [];
+          if (selectedNodeIds.length > 1) {
+            const exp = resolveGroupMembers(selectedNodeIds, nodes);
+            nodesToCopy = nodes.filter((n) => exp.includes(n.id));
+          } else if (selectedNodeId) {
+            const s = nodes.find((n) => n.id === selectedNodeId);
+            if (s?.groupId) {
+              nodesToCopy = nodes.filter((n) => n.groupId === s.groupId);
+            } else if (s) {
+              nodesToCopy = [s];
+            }
+          }
+          if (nodesToCopy.length > 0) {
+            e.preventDefault();
+            const targetIds = nodesToCopy.map((n) => n.id);
+            const internalEdges = edges.filter(
+              (ed) => targetIds.includes(ed.from) && targetIds.includes(ed.to)
+            );
+            clipboardGroupRef.current = { nodes: nodesToCopy, edges: internalEdges };
+            showTemporaryToast(
+              `Copied ${nodesToCopy.length} ${nodesToCopy.length === 1 ? "item" : "items (group)"} to clipboard`
+            );
+          }
+          return;
+        } else if (e.key === "v" || e.key === "V") {
+          if (clipboardGroupRef.current && clipboardGroupRef.current.nodes.length > 0) {
+            e.preventDefault();
+            handlePasteGroupFromClipboard();
+            return;
+          }
         }
       }
 
@@ -3108,6 +3300,10 @@ export default function WhiteboardCanvas({
     handleUngroupSelectedNodes,
     handleLinkSelectedNodes,
     handleUnlinkSelectedNodes,
+    handleDuplicateGroup,
+    handlePasteGroupFromClipboard,
+    resolveGroupMembers,
+    showTemporaryToast,
   ]);
 
   // Synchronize zoom and pan refs for wheel listener
@@ -4225,17 +4421,30 @@ export default function WhiteboardCanvas({
           </span>
 
           {selectedNode.groupId && (
-            <button
-              type="button"
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={handleUngroupSelectedNodes}
-              className="px-1.5 py-0.5 rounded bg-blue-500/20 hover:bg-amber-500/25 text-blue-300 hover:text-amber-200 border border-blue-500/35 text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
-              title="Linked as group entity (drag moves together). Click to unlink."
-            >
-              <Link2 className="w-2.5 h-2.5 text-blue-400" />
-              <span>Linked Group</span>
-              <span className="text-[9px] text-gray-400">· Unlink</span>
-            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={handleUngroupSelectedNodes}
+                className="px-1.5 py-0.5 rounded bg-blue-500/20 hover:bg-amber-500/25 text-blue-300 hover:text-amber-200 border border-blue-500/35 text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                title="Linked as group entity (drag moves together). Click to unlink."
+              >
+                <Link2 className="w-2.5 h-2.5 text-blue-400" />
+                <span>Linked Group</span>
+                <span className="text-[9px] text-gray-400">· Unlink</span>
+              </button>
+
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => handleDuplicateGroup(selectedNode.groupId)}
+                className="px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/35 text-cyan-300 hover:text-white border border-cyan-500/35 text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                title="Copy entire linked group: Clones in linked form so you can safely drag to a fresh area without dislocation"
+              >
+                <Copy className="w-2.5 h-2.5 text-cyan-400" />
+                <span>Copy Group</span>
+              </button>
+            </div>
           )}
 
           <div className="h-4 w-px bg-[#30333D] shrink-0" />
@@ -5189,9 +5398,15 @@ export default function WhiteboardCanvas({
 
           {/* Universal Duplicate Button */}
           <button
-            onClick={() => handleDuplicateNode(selectedNode.id)}
+            onClick={() => {
+              if (selectedNode.groupId) {
+                handleDuplicateGroup(selectedNode.groupId);
+              } else {
+                handleDuplicateGroup();
+              }
+            }}
             className="p-1 text-gray-400 hover:text-white hover:bg-[#282A33] rounded transition-colors cursor-pointer"
-            title="Duplicate node (Ctrl+D)"
+            title={selectedNode.groupId ? "Duplicate linked group (Ctrl+D)" : "Duplicate node (Ctrl+D)"}
           >
             <Copy className="w-3.5 h-3.5" />
           </button>
@@ -5359,6 +5574,17 @@ export default function WhiteboardCanvas({
             )}
 
             <div className="h-4 w-px bg-[#30333D] shrink-0" />
+
+            {/* COPY GROUP (Clones selection into linked form so dragging is safe) */}
+            <button
+              type="button"
+              onClick={() => handleDuplicateGroup()}
+              className="px-2.5 py-1 bg-cyan-600/25 hover:bg-cyan-600/40 text-cyan-200 hover:text-white border border-cyan-500/40 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-xs"
+              title="Copy Group (Ctrl+C / Ctrl+D): Copies selection and places on canvas in linked form so no boxes are dislocated when dragging"
+            >
+              <Copy className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Copy Group</span>
+            </button>
 
             {/* OPTIONAL CONNECTOR ARROW LINES DROPDOWN */}
             <div className="relative flex items-center shrink-0">
