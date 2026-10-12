@@ -279,15 +279,39 @@ export async function syncTenantWrite(
         ? docOrFilter.toObject() 
         : docOrFilter;
       if (cleanDoc && cleanDoc._id) {
+        const { _id, ...rest } = cleanDoc;
         await targetModel.updateOne(
-          { _id: cleanDoc._id },
-          { $set: cleanDoc },
+          { _id },
+          { $set: rest },
           { upsert: true }
         );
       }
     } else if (operation === "update") {
-      const filter = typeof docOrFilter === "string" ? { _id: docOrFilter } : docOrFilter;
-      await targetModel.updateOne(filter, updatePayload);
+      const cleanDoc = docOrFilter && typeof docOrFilter.toObject === "function" 
+        ? docOrFilter.toObject() 
+        : docOrFilter;
+
+      if (!updatePayload && cleanDoc && cleanDoc._id) {
+        const { _id, ...rest } = cleanDoc;
+        await targetModel.updateOne(
+          { _id },
+          { $set: rest },
+          { upsert: true }
+        );
+      } else {
+        const filter = typeof docOrFilter === "string" ? { _id: docOrFilter } : docOrFilter;
+        let safePayload = updatePayload;
+        if (safePayload && typeof safePayload === "object") {
+          if (safePayload.$set && safePayload.$set._id) {
+            const { _id, ...cleanSet } = safePayload.$set;
+            safePayload = { ...safePayload, $set: cleanSet };
+          } else if (safePayload._id) {
+            const { _id, ...cleanObj } = safePayload;
+            safePayload = cleanObj;
+          }
+        }
+        await targetModel.updateOne(filter, safePayload);
+      }
     } else if (operation === "delete") {
       const filter = typeof docOrFilter === "string" ? { _id: docOrFilter } : docOrFilter;
       await targetModel.deleteOne(filter);
