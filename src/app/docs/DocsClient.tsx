@@ -1005,116 +1005,114 @@ export default function DocsClient({
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F4F8FC] via-[#FAFBFD] to-white dark:from-[#101014] dark:via-[#141417] dark:to-[#18181B] text-[#242424] dark:text-[#E4E4E7]">
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-10 sm:py-14">
-      {/* Header — minimal home-style hero */}
-      <div className="mb-10">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-100 dark:border-blue-900">
-            AWS S3 Enterprise Vault
-          </span>
-          <span className="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-gray-900 text-white dark:bg-white dark:text-gray-900">
-            {companyCode}
-          </span>
-        </div>
-        <h1 className="text-3xl sm:text-[2.75rem] font-light tracking-tight leading-[1.1] text-gray-900 dark:text-white">
-          Document vault, <span className="font-semibold">minus the clutter.</span>
-        </h1>
-        <p className="text-sm sm:text-[15px] text-gray-500 dark:text-zinc-400 mt-3 max-w-2xl leading-relaxed">
-          Direct-to-S3 uploads with strict role-based access, isolated tenant paths, and elastic storage that grows with you.
-        </p>
-        <div className="flex items-center gap-2 mt-4 text-xs text-gray-500 dark:text-zinc-400">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="font-medium">Connected · taskflow-pm-storage-prod (ap-south-1)</span>
-        </div>
+        {/* Header — minimal home-style hero */}
+        <div className="mb-10">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-100 dark:border-blue-900">
+              AWS S3 Enterprise Vault
+            </span>
+            <span className="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-gray-900 text-white dark:bg-white dark:text-gray-900">
+              {companyCode}
+            </span>
+          </div>
+          <h1 className="text-3xl sm:text-[2.75rem] font-light tracking-tight leading-[1.1] text-gray-900 dark:text-white">
+            Document vault, <span className="font-semibold">minus the clutter.</span>
+          </h1>
+          <p className="text-sm sm:text-[15px] text-gray-500 dark:text-zinc-400 mt-3 max-w-2xl leading-relaxed">
+            Direct-to-S3 uploads with strict role-based access, isolated tenant paths, and elastic storage that grows with you.
+          </p>
+          <div className="flex items-center gap-2 mt-4 text-xs text-gray-500 dark:text-zinc-400">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="font-medium">Connected · taskflow-pm-storage-prod (ap-south-1)</span>
+          </div>
 
-        {/* Elastic Storage Quota & Telemetry Banner */}
-        <div className="mt-8 bg-white/80 dark:bg-white/[0.03] backdrop-blur rounded-3xl border border-black/[0.06] dark:border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.04)] p-5 sm:p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="flex items-start gap-3.5">
-              <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 shrink-0">
-                <HardDrive className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                    Elastic Cloud Storage Telemetry
-                  </h3>
-                  <span
-                    className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                      storageMetrics.isOverBaseQuota
+          {/* Elastic Storage Quota & Telemetry Banner */}
+          <div className="mt-8 bg-white/80 dark:bg-white/[0.03] backdrop-blur rounded-3xl border border-black/[0.06] dark:border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.04)] p-5 sm:p-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 shrink-0">
+                  <HardDrive className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                      Elastic Cloud Storage Telemetry
+                    </h3>
+                    <span
+                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${storageMetrics.isOverBaseQuota
                         ? "bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300"
                         : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300"
-                    }`}
-                  >
-                    {storageMetrics.isOverBaseQuota
-                      ? `Elastic Tier (+${storageMetrics.extraBuckets * 5} GB Active)`
-                      : "Complimentary Base Tier (2 GB)"}
-                  </span>
-                  <span className="text-[11px] text-gray-500 dark:text-zinc-400">
-                    {storageMetrics.usedMB >= 1024
-                      ? `${storageMetrics.usedGB.toFixed(2)} GB`
-                      : `${storageMetrics.usedMB.toFixed(1)} MB`}{" "}
-                    used of {storageMetrics.totalQuotaGB} GB allocated
-                  </span>
+                        }`}
+                    >
+                      {storageMetrics.isOverBaseQuota
+                        ? `Elastic Tier (+${storageMetrics.extraBuckets * 5} GB Active)`
+                        : "Complimentary Base Tier (2 GB)"}
+                    </span>
+                    <span className="text-[11px] text-gray-500 dark:text-zinc-400">
+                      {storageMetrics.usedMB >= 1024
+                        ? `${storageMetrics.usedGB.toFixed(2)} GB`
+                        : `${storageMetrics.usedMB.toFixed(1)} MB`}{" "}
+                      used of {storageMetrics.totalQuotaGB} GB allocated
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+                    Every workspace includes <strong>2 GB free</strong> on AWS S3. When storage reaches 2 GB, it auto-expands to 7 GB for <strong>+$3 USD in your next monthly bill</strong>, and expands in seamless <strong>+5 GB increments ($3 USD each)</strong> whenever you reach subsequent ceilings.
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
-                  Every workspace includes <strong>2 GB free</strong> on AWS S3. When storage reaches 2 GB, it auto-expands to 7 GB for <strong>+$3 USD in your next monthly bill</strong>, and expands in seamless <strong>+5 GB increments ($3 USD each)</strong> whenever you reach subsequent ceilings.
-                </p>
+              </div>
+
+              <div className="flex items-center gap-6 lg:border-l lg:border-gray-100 lg:dark:border-zinc-800 lg:pl-6 shrink-0">
+                <div className="text-left sm:text-right">
+                  <p className="text-[11px] text-gray-400 dark:text-zinc-500">Next Cycle Storage Add-on</p>
+                  <p className="text-base font-bold text-gray-900 dark:text-white">
+                    {storageMetrics.storageAddonCostUSD > 0 ? (
+                      <span className="text-blue-600 dark:text-blue-400">
+                        +${storageMetrics.storageAddonCostUSD.toFixed(2)} USD
+                      </span>
+                    ) : (
+                      <span className="text-emerald-600 dark:text-emerald-400">
+                        $0.00 USD (Covered)
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[10px] text-gray-400 dark:text-zinc-500">
+                    {storageMetrics.isOverBaseQuota
+                      ? `${storageMetrics.extraBuckets} × 5GB elastic expansion`
+                      : "Within 2 GB complimentary quota"}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-6 lg:border-l lg:border-gray-100 lg:dark:border-zinc-800 lg:pl-6 shrink-0">
-              <div className="text-left sm:text-right">
-                <p className="text-[11px] text-gray-400 dark:text-zinc-500">Next Cycle Storage Add-on</p>
-                <p className="text-base font-bold text-gray-900 dark:text-white">
-                  {storageMetrics.storageAddonCostUSD > 0 ? (
-                    <span className="text-blue-600 dark:text-blue-400">
-                      +${storageMetrics.storageAddonCostUSD.toFixed(2)} USD
-                    </span>
-                  ) : (
-                    <span className="text-emerald-600 dark:text-emerald-400">
-                      $0.00 USD (Covered)
+            {/* Progress Bar */}
+            <div className="mt-4 pt-3 border-t border-gray-100 dark:border-zinc-800/80">
+              <div className="flex justify-between items-center text-[11px] text-gray-500 dark:text-zinc-400 mb-1.5">
+                <span>Allocated Quota Utilization: {storageMetrics.percentUsed}%</span>
+                <span>
+                  {storageMetrics.usedMB >= 1024
+                    ? `${storageMetrics.usedGB.toFixed(2)} GB`
+                    : `${storageMetrics.usedMB.toFixed(1)} MB`}{" "}
+                  / {storageMetrics.totalQuotaGB} GB
+                  {storageMetrics.usedGB >= storageMetrics.totalQuotaGB * 0.9 && (
+                    <span className="ml-2 text-amber-500 font-semibold">
+                      (Approaching next +5GB expansion)
                     </span>
                   )}
-                </p>
-                <p className="text-[10px] text-gray-400 dark:text-zinc-500">
-                  {storageMetrics.isOverBaseQuota
-                    ? `${storageMetrics.extraBuckets} × 5GB elastic expansion`
-                    : "Within 2 GB complimentary quota"}
-                </p>
+                </span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-gray-100 dark:bg-zinc-800 overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-500 rounded-full ${storageMetrics.percentUsed > 90
+                    ? "bg-amber-500"
+                    : storageMetrics.isOverBaseQuota
+                      ? "bg-purple-600"
+                      : "bg-blue-600"
+                    }`}
+                  style={{ width: `${Math.min(100, storageMetrics.percentUsed)}%` }}
+                />
               </div>
             </div>
           </div>
-
-          {/* Progress Bar */}
-          <div className="mt-4 pt-3 border-t border-gray-100 dark:border-zinc-800/80">
-            <div className="flex justify-between items-center text-[11px] text-gray-500 dark:text-zinc-400 mb-1.5">
-              <span>Allocated Quota Utilization: {storageMetrics.percentUsed}%</span>
-              <span>
-                {storageMetrics.usedMB >= 1024
-                  ? `${storageMetrics.usedGB.toFixed(2)} GB`
-                  : `${storageMetrics.usedMB.toFixed(1)} MB`}{" "}
-                / {storageMetrics.totalQuotaGB} GB
-                {storageMetrics.usedGB >= storageMetrics.totalQuotaGB * 0.9 && (
-                  <span className="ml-2 text-amber-500 font-semibold">
-                    (Approaching next +5GB expansion)
-                  </span>
-                )}
-              </span>
-            </div>
-            <div className="w-full h-2 rounded-full bg-gray-100 dark:bg-zinc-800 overflow-hidden">
-              <div
-                className={`h-full transition-all duration-500 rounded-full ${
-                  storageMetrics.percentUsed > 90
-                    ? "bg-amber-500"
-                    : storageMetrics.isOverBaseQuota
-                    ? "bg-purple-600"
-                    : "bg-blue-600"
-                }`}
-                style={{ width: `${Math.min(100, storageMetrics.percentUsed)}%` }}
-              />
-            </div>
-          </div>
-        </div>
         </div>
 
         {/* Upload Form Card */}
@@ -1141,14 +1139,14 @@ export default function DocsClient({
                 <select
                   value={selectedCategory}
                   onChange={(e) => handleCategoryChange(e.target.value as DocumentCategory)}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-zinc-700 bg-white dark:bg-[#27272A] text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
+                  className="w-full px-4 py-3 rounded-[4px] border border-gray-300 dark:border-zinc-700 bg-white dark:bg-[#27272A] text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
                 >
                   <option value="PROJECT">📁 Project & Engineering Deliverables (Max 25 MB)</option>
                   <option value="EMPLOYEE">👤 Employee & Onboarding Records (Max 5 MB)</option>
                   <option value="SALES">💼 Sales Decks & Client Contracts (Max 15 MB)</option>
                   <option value="SALARY_FINANCE">💰 Salary, Payroll & Finance (Max 10 MB)</option>
                 </select>
-                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1.5">{categoryConfig.description}</p>
+                {/* <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1.5">{categoryConfig.description}</p> */}
               </div>
 
               {/* Step 2: Subtype Quick-Pick Dropdown */}
@@ -1159,7 +1157,7 @@ export default function DocsClient({
                 <select
                   value={selectedSubtype}
                   onChange={(e) => handleSubtypeSelect(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-zinc-700 bg-white dark:bg-[#27272A] text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
+                  className="w-full px-4 py-3 rounded-[4px] border border-gray-300 dark:border-zinc-700 bg-white dark:bg-[#27272A] text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
                 >
                   {categoryConfig.subtypes.map((sub, idx) => (
                     <option key={idx} value={sub}>
@@ -1167,9 +1165,9 @@ export default function DocsClient({
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1.5">
+                {/* <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1.5">
                   Select a document template or specialization to prefill metadata.
-                </p>
+                </p> */}
               </div>
             </div>
 
@@ -1184,7 +1182,7 @@ export default function DocsClient({
                   <select
                     value={selectedEntityId}
                     onChange={(e) => setSelectedEntityId(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-zinc-700 bg-white dark:bg-[#27272A] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full px-4 py-3 rounded-[4px] border border-gray-300 dark:border-zinc-700 bg-white dark:bg-[#27272A] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>
@@ -1199,7 +1197,7 @@ export default function DocsClient({
                   <select
                     value={selectedEntityId}
                     onChange={(e) => setSelectedEntityId(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-zinc-700 bg-white dark:bg-[#27272A] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full px-4 py-3 rounded-[4px] border border-gray-300 dark:border-zinc-700 bg-white dark:bg-[#27272A] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
                     {projects.length > 0 ? (
                       projects.map((p) => (
@@ -1218,7 +1216,7 @@ export default function DocsClient({
                   <select
                     value={selectedEntityId}
                     onChange={(e) => setSelectedEntityId(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-zinc-700 bg-white dark:bg-[#27272A] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full px-4 py-3 rounded-[4px] border border-gray-300 dark:border-zinc-700 bg-white dark:bg-[#27272A] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
                     {deals.length > 0 ? (
                       deals.map((d) => (
@@ -1237,7 +1235,7 @@ export default function DocsClient({
                   <select
                     value={selectedEntityId}
                     onChange={(e) => setSelectedEntityId(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-zinc-700 bg-white dark:bg-[#27272A] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full px-4 py-3 rounded-[4px] border border-gray-300 dark:border-zinc-700 bg-white dark:bg-[#27272A] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
                     <option value="">Organization General Balance Sheet / Treasury</option>
                     {users.map((u) => (
@@ -1259,7 +1257,7 @@ export default function DocsClient({
                   value={docTitle}
                   onChange={(e) => setDocTitle(e.target.value)}
                   placeholder="e.g. Q3 Architecture Blueprint"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-zinc-700 bg-white dark:bg-[#27272A] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  className="w-full px-4 py-3 rounded-[4px] border border-gray-300 dark:border-zinc-700 bg-white dark:bg-[#27272A] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   required
                 />
               </div>
@@ -1322,11 +1320,10 @@ export default function DocsClient({
                           <button
                             type="button"
                             onClick={() => setUploadMode("merge_pdf")}
-                            className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium transition-all ${
-                              uploadMode === "merge_pdf"
-                                ? "bg-blue-600 text-white shadow-xs"
-                                : "text-gray-600 dark:text-zinc-400 hover:text-gray-900"
-                            }`}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium transition-all ${uploadMode === "merge_pdf"
+                              ? "bg-blue-600 text-white shadow-xs"
+                              : "text-gray-600 dark:text-zinc-400 hover:text-gray-900"
+                              }`}
                           >
                             <Layers className="w-3.5 h-3.5" />
                             Merge into 1 Multi-Page PDF
@@ -1334,11 +1331,10 @@ export default function DocsClient({
                           <button
                             type="button"
                             onClick={() => setUploadMode("batch_layers")}
-                            className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium transition-all ${
-                              uploadMode === "batch_layers"
-                                ? "bg-blue-600 text-white shadow-xs"
-                                : "text-gray-600 dark:text-zinc-400 hover:text-gray-900"
-                            }`}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium transition-all ${uploadMode === "batch_layers"
+                              ? "bg-blue-600 text-white shadow-xs"
+                              : "text-gray-600 dark:text-zinc-400 hover:text-gray-900"
+                              }`}
                           >
                             <SlidersHorizontal className="w-3.5 h-3.5" />
                             Separate Pages
@@ -1432,13 +1428,12 @@ export default function DocsClient({
                       return (
                         <div
                           key={item.id}
-                          className={`p-3 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
-                            isStillOversized
-                              ? "bg-red-50/70 dark:bg-red-950/30 border-red-300 dark:border-red-800"
-                              : item.applySizeReducer
+                          className={`p-3 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${isStillOversized
+                            ? "bg-red-50/70 dark:bg-red-950/30 border-red-300 dark:border-red-800"
+                            : item.applySizeReducer
                               ? "bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/60"
                               : "bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
-                          }`}
+                            }`}
                         >
                           {/* Left: Page Number, Reorder, Thumbnail, Title */}
                           <div className="flex items-center gap-3 min-w-0">
@@ -1505,11 +1500,10 @@ export default function DocsClient({
                           {/* Center: Per-File Size Reducer Tickmark Option */}
                           <div className="shrink-0 md:w-80">
                             <label
-                              className={`flex items-start gap-2.5 p-2 rounded-xl border transition-all cursor-pointer select-none ${
-                                item.applySizeReducer
-                                  ? "bg-amber-100/60 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200"
-                                  : "bg-gray-100/60 dark:bg-zinc-750 border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-zinc-300 hover:border-gray-300"
-                              } ${!item.isImage ? "opacity-60 cursor-not-allowed" : ""}`}
+                              className={`flex items-start gap-2.5 p-2 rounded-xl border transition-all cursor-pointer select-none ${item.applySizeReducer
+                                ? "bg-amber-100/60 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200"
+                                : "bg-gray-100/60 dark:bg-zinc-750 border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-zinc-300 hover:border-gray-300"
+                                } ${!item.isImage ? "opacity-60 cursor-not-allowed" : ""}`}
                             >
                               <input
                                 type="checkbox"
@@ -1694,8 +1688,8 @@ export default function DocsClient({
             <button
               onClick={() => handleCategoryFilterChange("ALL")}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === "ALL"
-                  ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
-                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
+                : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
             >
               All Files ({activeDocuments.length})
@@ -1703,8 +1697,8 @@ export default function DocsClient({
             <button
               onClick={() => handleCategoryFilterChange("PROJECT")}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === "PROJECT"
-                  ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
-                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
+                : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
             >
               📁 Projects ({countProjects})
@@ -1712,8 +1706,8 @@ export default function DocsClient({
             <button
               onClick={() => handleCategoryFilterChange("EMPLOYEE")}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === "EMPLOYEE"
-                  ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
-                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
+                : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
             >
               👤 Employee ({countEmployees})
@@ -1721,8 +1715,8 @@ export default function DocsClient({
             <button
               onClick={() => handleCategoryFilterChange("SALES")}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === "SALES"
-                  ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
-                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
+                : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
             >
               💼 Sales ({countSales})
@@ -1730,8 +1724,8 @@ export default function DocsClient({
             <button
               onClick={() => handleCategoryFilterChange("SALARY_FINANCE")}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === "SALARY_FINANCE"
-                  ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
-                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm"
+                : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                 }`}
             >
               💰 Finance ({countFinance})
@@ -1741,8 +1735,8 @@ export default function DocsClient({
             <button
               onClick={() => handleCategoryFilterChange("ARCHIVE")}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${activeTab === "ARCHIVE"
-                  ? "bg-amber-500 text-white shadow-sm"
-                  : "text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                ? "bg-amber-500 text-white shadow-sm"
+                : "text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
                 }`}
             >
               <Archive className="w-3.5 h-3.5" />
@@ -1930,8 +1924,8 @@ export default function DocsClient({
                       <tr
                         key={doc._id}
                         className={`transition-colors ${doc.isArchived
-                            ? "bg-amber-50/30 dark:bg-amber-950/10 hover:bg-amber-50/60 dark:hover:bg-amber-950/20"
-                            : "hover:bg-gray-50/70 dark:hover:bg-zinc-800/40"
+                          ? "bg-amber-50/30 dark:bg-amber-950/10 hover:bg-amber-50/60 dark:hover:bg-amber-950/20"
+                          : "hover:bg-gray-50/70 dark:hover:bg-zinc-800/40"
                           }`}
                       >
                         {/* 1. Document Title */}
@@ -1939,14 +1933,14 @@ export default function DocsClient({
                           <div className="flex items-center gap-2.5">
                             <div
                               className={`p-1.5 rounded-lg shrink-0 ${doc.isArchived
-                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
-                                  : doc.category === "PROJECT"
-                                    ? "bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
-                                    : doc.category === "EMPLOYEE"
-                                      ? "bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400"
-                                      : doc.category === "SALES"
-                                        ? "bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400"
-                                        : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+                                ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
+                                : doc.category === "PROJECT"
+                                  ? "bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
+                                  : doc.category === "EMPLOYEE"
+                                    ? "bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400"
+                                    : doc.category === "SALES"
+                                      ? "bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400"
+                                      : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
                                 }`}
                             >
                               <FileText className="w-4 h-4" />
@@ -1968,12 +1962,12 @@ export default function DocsClient({
                         <td className="py-3.5 px-4 whitespace-nowrap">
                           <span
                             className={`px-2 py-0.5 rounded text-xs font-semibold ${doc.category === "PROJECT"
-                                ? "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300"
-                                : doc.category === "EMPLOYEE"
-                                  ? "bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300"
-                                  : doc.category === "SALES"
-                                    ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
-                                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
+                              ? "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300"
+                              : doc.category === "EMPLOYEE"
+                                ? "bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300"
+                                : doc.category === "SALES"
+                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
+                                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
                               }`}
                           >
                             {doc.category === "PROJECT" && "📁 Project"}
@@ -2079,8 +2073,8 @@ export default function DocsClient({
                                   : "Move to Archive folder to keep working area clean"
                               }
                               className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${doc.isArchived
-                                  ? "bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-600 dark:text-emerald-400"
-                                  : "bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/80 text-amber-700 dark:text-amber-400"
+                                ? "bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-600 dark:text-emerald-400"
+                                : "bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/80 text-amber-700 dark:text-amber-400"
                                 }`}
                             >
                               {isArchiving ? (
@@ -2177,11 +2171,10 @@ export default function DocsClient({
                           {showEllipsis && <span className="px-1 text-gray-400">…</span>}
                           <button
                             onClick={() => setCurrentPage(page)}
-                            className={`w-7 h-7 rounded-lg text-xs font-semibold transition-all ${
-                              safeCurrentPage === page
-                                ? "bg-blue-600 text-white shadow-sm"
-                                : "bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700"
-                            }`}
+                            className={`w-7 h-7 rounded-lg text-xs font-semibold transition-all ${safeCurrentPage === page
+                              ? "bg-blue-600 text-white shadow-sm"
+                              : "bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700"
+                              }`}
                           >
                             {page}
                           </button>
@@ -2385,8 +2378,8 @@ export default function DocsClient({
               <label
                 onClick={() => setDeleteScope("vault_only")}
                 className={`block p-3.5 rounded-xl border cursor-pointer transition-all ${deleteScope === "vault_only"
-                    ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 ring-1 ring-blue-500"
-                    : "border-gray-200 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800/40"
+                  ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 ring-1 ring-blue-500"
+                  : "border-gray-200 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800/40"
                   }`}
               >
                 <div className="flex items-start gap-3">
@@ -2417,8 +2410,8 @@ export default function DocsClient({
               <label
                 onClick={() => setDeleteScope("both")}
                 className={`block p-3.5 rounded-xl border cursor-pointer transition-all ${deleteScope === "both"
-                    ? "border-red-500 bg-red-50/50 dark:bg-red-950/20 ring-1 ring-red-500"
-                    : "border-gray-200 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800/40"
+                  ? "border-red-500 bg-red-50/50 dark:bg-red-950/20 ring-1 ring-red-500"
+                  : "border-gray-200 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800/40"
                   }`}
               >
                 <div className="flex items-start gap-3">
