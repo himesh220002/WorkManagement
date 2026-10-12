@@ -6,6 +6,9 @@ import { syncTenantWrite } from "@/lib/tenantDb";
 import { ORG_CHART_NODES, ORG_CHART_EDGES } from "@/lib/whiteboardTemplates";
 import mongoose from "mongoose";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }

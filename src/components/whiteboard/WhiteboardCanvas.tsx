@@ -974,6 +974,7 @@ export default function WhiteboardCanvas({
         : Date.now();
       lastSyncedUpdatedAtRef.current = serverTime;
       hasUnsavedEditsRef.current = false;
+      setPushBlink(false);
       setSaveStatus("saved");
       setRemoteUpdateAvailable(false);
 
@@ -1055,6 +1056,8 @@ export default function WhiteboardCanvas({
           : Date.now();
         lastSyncedUpdatedAtRef.current = remoteTime;
         hasUnsavedEditsRef.current = false;
+        setPushBlink(false);
+        setPullBlink(false);
         setSaveStatus("saved");
         setRemoteUpdateAvailable(false);
 
@@ -1083,7 +1086,7 @@ export default function WhiteboardCanvas({
     }
   }, [boardId, showTemporaryToast]);
 
-  // Background polling (every 5s) to detect parallel updates from another session / browser
+  // Background polling (every 20s) to detect if cloud database has newer changes: triggers Down Blink on Pull button
   useEffect(() => {
     const checkRemoteUpdates = async () => {
       const activeId = boardIdRef.current || boardId;
@@ -1105,24 +1108,34 @@ export default function WhiteboardCanvas({
           : 0;
 
         if (serverUpdatedAt > lastSyncedUpdatedAtRef.current + 1500) {
-          // The server has newer changes!
-          if (!hasUnsavedEditsRef.current && !isUserInteracting()) {
-            // No unsaved local changes and user is not currently dragging/resizing/typing:
-            // Auto-sync instantly in real-time without touching pan, zoom, or fullscreen!
-            await applyRemoteSync(activeId);
-          } else {
-            // Local changes exist or user is interacting: notify with Sync button
-            setRemoteUpdateAvailable(true);
-          }
+          // Cloud database has changes: Down Blink!
+          setPullBlink(true);
         } else {
-          setRemoteUpdateAvailable(false);
+          setPullBlink(false);
         }
       } catch { }
     };
 
-    const syncInterval = setInterval(checkRemoteUpdates, 5000);
+    const syncInterval = setInterval(checkRemoteUpdates, 20000);
     return () => clearInterval(syncInterval);
-  }, [boardId, isUserInteracting, applyRemoteSync]);
+  }, [boardId]);
+
+  // Prompt on opening whiteboard: ask user if they want to Pull latest cloud canvas
+  useEffect(() => {
+    const activeId = boardIdRef.current || boardId;
+    if (
+      activeId &&
+      activeId !== "default-org-chart" &&
+      activeId !== "org-chart" &&
+      activeId !== "default"
+    ) {
+      const sessionKey = `taskflow_wb_opened_prompt_${activeId}`;
+      if (typeof window !== "undefined" && !sessionStorage.getItem(sessionKey)) {
+        sessionStorage.setItem(sessionKey, "true");
+        setShowInitialPullModal(true);
+      }
+    }
+  }, [boardId]);
 
   // Hydrate from localStorage on initial load if local cache is valid
   useEffect(() => {
@@ -4745,13 +4758,21 @@ export default function WhiteboardCanvas({
       {/* 1. TOP HEADER BAR (Breadcrumb, Title, Favorite, Author Avatar, Share, Fullscreen) */}
       <header className="absolute top-0 left-0 right-0 h-13 px-4 bg-[#121316]/10 border-b border-[#22242B] flex items-center justify-between z-30 shadow-md">
         <div className="flex items-center gap-3">
-          <Link
-            href="/whiteboards"
-            className="p-1.5 rounded-md hover:bg-[#202228] text-gray-400 hover:text-white transition-colors"
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              if (hasUnsavedEditsRef.current || pushBlink) {
+                setShowExitPushModal(true);
+              } else {
+                router.push("/whiteboards");
+              }
+            }}
+            className="p-1.5 rounded-md hover:bg-[#202228] text-gray-400 hover:text-white transition-colors cursor-pointer"
             title="Back to Whiteboards"
           >
             <ArrowLeft className="w-4 h-4" />
-          </Link>
+          </button>
 
           <div className="flex items-center gap-2">
             <input
@@ -4781,78 +4802,70 @@ export default function WhiteboardCanvas({
           <div className="text-[10px] text-gray-400 flex items-center gap-1 font-mono transition-colors">
             {saveStatus === "saving" ? (
               <span className="text-amber-400 flex items-center gap-1">
-                <Loader2 className="w-2.5 h-2.5 animate-spin" /> Saving to cloud...
+                <Loader2 className="w-2.5 h-2.5 animate-spin" /> Pushing to cloud...
               </span>
             ) : saveStatus === "saved" ? (
               <span className="text-emerald-400 flex items-center gap-0.5">
                 <Check className="w-3 h-3" /> Saved
               </span>
             ) : (
-              <span className="text-amber-300/80">Unsaved edits (auto-saves in 20s)</span>
+              <span className="text-amber-300/80">Unsaved edits (Push ready)</span>
             )}
           </div>
         </div>
 
         {/* Header Right Tools */}
         <div className="flex items-center gap-2.5">
-          {/* Remote updates detected alert banner / button */}
-          {remoteUpdateAvailable && (
-            <button
-              onClick={() => applyRemoteSync()}
-              disabled={isSyncing}
-              className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/60 rounded-md transition-all animate-pulse shadow-sm"
-              title="Remote changes detected from another open session. Click to sync instantly without moving your canvas!"
-            >
-              <RefreshCcwIcon className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-              <span>Remote Updates Detected · Sync</span>
-            </button>
-          )}
-
-          {/* Push Button (Force Save local to Cloud DB) */}
+          {/* Push Button (Up Blink when local has changes) */}
           <button
             onClick={handleForcePush}
             disabled={isPushing}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600/35 text-emerald-300 hover:text-emerald-200 border border-emerald-500/50 rounded-md transition-all shadow-xs cursor-pointer ${
-              isPushing ? "opacity-70 cursor-not-allowed" : ""
-            }`}
-            title="Push: Force save this local canvas (all objects) to the global cloud database"
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all shadow-xs cursor-pointer ${
+              pushBlink
+                ? "bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-300 border border-emerald-400 ring-2 ring-emerald-400/80 animate-pulse shadow-emerald-500/20"
+                : "bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/50"
+            } ${isPushing ? "opacity-70 cursor-not-allowed" : ""}`}
+            title={
+              pushBlink
+                ? "Local has changes ready to Push! Click to force-save to cloud database."
+                : "Push: Force save this local canvas (all objects) to the global cloud database"
+            }
           >
             {isPushing ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-300" />
             ) : (
-              <Upload className="w-3.5 h-3.5 text-emerald-400" />
+              <Upload className={`w-3.5 h-3.5 ${pushBlink ? "text-emerald-400 animate-bounce" : "text-emerald-400"}`} />
             )}
-            <span>{isPushing ? "Pushing..." : "Push"}</span>
+            <span>{isPushing ? "Pushing..." : pushBlink ? "Push (Changes)" : "Push"}</span>
+            {pushBlink && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
+            )}
           </button>
 
-          {/* Pull Button (Force Load latest from Cloud DB) */}
+          {/* Pull Button (Down Blink when cloud has changes) */}
           <button
             onClick={handleForcePull}
             disabled={isPulling}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-[#202228] hover:bg-[#282B33] text-gray-300 hover:text-white border border-[#30333D] rounded-md transition-colors cursor-pointer ${
-              isPulling ? "opacity-70 cursor-not-allowed" : ""
-            }`}
-            title="Pull: Load latest objects from global cloud database into this canvas"
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all shadow-xs cursor-pointer ${
+              pullBlink
+                ? "bg-cyan-500/25 hover:bg-cyan-500/35 text-cyan-200 border border-cyan-400 ring-2 ring-cyan-400/80 animate-pulse shadow-cyan-500/20"
+                : "bg-[#202228] hover:bg-[#282B33] text-gray-300 hover:text-white border border-[#30333D]"
+            } ${isPulling ? "opacity-70 cursor-not-allowed" : ""}`}
+            title={
+              pullBlink
+                ? "Cloud database has updates! Click Pull to load latest into canvas."
+                : "Pull: Load latest objects from global cloud database into this canvas"
+            }
           >
             {isPulling ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-300" />
             ) : (
-              <Download className="w-3.5 h-3.5 text-cyan-400" />
+              <Download className={`w-3.5 h-3.5 ${pullBlink ? "text-cyan-400 animate-bounce" : "text-cyan-400"}`} />
             )}
-            <span>{isPulling ? "Pulling..." : "Pull"}</span>
-          </button>
-
-          {/* Sync Button */}
-          <button
-            onClick={() => applyRemoteSync()}
-            disabled={isSyncing}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-[#202228] hover:bg-[#282B33] text-gray-300 hover:text-white border border-[#30333D] rounded-md transition-colors ${
-              isSyncing ? "opacity-70 cursor-not-allowed" : ""
-            }`}
-            title="Sync latest changes from cloud (preserves canvas position & zoom without moving an inch)"
-          >
-            <RefreshCcwIcon className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin text-cyan-400" : ""}`} />
-            <span>{isSyncing ? "Syncing..." : "Sync"}</span>
+            <span>{isPulling ? "Pulling..." : pullBlink ? "Pull (New Data)" : "Pull"}</span>
+            {pullBlink && (
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping inline-block" />
+            )}
           </button>
 
           {/* Manual Save Button */}
@@ -10343,6 +10356,99 @@ export default function WhiteboardCanvas({
                 className="px-3.5 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-[#20222B] transition-colors cursor-pointer"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Opening Modal: Ask user to Pull from Cloud on initial load */}
+      {showInitialPullModal && (
+        <div className="fixed inset-0 z-[9999999] flex items-center justify-center bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#181A20] border border-[#2E323D] rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 flex flex-col gap-4 text-white">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400">
+                <Download className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold">Pull Latest Cloud Canvas?</h3>
+                <p className="text-xs text-gray-400">Opening Whiteboard · Conflict Prevention</p>
+              </div>
+            </div>
+            <p className="text-xs text-gray-300 leading-relaxed">
+              Would you like to pull the latest diagram from the cloud database to start fresh, or continue with your current local canvas?
+            </p>
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[#252833]">
+              <button
+                type="button"
+                onClick={() => setShowInitialPullModal(false)}
+                className="px-3.5 py-1.5 text-xs font-medium text-gray-300 hover:text-white bg-[#22252E] hover:bg-[#2A2E39] border border-[#303442] rounded-lg transition-colors cursor-pointer"
+              >
+                Keep Local Canvas
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowInitialPullModal(false);
+                  await handleForcePull();
+                }}
+                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-cyan-600 hover:bg-cyan-500 rounded-lg shadow-md shadow-cyan-600/30 transition-all cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Pull from Cloud</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Exit Protection Modal: Ask user to Push if any changes exist */}
+      {showExitPushModal && (
+        <div className="fixed inset-0 z-[9999999] flex items-center justify-center bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#181A20] border border-[#2E323D] rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 flex flex-col gap-4 text-white">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                <Upload className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold">Unsaved Changes on Drawboard</h3>
+                <p className="text-xs text-gray-400">Exit Confirmation</p>
+              </div>
+            </div>
+            <p className="text-xs text-gray-300 leading-relaxed">
+              You have modified objects on the drawboard. Would you like to Push your changes to the cloud database before leaving?
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#252833]">
+              <button
+                type="button"
+                onClick={() => setShowExitPushModal(false)}
+                className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-white transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExitPushModal(false);
+                  hasUnsavedEditsRef.current = false;
+                  setPushBlink(false);
+                  router.push("/whiteboards");
+                }}
+                className="px-3 py-1.5 text-xs font-medium text-gray-300 hover:text-white bg-[#22252E] hover:bg-[#2A2E39] border border-[#303442] rounded-lg transition-colors cursor-pointer"
+              >
+                Exit without Pushing
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await handleForcePush();
+                  setShowExitPushModal(false);
+                  router.push("/whiteboards");
+                }}
+                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-md shadow-emerald-600/30 transition-all cursor-pointer"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Push & Exit</span>
               </button>
             </div>
           </div>
