@@ -21,6 +21,17 @@ import {
   searchDynamicReactIcons,
   ICON_COMPONENT_MAP,
 } from "@/lib/whiteboardIconGallery";
+import {
+  saveWhiteboardClipboard,
+  readWhiteboardClipboard,
+  parseWhiteboardClipboardJson,
+  preparePastedItems,
+  exportWhiteboardBlockFile,
+  downloadWhiteboardBlockFile,
+  parseWhiteboardBlockJson,
+  prepareImportedBlockItems,
+  WHITEBOARD_CLIPBOARD_STORAGE_KEY,
+} from "@/lib/whiteboardClipboard";
 
 describe("Chat Space & Mentions Engine", () => {
   it("extracts multiple @mentions from input string", () => {
@@ -2284,6 +2295,33 @@ describe("Multi-Object Selection, Link & Unlink Engine", () => {
     expect(linkedEdges).toHaveLength(2);
     expect(linkedEdges.map((e) => e.id)).toEqual(["e1", "e2"]);
   });
+
+  it("suppresses upper floating menu and group frame while dragging marquee selection box, rendering only after mouse release", () => {
+    // While user is dragging mouse (isSelectingBox === true)
+    let isSelectingBox = true;
+    let selectedNodeIds = ["node-1", "node-2"];
+    let selectedNodeId: string | null = "node-1";
+
+    // Menu visibility predicates
+    const shouldShowMultiToolbar = !isSelectingBox && selectedNodeIds.length > 1;
+    const shouldShowSingleFormatBar = !isSelectingBox && !!selectedNodeId && selectedNodeIds.length <= 1;
+    const shouldShowGroupFrame = !isSelectingBox && selectedNodeIds.length > 1;
+
+    // While dragging box: All upper menus MUST remain hidden
+    expect(shouldShowMultiToolbar).toBe(false);
+    expect(shouldShowSingleFormatBar).toBe(false);
+    expect(shouldShowGroupFrame).toBe(false);
+
+    // When user releases the mouse (mouse up, grouping complete)
+    isSelectingBox = false;
+
+    const shouldShowMultiToolbarAfterMouseUp = !isSelectingBox && selectedNodeIds.length > 1;
+    const shouldShowGroupFrameAfterMouseUp = !isSelectingBox && selectedNodeIds.length > 1;
+
+    // After mouse up: Upper menu and group frame appear cleanly
+    expect(shouldShowMultiToolbarAfterMouseUp).toBe(true);
+    expect(shouldShowGroupFrameAfterMouseUp).toBe(true);
+  });
 });
 
 describe("Whiteboard Canvas Drag-and-Drop, Hierarchy Branching & Note In-Place Editing", () => {
@@ -2736,6 +2774,219 @@ describe("Whiteboard Canvas Drag-and-Drop, Hierarchy Branching & Note In-Place E
     const unlinkedNodes = movedNodes.map((n) => ({ ...n, groupId: "" }));
     expect(unlinkedNodes.every((n) => n.groupId === "")).toBe(true);
     expect(resolveGroupMembers(["clone-temp-b"], unlinkedNodes)).toEqual(["clone-temp-b"]);
+  });
+
+  describe("Cross-Whiteboard Clipboard & Temporary Group Paste Engine", () => {
+    it("saves and retrieves whiteboard nodes and edges via persistent storage", () => {
+      const mockStorage: Record<string, string> = {};
+      const fakeWindow = {
+        localStorage: {
+          getItem: (k: string) => mockStorage[k] || null,
+          setItem: (k: string, v: string) => { mockStorage[k] = v; },
+        },
+      };
+      const origWindow = (globalThis as any).window;
+      (globalThis as any).window = fakeWindow;
+
+      try {
+        const sourceNodes: any[] = [
+          { id: "node-1", type: "sticky", x: 100, y: 150, width: 200, height: 120, title: "Notes" },
+          { id: "node-2", type: "task", x: 380, y: 150, width: 220, height: 120, title: "Deploy API" },
+        ];
+        const sourceEdges: any[] = [
+          { id: "edge-1", from: "node-1", to: "node-2", arrowDirection: "forward" },
+        ];
+
+        const saved = saveWhiteboardClipboard(sourceNodes, sourceEdges, "board-alpha");
+        expect(saved).not.toBeNull();
+        expect(saved?.sourceBoardId).toBe("board-alpha");
+        expect(saved?.nodes).toHaveLength(2);
+        expect(mockStorage[WHITEBOARD_CLIPBOARD_STORAGE_KEY]).toBeDefined();
+
+        const loaded = readWhiteboardClipboard();
+        expect(loaded).not.toBeNull();
+        expect(loaded?.sourceBoardId).toBe("board-alpha");
+        expect(loaded?.nodes).toHaveLength(2);
+        expect(loaded?.edges).toHaveLength(1);
+        expect(loaded?.nodes[0].title).toBe("Notes");
+      } finally {
+        if (origWindow === undefined) {
+          delete (globalThis as any).window;
+        } else {
+          (globalThis as any).window = origWindow;
+        }
+      }
+    });
+
+    it("safely validates and parses JSON clipboard payloads", () => {
+      expect(parseWhiteboardClipboardJson("")).toBeNull();
+      expect(parseWhiteboardClipboardJson("invalid json text")).toBeNull();
+      expect(parseWhiteboardClipboardJson(JSON.stringify({ notAWhiteboard: true }))).toBeNull();
+
+      const validJson = JSON.stringify({
+        app: "TaskPMS_Whiteboard",
+        version: 1,
+        sourceBoardId: "board-1",
+        nodes: [{ id: "n1", type: "text", x: 50, y: 50, width: 100, height: 40 }],
+        edges: [],
+      });
+      const parsed = parseWhiteboardClipboardJson(validJson);
+      expect(parsed).not.toBeNull();
+      expect(parsed?.nodes).toHaveLength(1);
+    });
+
+    it("prepares cross-whiteboard temporary group paste centered at viewport while preserving relative coordinates and arrows", () => {
+      // 3 items created via mouse marquee / temporary group on Board 1
+      const sourceNodes: any[] = [
+        { id: "src-1", type: "sticky", x: 1000, y: 800, width: 140, height: 100, title: "Auth Step" },
+        { id: "src-2", type: "task", x: 1200, y: 800, width: 140, height: 100, title: "Backend API" },
+        { id: "src-3", type: "shape", x: 1400, y: 800, width: 140, height: 100, title: "DB Cache" },
+      ];
+      const sourceEdges: any[] = [
+        { id: "e-1", from: "src-1", to: "src-2", arrowDirection: "forward" },
+        { id: "e-2", from: "src-2", to: "src-3", arrowDirection: "forward" },
+      ];
+
+      // User pastes on Board 2 where targetCenter is (400, 300)
+      const result = preparePastedItems({
+        clipNodes: sourceNodes,
+        clipEdges: sourceEdges,
+        sourceBoardId: "board-space-1",
+        targetBoardId: "board-space-2",
+        existingNodesCount: 5,
+        targetCenter: { x: 400, y: 300 },
+      });
+
+      expect(result.isDifferentBoard).toBe(true);
+      expect(result.clonedNodes).toHaveLength(3);
+      expect(result.clonedEdges).toHaveLength(2);
+      expect(result.newLinkedGroupId).toBeDefined();
+
+      // All 3 items bound into unified linked group
+      expect(result.clonedNodes[0].groupId).toBe(result.newLinkedGroupId);
+      expect(result.clonedNodes[1].groupId).toBe(result.newLinkedGroupId);
+      expect(result.clonedNodes[2].groupId).toBe(result.newLinkedGroupId);
+
+      // Unique new IDs generated
+      expect(result.clonedNodes[0].id).not.toBe("src-1");
+      expect(result.clonedNodes[1].id).not.toBe("src-2");
+      expect(result.clonedNodes[2].id).not.toBe("src-3");
+
+      // Relative distances strictly preserved (200px horizontal spacing)
+      expect(result.clonedNodes[1].x - result.clonedNodes[0].x).toBe(200);
+      expect(result.clonedNodes[2].x - result.clonedNodes[1].x).toBe(200);
+
+      // Group center positioned at targetCenter (400, 300)
+      const groupMinX = Math.min(...result.clonedNodes.map((n) => n.x));
+      const groupMaxX = Math.max(...result.clonedNodes.map((n) => n.x + (n.width || 100)));
+      const groupCenterX = (groupMinX + groupMaxX) / 2;
+      expect(groupCenterX).toBe(400);
+
+      // Edges remapped to the new cloned node IDs
+      expect(result.clonedEdges[0].from).toBe(result.clonedNodes[0].id);
+      expect(result.clonedEdges[0].to).toBe(result.clonedNodes[1].id);
+      expect(result.clonedEdges[1].from).toBe(result.clonedNodes[1].id);
+      expect(result.clonedEdges[1].to).toBe(result.clonedNodes[2].id);
+    });
+
+    it("exports temporary or linked group into a serialized WhiteboardBlockFile structure", () => {
+      const sourceNodes: any[] = [
+        { id: "node-a", type: "sticky", x: 100, y: 100, width: 120, height: 80, title: "Step 1" },
+        { id: "node-b", type: "task", x: 300, y: 100, width: 120, height: 80, title: "Step 2" },
+      ];
+      const sourceEdges: any[] = [
+        { id: "e-ab", from: "node-a", to: "node-b", arrowDirection: "forward" },
+        { id: "e-ext", from: "node-a", to: "external-node", arrowDirection: "forward" },
+      ];
+
+      const block = exportWhiteboardBlockFile(sourceNodes, sourceEdges, "Payment Flow", "board-99");
+      expect(block.app).toBe("TaskPMS_Whiteboard");
+      expect(block.type).toBe("whiteboard_block");
+      expect(block.version).toBe(1);
+      expect(block.title).toBe("Payment Flow");
+      expect(block.sourceBoardId).toBe("board-99");
+      expect(block.nodes).toHaveLength(2);
+      // External edge excluded; only internal edges between group nodes retained
+      expect(block.edges).toHaveLength(1);
+      expect(block.edges[0].id).toBe("e-ab");
+    });
+
+    it("safely parses block JSON files and extracts valid block objects", () => {
+      expect(parseWhiteboardBlockJson("")).toBeNull();
+      expect(parseWhiteboardBlockJson("not json")).toBeNull();
+      expect(parseWhiteboardBlockJson(JSON.stringify({ notBlock: true }))).toBeNull();
+
+      const rawBlock = {
+        app: "TaskPMS_Whiteboard",
+        type: "whiteboard_block",
+        version: 1,
+        title: "Microservices Architecture",
+        nodes: [
+          { id: "ms-1", type: "shape", x: 50, y: 50, width: 100, height: 60, title: "Auth Service" },
+        ],
+        edges: [],
+      };
+      const parsed = parseWhiteboardBlockJson(JSON.stringify(rawBlock));
+      expect(parsed).not.toBeNull();
+      expect(parsed?.title).toBe("Microservices Architecture");
+      expect(parsed?.nodes).toHaveLength(1);
+
+      // Also supports raw array of nodes
+      const arrayJson = JSON.stringify([
+        { id: "arr-1", type: "text", x: 10, y: 20, width: 80, height: 30 },
+      ]);
+      const parsedArray = parseWhiteboardBlockJson(arrayJson);
+      expect(parsedArray).not.toBeNull();
+      expect(parsedArray?.nodes).toHaveLength(1);
+    });
+
+    it("prepares imported block placement by remapping IDs, binding into linked group, and centering at target coordinates", () => {
+      const blockFile = {
+        app: "TaskPMS_Whiteboard" as const,
+        type: "whiteboard_block" as const,
+        version: 1 as const,
+        title: "Imported Flow",
+        exportedAt: Date.now(),
+        nodes: [
+          { id: "old-1", type: "sticky" as const, x: 200, y: 300, width: 100, height: 100, title: "Sticky A" },
+          { id: "old-2", type: "shape" as const, x: 400, y: 300, width: 100, height: 100, title: "Box B" },
+        ],
+        edges: [
+          { id: "old-edge", from: "old-1", to: "old-2", arrowDirection: "forward" as const },
+        ],
+      };
+
+      const result = prepareImportedBlockItems({
+        block: blockFile,
+        existingNodesCount: 10,
+        targetCenter: { x: 800, y: 600 },
+      });
+
+      expect(result.clonedNodes).toHaveLength(2);
+      expect(result.clonedEdges).toHaveLength(1);
+      expect(result.newLinkedGroupId).toBeDefined();
+
+      // IDs must be remapped
+      expect(result.clonedNodes[0].id).not.toBe("old-1");
+      expect(result.clonedNodes[1].id).not.toBe("old-2");
+      expect(result.clonedEdges[0].from).toBe(result.clonedNodes[0].id);
+      expect(result.clonedEdges[0].to).toBe(result.clonedNodes[1].id);
+
+      // Both nodes belong to new linked group so they move together
+      expect(result.clonedNodes[0].groupId).toBe(result.newLinkedGroupId);
+      expect(result.clonedNodes[1].groupId).toBe(result.newLinkedGroupId);
+
+      // Spacing between nodes strictly preserved (200px)
+      expect(result.clonedNodes[1].x - result.clonedNodes[0].x).toBe(200);
+
+      // Group center positioned at targetCenter (800, 600)
+      const minX = Math.min(...result.clonedNodes.map((n) => n.x));
+      const maxX = Math.max(...result.clonedNodes.map((n) => n.x + n.width));
+      const minY = Math.min(...result.clonedNodes.map((n) => n.y));
+      const maxY = Math.max(...result.clonedNodes.map((n) => n.y + n.height));
+      expect((minX + maxX) / 2).toBe(800);
+      expect((minY + maxY) / 2).toBe(600);
+    });
   });
 });
 

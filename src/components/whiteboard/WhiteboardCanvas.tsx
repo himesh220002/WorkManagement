@@ -86,6 +86,8 @@ import {
   CheckCircle,
   RotateCcw,
   Spline,
+  FolderDown,
+  FolderInput,
 } from "lucide-react";
 import { IWhiteboardNode, IWhiteboardEdge } from "@/models/whiteboard";
 import {
@@ -118,6 +120,18 @@ import {
   toggleMarkdownCheckbox,
   NoteFormat,
 } from "@/lib/whiteboardMarkdownAndJson";
+import {
+  saveWhiteboardClipboard,
+  readWhiteboardClipboard,
+  parseWhiteboardClipboardJson,
+  preparePastedItems,
+  WhiteboardClipboardPayload,
+  exportWhiteboardBlockFile,
+  downloadWhiteboardBlockFile,
+  parseWhiteboardBlockJson,
+  prepareImportedBlockItems,
+  WhiteboardBlockFile,
+} from "@/lib/whiteboardClipboard";
 import { RxReset } from "react-icons/rx";
 import WhiteboardSettingsModal from "./WhiteboardSettingsModal";
 
@@ -881,10 +895,11 @@ export default function WhiteboardCanvas({
   const canvasRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const rafIdRef = useRef<number | null>(null);
-  const clipboardGroupRef = useRef<{
-    nodes: IWhiteboardNode[];
-    edges: IWhiteboardEdge[];
-  } | null>(null);
+  const clipboardGroupRef = useRef<WhiteboardClipboardPayload | null>(null);
+  const blockFileInputRef = useRef<HTMLInputElement>(null);
+  const pendingImportCoordsRef = useRef<{ x: number; y: number } | null>(null);
+  const importBlockTextRef = useRef<((text: string, coords?: { x: number; y: number }) => boolean) | null>(null);
+  const lastMouseCanvasPosRef = useRef<{ x: number; y: number } | null>(null);
   const hasUnsavedEditsRef = useRef<boolean>(false);
   const isSavingRef = useRef<boolean>(false);
   const isMouseDownRef = useRef<boolean>(false);
@@ -1935,20 +1950,25 @@ export default function WhiteboardCanvas({
         let localPreviewText = "";
         const localMetaData: Record<string, any> = { isUploadingToS3: true };
 
-        if (isGraphml || isJson || isMarkdown || ext === "txt") {
+        if (isGraphml || isJson || isMarkdown || ext === "txt" || ext === "wbblock") {
           try {
             const rawText = await file.text();
             localPreviewText = rawText.slice(0, 15000);
-            if (isGraphml) {
-              const parsed = parseGraphML(rawText);
-              localMetaData.nodeCount = parsed.nodes.length;
-              localMetaData.edgeCount = parsed.edges.length;
-            } else if (isJson) {
+            if (isJson || ext === "wbblock") {
+              const blockData = parseWhiteboardBlockJson(rawText);
+              if (blockData && blockData.nodes && blockData.nodes.length > 0 && importBlockTextRef.current) {
+                const imported = importBlockTextRef.current(rawText, coords);
+                if (imported) continue;
+              }
               try {
                 const j = JSON.parse(rawText);
                 localMetaData.keyCount = typeof j === "object" && j !== null ? Object.keys(j).length : 0;
                 localMetaData.isArray = Array.isArray(j);
               } catch { }
+            } else if (isGraphml) {
+              const parsed = parseGraphML(rawText);
+              localMetaData.nodeCount = parsed.nodes.length;
+              localMetaData.edgeCount = parsed.edges.length;
             }
           } catch { }
         }
@@ -2046,17 +2066,6 @@ export default function WhiteboardCanvas({
     },
     [pan, zoom, nodes, edges, boardId]
   );
-
-  // Global Clipboard Paste Listener (Ctrl+V paste screenshots/images directly from PC)
-  useEffect(() => {
-    const handlePaste = (e: ClipboardEvent) => {
-      if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
-        processUploadedFiles(e.clipboardData.files);
-      }
-    };
-    window.addEventListener("paste", handlePaste);
-    return () => window.removeEventListener("paste", handlePaste);
-  }, [processUploadedFiles]);
 
   // Duplicate Selected Node
   const handleDuplicateNode = (nodeId?: string) => {
@@ -2952,13 +2961,17 @@ export default function WhiteboardCanvas({
       setSelectedNodeId(clonedIds[0] || null);
       setSelectedNodeIds(clonedIds);
 
-      // Save to clipboard buffer for consecutive pasting
-      clipboardGroupRef.current = {
-        nodes: targetNodes,
-        edges: edges.filter((e) =>
+      // Save to clipboard buffer for consecutive pasting across whiteboards
+      const savedPayload = saveWhiteboardClipboard(
+        targetNodes,
+        edges.filter((e) =>
           targetNodes.some((tn) => tn.id === e.from) && targetNodes.some((tn) => tn.id === e.to)
         ),
-      };
+        boardId
+      );
+      if (savedPayload) {
+        clipboardGroupRef.current = savedPayload;
+      }
 
       if (clonedNodes.length > 1) {
         showTemporaryToast(
@@ -2968,73 +2981,266 @@ export default function WhiteboardCanvas({
         showTemporaryToast("Duplicated item");
       }
     },
-    [nodes, edges, selectedNodeId, selectedNodeIds, resolveGroupMembers, pushHistory, triggerAutoSave, showTemporaryToast]
+    [nodes, edges, selectedNodeId, selectedNodeIds, resolveGroupMembers, pushHistory, triggerAutoSave, showTemporaryToast, boardId]
   );
 
-  // Paste from clipboard in linked group form
-  const handlePasteGroupFromClipboard = useCallback(() => {
-    if (!clipboardGroupRef.current || clipboardGroupRef.current.nodes.length === 0) return;
-    const { nodes: clipNodes, edges: clipEdges } = clipboardGroupRef.current;
-
-    const idMap = new Map<string, string>();
-    const newLinkedGroupId =
-      clipNodes.length > 1
-        ? `group-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-        : undefined;
-
-    const offsetX = 40;
-    const offsetY = 40;
-
-    const clonedNodes: IWhiteboardNode[] = clipNodes.map((sourceNode) => {
-      const newId = `${sourceNode.type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      idMap.set(sourceNode.id, newId);
-
-      return {
-        ...sourceNode,
-        id: newId,
-        groupId: newLinkedGroupId,
-        x: sourceNode.x + offsetX,
-        y: sourceNode.y + offsetY,
-        title: sourceNode.title || "",
-        zIndex: nodesRef.current.length + 2,
-      };
-    });
-
-    const clonedEdges: IWhiteboardEdge[] = clipEdges
-      .filter((e) => idMap.has(e.from) && idMap.has(e.to))
-      .map((e) => ({
-        ...e,
-        id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        from: idMap.get(e.from)!,
-        to: idMap.get(e.to)!,
-      }));
-
-    const updatedNodes = [...nodesRef.current, ...clonedNodes];
-    const updatedEdges = [...edgesRef.current, ...clonedEdges];
-
-    setNodes(updatedNodes);
-    setEdges(updatedEdges);
-    pushHistory(updatedNodes, updatedEdges);
-    triggerAutoSave(updatedNodes, updatedEdges);
-
-    const clonedIds = clonedNodes.map((n) => n.id);
-    setSelectedNodeId(clonedIds[0] || null);
-    setSelectedNodeIds(clonedIds);
-
-    // Update clipboard coordinates for staggered future pastes
-    clipboardGroupRef.current = {
-      nodes: clonedNodes.map((n) => ({ ...n })),
-      edges: clonedEdges,
-    };
-
-    if (clonedNodes.length > 1) {
-      showTemporaryToast(
-        `Pasted ${clonedNodes.length} items as a Linked Group entity`
-      );
-    } else {
-      showTemporaryToast("Pasted item from clipboard");
+  // Read clipboard from memory or persistent localStorage
+  const getWhiteboardClipboardData = useCallback((): WhiteboardClipboardPayload | null => {
+    if (clipboardGroupRef.current && clipboardGroupRef.current.nodes.length > 0) {
+      return clipboardGroupRef.current;
     }
-  }, [pushHistory, triggerAutoSave, showTemporaryToast]);
+    const localData = readWhiteboardClipboard();
+    if (localData && localData.nodes && localData.nodes.length > 0) {
+      return localData;
+    }
+    return null;
+  }, []);
+
+  // Paste from clipboard in linked group form (supports cross-whiteboard pasting!)
+  const handlePasteGroupFromClipboard = useCallback(
+    (explicitData?: WhiteboardClipboardPayload) => {
+      const data = explicitData || getWhiteboardClipboardData();
+      if (!data || !data.nodes || data.nodes.length === 0) return;
+      const { nodes: clipNodes, edges: clipEdges, sourceBoardId } = data;
+
+      const curPan = panRef.current || pan;
+      const curZoom = zoomRef.current || zoom;
+      const clientW = canvasRef.current?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 1200);
+      const clientH = canvasRef.current?.clientHeight || (typeof window !== "undefined" ? window.innerHeight : 800);
+
+      const viewport = {
+        left: -curPan.x / curZoom,
+        top: -curPan.y / curZoom,
+        width: clientW / curZoom,
+        height: clientH / curZoom,
+      };
+
+      const targetCenter = lastMouseCanvasPosRef.current || {
+        x: Math.round(viewport.left + viewport.width / 2),
+        y: Math.round(viewport.top + viewport.height / 2),
+      };
+
+      const { clonedNodes, clonedEdges, isDifferentBoard } = preparePastedItems({
+        clipNodes,
+        clipEdges,
+        targetBoardId: boardId,
+        sourceBoardId,
+        existingNodesCount: nodesRef.current.length,
+        viewport,
+        targetCenter,
+      });
+
+      if (clonedNodes.length === 0) return;
+
+      const updatedNodes = [...nodesRef.current, ...clonedNodes];
+      const updatedEdges = [...edgesRef.current, ...clonedEdges];
+
+      setNodes(updatedNodes);
+      setEdges(updatedEdges);
+      pushHistory(updatedNodes, updatedEdges);
+      triggerAutoSave(updatedNodes, updatedEdges);
+
+      const clonedIds = clonedNodes.map((n) => n.id);
+      setSelectedNodeId(clonedIds[0] || null);
+      setSelectedNodeIds(clonedIds);
+
+      // Update clipboard coordinates for staggered future pastes
+      const nextPayload = saveWhiteboardClipboard(
+        clonedNodes.map((n) => ({ ...n })),
+        clonedEdges,
+        boardId
+      );
+      if (nextPayload) {
+        clipboardGroupRef.current = nextPayload;
+      }
+
+      if (isDifferentBoard) {
+        showTemporaryToast(
+          `Pasted ${clonedNodes.length} ${clonedNodes.length === 1 ? "item" : "items (group)"} from clipboard!`
+        );
+      } else if (clonedNodes.length > 1) {
+        showTemporaryToast(
+          `Pasted ${clonedNodes.length} items as a Linked Group entity`
+        );
+      } else {
+        showTemporaryToast("Pasted item from clipboard");
+      }
+    },
+    [
+      getWhiteboardClipboardData,
+      boardId,
+      pan,
+      zoom,
+      pushHistory,
+      triggerAutoSave,
+      showTemporaryToast,
+    ]
+  );
+
+  // Whiteboard Block Export Handler (Exports temporary multi-selection group or linked group to .json block file)
+  const handleExportSelectedBlock = useCallback(
+    (explicitGroupId?: string) => {
+      let targetNodes: IWhiteboardNode[] = [];
+
+      if (explicitGroupId) {
+        targetNodes = nodes.filter((n) => n.groupId === explicitGroupId);
+      } else if (selectedNodeIds.length > 1) {
+        const expandedIds = resolveGroupMembers(selectedNodeIds, nodes);
+        targetNodes = nodes.filter((n) => expandedIds.includes(n.id));
+      } else if (selectedNodeId) {
+        const single = nodes.find((n) => n.id === selectedNodeId);
+        if (single?.groupId) {
+          targetNodes = nodes.filter((n) => n.groupId === single.groupId);
+        } else if (single) {
+          targetNodes = [single];
+        }
+      }
+
+      if (targetNodes.length === 0) {
+        showTemporaryToast("Select a temporary or linked group to export as a block");
+        return;
+      }
+
+      const targetIds = new Set(targetNodes.map((n) => n.id));
+      const internalEdges = edges.filter(
+        (e) => targetIds.has(e.from) && targetIds.has(e.to)
+      );
+
+      const blockTitle =
+        targetNodes[0]?.title && targetNodes[0].title.trim()
+          ? targetNodes[0].title.trim()
+          : title || "Whiteboard Block";
+
+      const blockFile = exportWhiteboardBlockFile(
+        targetNodes,
+        internalEdges,
+        blockTitle,
+        boardId
+      );
+
+      const success = downloadWhiteboardBlockFile(blockFile);
+      if (success) {
+        showTemporaryToast(
+          `Exported block "${blockTitle}" (${targetNodes.length} items${internalEdges.length > 0 ? `, ${internalEdges.length} arrows` : ""
+          }) to .json file!`
+        );
+      }
+    },
+    [nodes, edges, selectedNodeId, selectedNodeIds, resolveGroupMembers, title, boardId, showTemporaryToast]
+  );
+
+  // Trigger file selection for importing a block
+  const handleTriggerImportBlock = useCallback((targetCoords?: { x: number; y: number }) => {
+    if (targetCoords) {
+      pendingImportCoordsRef.current = targetCoords;
+    } else {
+      pendingImportCoordsRef.current = null;
+    }
+    if (blockFileInputRef.current) {
+      blockFileInputRef.current.value = "";
+      blockFileInputRef.current.click();
+    }
+  }, []);
+
+  // Parse and place block onto canvas
+  const handleImportBlockFromText = useCallback(
+    (jsonText: string, targetCoords?: { x: number; y: number }) => {
+      const block = parseWhiteboardBlockJson(jsonText);
+      if (!block || !block.nodes || block.nodes.length === 0) {
+        showTemporaryToast("Invalid block file. No whiteboard items found.");
+        return false;
+      }
+
+      const curPan = panRef.current || pan;
+      const curZoom = zoomRef.current || zoom;
+      const clientW = canvasRef.current?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 1200);
+      const clientH = canvasRef.current?.clientHeight || (typeof window !== "undefined" ? window.innerHeight : 800);
+
+      const viewport = {
+        left: -curPan.x / curZoom,
+        top: -curPan.y / curZoom,
+        width: clientW / curZoom,
+        height: clientH / curZoom,
+      };
+
+      const targetCenter = targetCoords || pendingImportCoordsRef.current || {
+        x: Math.round(viewport.left + viewport.width / 2),
+        y: Math.round(viewport.top + viewport.height / 2),
+      };
+      pendingImportCoordsRef.current = null;
+
+      const { clonedNodes, clonedEdges } = prepareImportedBlockItems({
+        block,
+        targetCenter,
+        viewport,
+        existingNodesCount: nodesRef.current.length,
+      });
+
+      if (clonedNodes.length === 0) return false;
+
+      const updatedNodes = [...nodesRef.current, ...clonedNodes];
+      const updatedEdges = [...edgesRef.current, ...clonedEdges];
+
+      setNodes(updatedNodes);
+      setEdges(updatedEdges);
+      pushHistory(updatedNodes, updatedEdges);
+      triggerAutoSave(updatedNodes, updatedEdges);
+
+      const clonedIds = clonedNodes.map((n) => n.id);
+      setSelectedNodeId(clonedIds[0] || null);
+      setSelectedNodeIds(clonedIds);
+
+      showTemporaryToast(
+        `Imported block "${block.title || "Block"}" (${clonedNodes.length} items) as a Linked Group!`
+      );
+      return true;
+    },
+    [pan, zoom, pushHistory, triggerAutoSave, showTemporaryToast]
+  );
+
+  // Keep ref up to date for processUploadedFiles drag-and-drop
+  importBlockTextRef.current = handleImportBlockFromText;
+
+  // Global Clipboard Paste Listener (Ctrl+V paste screenshots/images directly from PC, or whiteboard items)
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          (activeEl as HTMLElement).isContentEditable)
+      ) {
+        return; // Typing in input/textarea, let default paste happen
+      }
+
+      // 1. Files (Screenshots / images pasted directly from OS)
+      if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+        processUploadedFiles(e.clipboardData.files);
+        return;
+      }
+
+      // 2. Whiteboard items JSON in clipboardData
+      const textData = e.clipboardData?.getData("text/plain");
+      if (textData) {
+        const parsed = parseWhiteboardClipboardJson(textData);
+        if (parsed && parsed.nodes.length > 0) {
+          e.preventDefault();
+          handlePasteGroupFromClipboard(parsed);
+          return;
+        }
+      }
+
+      // 3. Fallback to localStorage clipboard
+      const localData = getWhiteboardClipboardData();
+      if (localData && localData.nodes.length > 0) {
+        e.preventDefault();
+        handlePasteGroupFromClipboard(localData);
+      }
+    };
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [processUploadedFiles, handlePasteGroupFromClipboard, getWhiteboardClipboardData]);
 
   // Node Dragging Start (Supports linked groups, Ctrl+Click multi-select, and compound temporary groups)
   const handleNodeMouseDown = (node: IWhiteboardNode, e: React.MouseEvent) => {
@@ -3232,6 +3438,7 @@ export default function WhiteboardCanvas({
     }
 
     const coords = getCanvasCoords(e.clientX, e.clientY);
+    lastMouseCanvasPosRef.current = coords;
 
     // Track cursor for dynamic arrow preview when connecting two nodes
     if (activeTool === "arrow" && connectingFromNodeId) {
@@ -3998,16 +4205,20 @@ export default function WhiteboardCanvas({
             const internalEdges = edges.filter(
               (ed) => targetIds.includes(ed.from) && targetIds.includes(ed.to)
             );
-            clipboardGroupRef.current = { nodes: nodesToCopy, edges: internalEdges };
+            const saved = saveWhiteboardClipboard(nodesToCopy, internalEdges, boardId);
+            if (saved) {
+              clipboardGroupRef.current = saved;
+            }
             showTemporaryToast(
               `Copied ${nodesToCopy.length} ${nodesToCopy.length === 1 ? "item" : "items (group)"} to clipboard`
             );
           }
           return;
         } else if (e.key === "v" || e.key === "V") {
-          if (clipboardGroupRef.current && clipboardGroupRef.current.nodes.length > 0) {
+          const clipData = getWhiteboardClipboardData();
+          if (clipData && clipData.nodes && clipData.nodes.length > 0) {
             e.preventDefault();
-            handlePasteGroupFromClipboard();
+            handlePasteGroupFromClipboard(clipData);
             return;
           }
         }
@@ -4087,6 +4298,8 @@ export default function WhiteboardCanvas({
     handleUnlinkSelectedNodes,
     handleDuplicateGroup,
     handlePasteGroupFromClipboard,
+    getWhiteboardClipboardData,
+    boardId,
     resolveGroupMembers,
     showTemporaryToast,
   ]);
@@ -5617,6 +5830,26 @@ export default function WhiteboardCanvas({
         onChange={handleDirectFileAdd}
       />
 
+      {/* Hidden File Input for Whiteboard Block Import (.json, .wbblock) */}
+      <input
+        ref={blockFileInputRef}
+        type="file"
+        accept=".json,.wbblock"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            try {
+              const text = await file.text();
+              handleImportBlockFromText(text, pendingImportCoordsRef.current || undefined);
+            } catch (err) {
+              showTemporaryToast("Failed to read block file");
+            }
+          }
+          e.target.value = "";
+        }}
+      />
+
       {/* 1. TOP HEADER BAR (Breadcrumb, Title, Favorite, Author Avatar, Share, Fullscreen) */}
       <header className="absolute top-0 left-0 right-0 h-13 px-3 sm:px-4 bg-[#121316]/10 backdrop-blur-sm border-b border-[#22242B] flex items-center justify-between z-30 shadow-md max-w-full overflow-x-auto scrollbar-none">
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -5644,7 +5877,7 @@ export default function WhiteboardCanvas({
                 setTitle(e.target.value);
                 triggerAutoSave(nodes, edges, e.target.value);
               }}
-              className="bg-transparent text-xs lg:text-sm font-bold text-white focus:bg-[#1A1C23] px-2 py-1 rounded border border-transparent focus:border-blue-500 focus:outline-none transition-all max-w-[120px] sm:max-w-[180px] xl:max-w-none truncate"
+              className="bg-gray-600 text-xs lg:text-sm font-bold text-white focus:bg-[#1A1C23] px-2 py-1 rounded border border-transparent focus:border-blue-500 focus:outline-none transition-all max-w-[120px] sm:max-w-[180px] xl:max-w-none truncate"
             />
             <button
               onClick={() => {
@@ -5782,6 +6015,16 @@ export default function WhiteboardCanvas({
             </button>
           )}
 
+          {/* Import Block Button */}
+          <button
+            onClick={() => handleTriggerImportBlock()}
+            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-semibold bg-[#202228] hover:bg-[#282B33] text-gray-200 border border-[#30333D] rounded-md transition-colors shrink-0 cursor-pointer"
+            title="Import Block: Import a saved whiteboard group or component (.json)"
+          >
+            <FolderInput className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">Import Block</span>
+          </button>
+
           {/* Settings Popup Button */}
           <button
             onClick={() => setIsSettingsModalOpen(true)}
@@ -5816,7 +6059,7 @@ export default function WhiteboardCanvas({
       </header>
 
       {/* 2. FLOATING FORMAT BAR (Shown above selected node - Differentiated by Object Type) */}
-      {selectedNode && selectedNodeIds.length <= 1 && (
+      {!isSelectingBox && selectedNode && selectedNodeIds.length <= 1 && (
         <div
           onMouseDown={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
@@ -5906,6 +6149,17 @@ export default function WhiteboardCanvas({
               >
                 <Copy className="w-2.5 h-2.5 text-cyan-400" />
                 <span>Copy Group</span>
+              </button>
+
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => handleExportSelectedBlock(selectedNode.groupId)}
+                className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-300 hover:text-white border border-emerald-500/35 text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                title="Export Block: Download linked group as a reusable block file (.json)"
+              >
+                <FolderDown className="w-2.5 h-2.5 text-emerald-400" />
+                <span>Export Block</span>
               </button>
             </div>
           )}
@@ -6896,7 +7150,7 @@ export default function WhiteboardCanvas({
       )}
 
       {/* 2b. MULTI-SELECTION FLOATING TOOLBAR WITH LINK AS GROUP ENTITY & UNLINK ACTIONS */}
-      {selectedNodeIds.length > 1 && (() => {
+      {!isSelectingBox && selectedNodeIds.length > 1 && (() => {
         const selectedNodes = nodes.filter((n) => selectedNodeIds.includes(n.id));
         const minX = selectedNodes.length > 0 ? Math.min(...selectedNodes.map((n) => n.x)) : 0;
         const minY = selectedNodes.length > 0 ? Math.min(...selectedNodes.map((n) => n.y)) : 0;
@@ -7072,6 +7326,17 @@ export default function WhiteboardCanvas({
             >
               <Copy className="w-3.5 h-3.5 text-cyan-400" />
               <span>Copy Group</span>
+            </button>
+
+            {/* EXPORT BLOCK (Downloads group as .json block file) */}
+            <button
+              type="button"
+              onClick={() => handleExportSelectedBlock()}
+              className="px-2.5 py-1 bg-emerald-600/25 hover:bg-emerald-600/40 text-emerald-200 hover:text-white border border-emerald-500/40 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-xs"
+              title="Export Block: Download selected group as a reusable block file (.json) to import into any whiteboard"
+            >
+              <FolderDown className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Export Block</span>
             </button>
 
             {/* OPTIONAL CONNECTOR ARROW LINES DROPDOWN */}
@@ -7511,6 +7776,45 @@ export default function WhiteboardCanvas({
               className="hover:text-white"
             >
               <X className="w-3 h-3" />
+            </button>
+          </div>
+
+          {/* Quick Paste from Clipboard if clipboard has items */}
+          {(() => {
+            const clipData = getWhiteboardClipboardData();
+            if (!clipData || !clipData.nodes || clipData.nodes.length === 0) return null;
+            return (
+              <div className="mb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handlePasteGroupFromClipboard(clipData);
+                    setDoubleClickMenu(null);
+                  }}
+                  className="w-full py-1.5 px-2 bg-emerald-600/25 hover:bg-emerald-600/40 text-emerald-300 hover:text-emerald-200 border border-emerald-500/40 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                  title="Paste copied items/group from clipboard here (Ctrl+V)"
+                >
+                  <Copy className="w-3 h-3 text-emerald-400" />
+                  <span>Paste {clipData.nodes.length} item{clipData.nodes.length === 1 ? "" : "s"} (Ctrl+V)</span>
+                </button>
+              </div>
+            );
+          })()}
+
+          {/* Quick Import Block (.json) */}
+          <div className="mb-2">
+            <button
+              type="button"
+              onClick={() => {
+                const coords = { x: doubleClickMenu.canvasX, y: doubleClickMenu.canvasY };
+                setDoubleClickMenu(null);
+                handleTriggerImportBlock(coords);
+              }}
+              className="w-full py-1.5 px-2 bg-blue-600/20 hover:bg-blue-600/35 text-blue-300 hover:text-white border border-blue-500/35 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+              title="Import a saved block file (.json) at this canvas position"
+            >
+              <FolderInput className="w-3 h-3 text-cyan-400" />
+              <span>Import Block (.json)</span>
             </button>
           </div>
 
@@ -8039,7 +8343,7 @@ export default function WhiteboardCanvas({
           )}
 
           {/* Group Bounding Box Frame (Linked, Compound, or Temporary Group) */}
-          {selectedNodeIds.length > 1 && (() => {
+          {!isSelectingBox && selectedNodeIds.length > 1 && (() => {
             const selectedNodes = nodes.filter((n) => selectedNodeIds.includes(n.id));
             if (selectedNodes.length === 0) return null;
 
@@ -11574,6 +11878,15 @@ export default function WhiteboardCanvas({
           title="Upload or Drag & Drop .graphml, .pdf, .json, .md, images or diagrams (Hosted on AWS S3)"
         >
           <Upload className="w-4 h-4" />
+        </button>
+
+        {/* Import Block from JSON file */}
+        <button
+          onClick={() => handleTriggerImportBlock()}
+          className="p-2 rounded-lg text-cyan-400 hover:text-cyan-300 hover:bg-[#22242D] transition-colors cursor-pointer"
+          title="Import Block: Place saved block (.json) onto whiteboard"
+        >
+          <FolderInput className="w-4 h-4" />
         </button>
 
         {/* Tech, Product & Flow Icons Gallery */}
