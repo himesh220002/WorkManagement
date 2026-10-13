@@ -316,19 +316,26 @@ function TextColorPicker({
   value,
   onChange,
   defaultColor = "#FFFFFF",
+  onOpenChange,
 }: {
   value?: string;
   onChange: (color: string) => void;
   defaultColor?: string;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const currentColor = value || defaultColor;
 
+  const toggleOpen = (next: boolean) => {
+    setIsOpen(next);
+    onOpenChange?.(next);
+  };
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
+        toggleOpen(false);
       }
     }
     if (isOpen) {
@@ -342,9 +349,10 @@ function TextColorPicker({
       <button
         type="button"
         onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
-          setIsOpen(!isOpen);
+          toggleOpen(!isOpen);
         }}
         className={`flex flex-col items-center justify-center w-6 h-6 rounded hover:bg-[#282A33] px-1 py-0.5 cursor-pointer transition-colors group ${isOpen ? "bg-[#282A33]" : ""
           }`}
@@ -363,7 +371,8 @@ function TextColorPicker({
       {isOpen && (
         <div
           onMouseDown={(e) => e.stopPropagation()}
-          className="absolute top-full left-0 mt-2 p-2.5 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl z-50 flex flex-col gap-2 min-w-[190px]"
+          onTouchStart={(e) => e.stopPropagation()}
+          className="absolute top-full right-0 sm:right-auto sm:left-0 mt-2 p-2.5 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl z-50 flex flex-col gap-2 min-w-[190px]"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between px-0.5">
@@ -384,7 +393,7 @@ function TextColorPicker({
                 onClick={(e) => {
                   e.stopPropagation();
                   onChange(c.value);
-                  setIsOpen(false);
+                  toggleOpen(false);
                 }}
                 className={`w-5 h-5 rounded-full hover:scale-110 transition-transform border cursor-pointer ${currentColor.toLowerCase() === c.value.toLowerCase()
                   ? "ring-2 ring-blue-500 border-white scale-105"
@@ -710,6 +719,8 @@ export default function WhiteboardCanvas({
   const directFileInputRef = useRef<HTMLInputElement>(null);
   const [isDraggingFileOver, setIsDraggingFileOver] = useState(false);
   const [isDraggingItemOver, setIsDraggingItemOver] = useState(false);
+  const dragCounterRef = useRef(0);
+  const [isTextColorPickerOpen, setIsTextColorPickerOpen] = useState(false);
 
   // S3 object deletion modal & notification state ("Delete from here" vs "Delete here + S3")
   const [s3DeleteModal, setS3DeleteModal] = useState<{
@@ -1546,33 +1557,50 @@ export default function WhiteboardCanvas({
     };
   }, []);
 
-  // Dismiss canvas background color picker and tool palettes on outside click
+  // Dismiss canvas background color picker and tool palettes on outside click or touch
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      const target = e.target as Node;
+    function handleClickOutside(e: MouseEvent | TouchEvent) {
+      const target = (e.target as Node) || (("touches" in e && (e as TouchEvent).touches[0]) ? ((e as TouchEvent).touches[0].target as Node) : null);
+      if (!target) return;
+
+      const targetEl = target as HTMLElement;
+
       if (bgColorPickerRef.current && !bgColorPickerRef.current.contains(target)) {
         setShowBgColorPicker(false);
       }
       if (stylePaletteRef.current && !stylePaletteRef.current.contains(target)) {
-        const inFormatBarPalette = (target as HTMLElement).closest?.("[data-palette-container='true']");
-        if (!inFormatBarPalette) {
+        const inFormatBarPalette = targetEl.closest?.("[data-palette-container='true']");
+        const inPaletteTrigger = targetEl.closest?.("[data-palette-trigger='true']");
+        if (!inFormatBarPalette && !inPaletteTrigger) {
           setShowStylePalette(false);
         }
       }
       if (shapePaletteRef.current && !shapePaletteRef.current.contains(target)) {
-        setShowShapePalette(false);
+        const inShapeTrigger = targetEl.closest?.("[data-shape-trigger='true']");
+        if (!inShapeTrigger) {
+          setShowShapePalette(false);
+        }
       }
       if (templateSelectorRef.current && !templateSelectorRef.current.contains(target)) {
-        setShowTemplateSelector(false);
+        const inTemplateTrigger = targetEl.closest?.("[data-template-trigger='true']");
+        if (!inTemplateTrigger) {
+          setShowTemplateSelector(false);
+        }
       }
       if (shapeSwitcherRef.current && !shapeSwitcherRef.current.contains(target)) {
         setShowShapeSwitcher(false);
       }
       if (iconGalleryRef.current && !iconGalleryRef.current.contains(target)) {
-        setShowIconGallery(false);
+        const inIconTrigger = targetEl.closest?.("[data-icon-trigger='true']");
+        if (!inIconTrigger) {
+          setShowIconGallery(false);
+        }
       }
       if (tableDialogRef.current && !tableDialogRef.current.contains(target)) {
-        setShowTableDialog(false);
+        const inTableTrigger = targetEl.closest?.("[data-table-trigger='true']");
+        if (!inTableTrigger) {
+          setShowTableDialog(false);
+        }
       }
     }
     if (
@@ -1585,7 +1613,11 @@ export default function WhiteboardCanvas({
       showTableDialog
     ) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      document.addEventListener("touchstart", handleClickOutside, { passive: true });
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+        document.removeEventListener("touchstart", handleClickOutside);
+      };
     }
   }, [
     showBgColorPicker,
@@ -2451,6 +2483,7 @@ export default function WhiteboardCanvas({
     setNodes(updated);
     pushHistory(updated, edges);
     setSelectedNodeId(newId);
+    setSelectedNodeIds([newId]);
     setShowShapePalette(false);
     triggerAutoSave(updated, edges);
   };
@@ -4020,10 +4053,16 @@ export default function WhiteboardCanvas({
     showTemporaryToast,
   ]);
 
-  // Synchronize zoom, pan, and activeTool refs for wheel and touch listeners
+  // Synchronize zoom, pan, activeTool, and handler refs for wheel, drag, and touch listeners
   const zoomRef = useRef(zoom);
   const panRef = useRef(pan);
   const activeToolRef = useRef(activeTool);
+  const handleMouseMoveRef = useRef(handleMouseMove);
+  handleMouseMoveRef.current = handleMouseMove;
+  const handleMouseUpRef = useRef(handleMouseUp);
+  handleMouseUpRef.current = handleMouseUp;
+  const getCanvasCoordsRef = useRef(getCanvasCoords);
+  getCanvasCoordsRef.current = getCanvasCoords;
   useEffect(() => {
     zoomRef.current = zoom;
   }, [zoom]);
@@ -4062,7 +4101,9 @@ export default function WhiteboardCanvas({
 
           if (isScrollCandidate) {
             const hasVert = e.deltaY !== 0 && currentEl.scrollHeight > currentEl.clientHeight + 1;
-            const hasHoriz = e.deltaX !== 0 && currentEl.scrollWidth > currentEl.clientWidth + 1;
+            const hasHoriz =
+              (e.deltaX !== 0 || (e.deltaY !== 0 && !hasVert)) &&
+              currentEl.scrollWidth > currentEl.clientWidth + 1;
             if (hasVert || hasHoriz) {
               scrollable = currentEl;
               break;
@@ -4082,7 +4123,9 @@ export default function WhiteboardCanvas({
             ) as HTMLElement[];
             for (const cand of candidates) {
               const hasVert = e.deltaY !== 0 && cand.scrollHeight > cand.clientHeight + 1;
-              const hasHoriz = e.deltaX !== 0 && cand.scrollWidth > cand.clientWidth + 1;
+              const hasHoriz =
+                (e.deltaX !== 0 || (e.deltaY !== 0 && !hasVert)) &&
+                cand.scrollWidth > cand.clientWidth + 1;
               if (hasVert || hasHoriz) {
                 scrollable = cand;
                 break;
@@ -4099,6 +4142,8 @@ export default function WhiteboardCanvas({
             // Scroll the element directly so transformed canvas doesn't swallow wheel events
             if (hasVerticalOverflow && e.deltaY !== 0) {
               scrollable.scrollTop += e.deltaY;
+            } else if (hasHorizontalOverflow && e.deltaY !== 0) {
+              scrollable.scrollLeft += e.deltaY;
             }
             if (hasHorizontalOverflow && e.deltaX !== 0) {
               scrollable.scrollLeft += e.deltaX;
@@ -4187,6 +4232,30 @@ export default function WhiteboardCanvas({
 
       if (e.touches.length === 1) {
         const t = e.touches[0];
+        // 1. Pen tool drawing on mobile touch
+        if (activeToolRef.current === "draw") {
+          e.preventDefault();
+          const coords = getCanvasCoords(t.clientX, t.clientY);
+          setIsDrawingPen(true);
+          setCurrentPenPoints([coords]);
+          return;
+        }
+
+        // 2. Interactive line or arrow drawing on mobile touch
+        if (activeToolRef.current === "line" || activeToolRef.current === "arrow-line") {
+          e.preventDefault();
+          const coords = getCanvasCoords(t.clientX, t.clientY);
+          setInteractiveLineDrawing({
+            tool: activeToolRef.current,
+            startX: coords.x,
+            startY: coords.y,
+            currentX: coords.x,
+            currentY: coords.y,
+          });
+          return;
+        }
+
+        // 3. Hand pan tool
         if (activeToolRef.current === "hand") {
           isSingleTouchPanning = true;
           singleTouchPanStart = {
@@ -4220,7 +4289,16 @@ export default function WhiteboardCanvas({
         return;
       }
 
-      // 2. Single finger pan with hand tool
+      // 2. Active pen stroke drawing
+      if (e.touches.length === 1 && activeToolRef.current === "draw") {
+        e.preventDefault();
+        const t = e.touches[0];
+        const coords = getCanvasCoords(t.clientX, t.clientY);
+        setCurrentPenPoints((prev) => [...prev, coords]);
+        return;
+      }
+
+      // 3. Single finger pan with hand tool
       if (e.touches.length === 1 && isSingleTouchPanning) {
         e.preventDefault();
         const t = e.touches[0];
@@ -4239,6 +4317,9 @@ export default function WhiteboardCanvas({
       }
       if (e.touches.length === 0) {
         isSingleTouchPanning = false;
+        if (activeToolRef.current === "draw") {
+          handleMouseUpRef.current();
+        }
       }
     };
 
@@ -4255,7 +4336,7 @@ export default function WhiteboardCanvas({
     };
   }, []);
 
-  // Global touch drag tracking for dragging nodes, resize handles, or edge control points on tablet
+  // Global touch and mouse drag tracking for dragging nodes, resize handles, pen drawings, or line tips
   useEffect(() => {
     const isDraggingSomething = Boolean(
       draggingNodeId ||
@@ -4263,7 +4344,9 @@ export default function WhiteboardCanvas({
       draggingLineMiddle ||
       resizing ||
       resizingDivider ||
-      draggingEdgeControlPoint
+      draggingEdgeControlPoint ||
+      isDrawingPen ||
+      interactiveLineDrawing
     );
     if (!isDraggingSomething) return;
 
@@ -4271,7 +4354,7 @@ export default function WhiteboardCanvas({
       if (e.touches.length === 1) {
         e.preventDefault();
         const t = e.touches[0];
-        handleMouseMove({
+        handleMouseMoveRef.current({
           clientX: t.clientX,
           clientY: t.clientY,
         } as unknown as React.MouseEvent);
@@ -4279,17 +4362,23 @@ export default function WhiteboardCanvas({
     };
 
     const handleWindowTouchEnd = () => {
-      handleMouseUp();
+      handleMouseUpRef.current();
+    };
+
+    const handleWinMouseUp = () => {
+      handleMouseUpRef.current();
     };
 
     window.addEventListener("touchmove", handleWindowTouchMove, { passive: false });
     window.addEventListener("touchend", handleWindowTouchEnd, { passive: false });
     window.addEventListener("touchcancel", handleWindowTouchEnd, { passive: false });
+    window.addEventListener("mouseup", handleWinMouseUp);
 
     return () => {
       window.removeEventListener("touchmove", handleWindowTouchMove);
       window.removeEventListener("touchend", handleWindowTouchEnd);
       window.removeEventListener("touchcancel", handleWindowTouchEnd);
+      window.removeEventListener("mouseup", handleWinMouseUp);
     };
   }, [
     draggingNodeId,
@@ -4298,13 +4387,39 @@ export default function WhiteboardCanvas({
     resizing,
     resizingDivider,
     draggingEdgeControlPoint,
-    handleMouseMove,
-    handleMouseUp,
+    isDrawingPen,
+    interactiveLineDrawing,
   ]);
 
-  // Touch start bridge for nodes on tablet
+  // Touch start bridge for nodes on tablet and mobile
   const handleNodeTouchStart = useCallback(
     (node: IWhiteboardNode, e: React.TouchEvent) => {
+      // 1. If Pen Draw Tool is active, start drawing rather than dragging node
+      if (activeToolRef.current === "draw") {
+        if (e.touches.length === 1) {
+          e.preventDefault();
+          const t = e.touches[0];
+          const coords = getCanvasCoords(t.clientX, t.clientY);
+          setIsDrawingPen(true);
+          setCurrentPenPoints([coords]);
+        }
+        return;
+      }
+
+      // 2. Allow inner scroll inside scrollable elements (notes, markdown, checklists, textareas, tables)
+      const target = e.target as HTMLElement | null;
+      const scrollable = target?.closest(
+        "[data-scrollable='true'], textarea, .overflow-y-auto, .overflow-auto"
+      ) as HTMLElement | null;
+      if (
+        scrollable &&
+        (scrollable.scrollHeight > scrollable.clientHeight + 1 ||
+          scrollable.scrollWidth > scrollable.clientWidth + 1)
+      ) {
+        // Allow inner scroll without initiating node dragging
+        return;
+      }
+
       if (e.touches.length === 1) {
         const t = e.touches[0];
         const syntheticEvent = {
@@ -4320,7 +4435,7 @@ export default function WhiteboardCanvas({
         handleNodeMouseDown(node, syntheticEvent);
       }
     },
-    [handleNodeMouseDown]
+    [handleNodeMouseDown, getCanvasCoords]
   );
 
   // Selected Node Reference
@@ -4872,7 +4987,7 @@ export default function WhiteboardCanvas({
               }
             }}
             style={{ ...h.style, cursor: h.cursor }}
-            className="absolute w-2.5 h-2.5 bg-white border border-blue-600 rounded-[2px] shadow-md z-30 hover:scale-125 transition-transform"
+            className="absolute w-3 h-3 sm:w-2.5 sm:h-2.5 bg-white border border-blue-600 rounded-[2px] shadow-md z-30 hover:scale-125 transition-transform before:content-[''] before:absolute before:-inset-3 sm:before:-inset-1.5 before:rounded-full before:z-10"
             title={`Resize ${h.name.toUpperCase()}`}
           />
         ))}
@@ -5339,6 +5454,8 @@ export default function WhiteboardCanvas({
   // Handle dropping draggable toolbar items or files onto canvas
   const handleCanvasDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
     setIsDraggingFileOver(false);
     setIsDraggingItemOver(false);
 
@@ -5395,22 +5512,24 @@ export default function WhiteboardCanvas({
     <div
       onDragEnter={(e) => {
         e.preventDefault();
-        if (e.dataTransfer.types.includes("Files")) {
-          setIsDraggingFileOver(true);
-        } else {
-          setIsDraggingItemOver(true);
+        dragCounterRef.current += 1;
+        if (dragCounterRef.current === 1) {
+          const types = Array.from(e.dataTransfer.types || []);
+          if (types.includes("Files")) {
+            setIsDraggingFileOver(true);
+          } else {
+            setIsDraggingItemOver(true);
+          }
         }
       }}
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
-        if (!isDraggingFileOver && e.dataTransfer.types.includes("Files")) {
-          setIsDraggingFileOver(true);
-        }
       }}
       onDragLeave={(e) => {
         e.preventDefault();
-        if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) {
+        dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+        if (dragCounterRef.current === 0) {
           setIsDraggingFileOver(false);
           setIsDraggingItemOver(false);
         }
@@ -5667,11 +5786,62 @@ export default function WhiteboardCanvas({
       {selectedNode && selectedNodeIds.length <= 1 && (
         <div
           onMouseDown={(e) => e.stopPropagation()}
-          className="absolute z-40 bg-[#1A1C22] border border-[#2D3039] rounded-lg shadow-2xl px-2.5 py-1.5 flex items-center gap-2 text-xs text-gray-300 animate-in fade-in-50 max-w-[calc(100vw-24px)] overflow-x-auto scrollbar-none"
-          style={{
-            left: Math.max(12, Math.min(window.innerWidth - 760, selectedNode.x * zoom + pan.x)),
-            top: Math.max(60, selectedNode.y * zoom + pan.y - 48),
+          onTouchStart={(e) => e.stopPropagation()}
+          onWheel={(e) => {
+            if (e.currentTarget.scrollWidth > e.currentTarget.clientWidth) {
+              if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                e.currentTarget.scrollLeft += e.deltaY;
+              } else {
+                e.currentTarget.scrollLeft += e.deltaX;
+              }
+              e.stopPropagation();
+            }
           }}
+          className={`absolute z-40 bg-[#1A1C22] border border-[#2D3039] rounded-lg shadow-2xl px-2.5 py-1.5 flex flex-nowrap items-center gap-1.5 sm:gap-2 text-xs text-gray-300 animate-in fade-in-50 whitespace-nowrap [&>*]:shrink-0 touch-pan-x ${
+            showStylePalette || showShapeSwitcher || isTextColorPickerOpen
+              ? "overflow-visible"
+              : "overflow-x-auto scrollbar-none"
+          }`}
+          style={(() => {
+            const isLineNode = selectedNode.type === "line";
+            const maxW = typeof window !== "undefined" ? window.innerWidth : 1200;
+            const maxH = typeof window !== "undefined" ? window.innerHeight : 800;
+            const estBarWidth = 560;
+            const maxLeft = Math.max(12, maxW - estBarWidth - 16);
+
+            let formatBarLeft = Math.max(12, Math.min(maxLeft, selectedNode.x * zoom + pan.x));
+            let formatBarTop = Math.max(60, Math.min(maxH - 80, selectedNode.y * zoom + pan.y - 52));
+
+            if (isLineNode) {
+              const ep = getLineEndpoints(selectedNode);
+              const minLineY = Math.min(ep.y1, ep.y2) * zoom + pan.y;
+              const maxLineY = Math.max(ep.y1, ep.y2) * zoom + pan.y;
+              const midLineX = ((ep.x1 + ep.x2) / 2) * zoom + pan.x;
+
+              // Center horizontally over the midpoint of the line
+              formatBarLeft = Math.max(12, Math.min(maxLeft, midLineX - 160));
+
+              // Position with generous clearance (72px above highest tip) so ends remain easily clickable
+              if (minLineY - 72 >= 64) {
+                formatBarTop = Math.max(60, Math.min(maxH - 80, minLineY - 72));
+              } else {
+                formatBarTop = Math.max(60, Math.min(maxH - 80, maxLineY + 52));
+              }
+            } else {
+              // If node is close to header (under 60px), position bar below node so it never gets hidden under header
+              const nodeScreenY = selectedNode.y * zoom + pan.y;
+              const nodeHeight = (selectedNode.height || 80) * zoom;
+              if (nodeScreenY - 52 < 60 && nodeScreenY + nodeHeight + 52 < maxH - 80) {
+                formatBarTop = nodeScreenY + nodeHeight + 12;
+              }
+            }
+
+            return {
+              left: formatBarLeft,
+              top: formatBarTop,
+              maxWidth: Math.max(180, maxW - formatBarLeft - 16),
+            };
+          })()}
         >
           <span className="px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400 text-[10px] font-bold uppercase tracking-wider shrink-0">
             {selectedNode.type === "shape"
@@ -5718,6 +5888,7 @@ export default function WhiteboardCanvas({
                 <button
                   type="button"
                   onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowShapeSwitcher(!showShapeSwitcher);
@@ -5743,6 +5914,7 @@ export default function WhiteboardCanvas({
                 {showShapeSwitcher && (
                   <div
                     onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
                     className="absolute top-full left-0 mt-2 p-1.5 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl grid grid-cols-4 gap-1 z-50 w-36"
                   >
@@ -5761,6 +5933,7 @@ export default function WhiteboardCanvas({
                           key={st.type}
                           type="button"
                           onMouseDown={(e) => e.stopPropagation()}
+                          onTouchStart={(e) => e.stopPropagation()}
                           onClick={(e) => {
                             e.stopPropagation();
                             updateSelectedNode({ shapeType: st.type as any });
@@ -5814,6 +5987,7 @@ export default function WhiteboardCanvas({
                 value={selectedNode.textColor}
                 onChange={(color) => updateSelectedNode({ textColor: color })}
                 defaultColor="#FFFFFF"
+                onOpenChange={setIsTextColorPickerOpen}
               />
 
               {/* Fill Type */}
@@ -5839,12 +6013,14 @@ export default function WhiteboardCanvas({
               <div className="relative" data-palette-container="true">
                 <button
                   type="button"
+                  data-palette-trigger="true"
                   onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowStylePalette(!showStylePalette);
                   }}
-                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs cursor-pointer hover:scale-110 transition-transform"
+                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs cursor-pointer hover:scale-110 transition-transform relative before:content-[''] before:absolute before:-inset-2 before:rounded-full"
                   style={{ backgroundColor: selectedNode.color || "#0078D4" }}
                   title="Change Box Color"
                 />
@@ -5852,14 +6028,16 @@ export default function WhiteboardCanvas({
                 {showStylePalette && (
                   <div
                     onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50"
+                    className="absolute top-full right-0 sm:right-auto sm:left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50"
                   >
                     {COLOR_PALETTE.map((c) => (
                       <button
                         key={c.name}
                         type="button"
                         onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveColor(c.value);
@@ -5895,12 +6073,14 @@ export default function WhiteboardCanvas({
               <div className="relative shrink-0" data-palette-container="true">
                 <button
                   type="button"
+                  data-palette-trigger="true"
                   onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowStylePalette(!showStylePalette);
                   }}
-                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs cursor-pointer hover:scale-110 transition-transform"
+                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs cursor-pointer hover:scale-110 transition-transform relative before:content-[''] before:absolute before:-inset-2 before:rounded-full"
                   style={{ backgroundColor: selectedNode.color || "#0EA5E9" }}
                   title="Change Component Color"
                 />
@@ -5908,14 +6088,16 @@ export default function WhiteboardCanvas({
                 {showStylePalette && (
                   <div
                     onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50"
+                    className="absolute top-full right-0 sm:right-auto sm:left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50"
                   >
                     {COLOR_PALETTE.map((c) => (
                       <button
                         key={c.name}
                         type="button"
                         onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveColor(c.value);
@@ -5959,6 +6141,7 @@ export default function WhiteboardCanvas({
                 value={selectedNode.textColor}
                 onChange={(color) => updateSelectedNode({ textColor: color })}
                 defaultColor="#FFFFFF"
+                onOpenChange={setIsTextColorPickerOpen}
               />
 
               <div className="h-4 w-px bg-[#30333D] shrink-0" />
@@ -5984,12 +6167,14 @@ export default function WhiteboardCanvas({
               <div className="relative shrink-0" data-palette-container="true">
                 <button
                   type="button"
+                  data-palette-trigger="true"
                   onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowStylePalette(!showStylePalette);
                   }}
-                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs cursor-pointer hover:scale-110 transition-transform"
+                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs cursor-pointer hover:scale-110 transition-transform relative before:content-[''] before:absolute before:-inset-2 before:rounded-full"
                   style={{ backgroundColor: selectedNode.color || "#0078D4" }}
                   title="Change Box Color"
                 />
@@ -5997,14 +6182,16 @@ export default function WhiteboardCanvas({
                 {showStylePalette && (
                   <div
                     onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50"
+                    className="absolute top-full right-0 sm:right-auto sm:left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50"
                   >
                     {COLOR_PALETTE.map((c) => (
                       <button
                         key={c.name}
                         type="button"
                         onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveColor(c.value);
@@ -6031,6 +6218,7 @@ export default function WhiteboardCanvas({
                   value={selectedNode.textColor}
                   onChange={(color) => updateSelectedNode({ textColor: color })}
                   defaultColor="#FDE68A"
+                  onOpenChange={setIsTextColorPickerOpen}
                 />
                 <FontSizeControl
                   fontSize={selectedNode.fontSize}
@@ -6050,6 +6238,7 @@ export default function WhiteboardCanvas({
                   value={selectedNode.bodyTextColor}
                   onChange={(color) => updateSelectedNode({ bodyTextColor: color })}
                   defaultColor="#FFFFFF"
+                  onOpenChange={setIsTextColorPickerOpen}
                 />
                 <FontSizeControl
                   fontSize={selectedNode.bodyFontSize}
@@ -6257,6 +6446,7 @@ export default function WhiteboardCanvas({
                   value={selectedNode.textColor}
                   onChange={(color) => updateSelectedNode({ textColor: color })}
                   defaultColor="#FBCFE8"
+                  onOpenChange={setIsTextColorPickerOpen}
                 />
               </>
             );
@@ -6329,6 +6519,7 @@ export default function WhiteboardCanvas({
                 value={selectedNode.textColor || selectedNode.color}
                 onChange={(color) => updateSelectedNode({ color, textColor: color })}
                 defaultColor="#FFFFFF"
+                onOpenChange={setIsTextColorPickerOpen}
               />
             </>
           )}
@@ -6397,24 +6588,40 @@ export default function WhiteboardCanvas({
               </div>
 
               {/* Stroke Color */}
-              <div className="relative">
+              <div className="relative" data-palette-container="true">
                 <button
-                  onClick={() => setShowStylePalette(!showStylePalette)}
-                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs"
+                  type="button"
+                  data-palette-trigger="true"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowStylePalette(!showStylePalette);
+                  }}
+                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs cursor-pointer hover:scale-110 transition-transform relative before:content-[''] before:absolute before:-inset-2 before:rounded-full"
                   style={{ backgroundColor: selectedNode.color || "#EC4899" }}
                   title="Stroke Color"
                 />
 
                 {showStylePalette && (
-                  <div className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50">
+                  <div
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-full right-0 sm:right-auto sm:left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50"
+                  >
                     {COLOR_PALETTE.map((c) => (
                       <button
                         key={c.name}
-                        onClick={() => {
+                        type="button"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
                           updateSelectedNode({ color: c.value });
                           setShowStylePalette(false);
                         }}
-                        className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20"
+                        className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20 cursor-pointer"
                         style={{ backgroundColor: c.value }}
                         title={c.name}
                       />
@@ -6428,24 +6635,40 @@ export default function WhiteboardCanvas({
           {/* G. LOGO / LEGEND CONTROLS */}
           {(selectedNode.type === "logo" || selectedNode.type === "legend") && (
             <>
-              <div className="relative">
+              <div className="relative" data-palette-container="true">
                 <button
-                  onClick={() => setShowStylePalette(!showStylePalette)}
-                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs"
+                  type="button"
+                  data-palette-trigger="true"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowStylePalette(!showStylePalette);
+                  }}
+                  className="w-4 h-4 rounded-full border border-white/40 shadow-xs cursor-pointer hover:scale-110 transition-transform relative before:content-[''] before:absolute before:-inset-2 before:rounded-full"
                   style={{ backgroundColor: selectedNode.color || "#06B6D4" }}
                   title="Change Color"
                 />
 
                 {showStylePalette && (
-                  <div className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50">
+                  <div
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-full right-0 sm:right-auto sm:left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50"
+                  >
                     {COLOR_PALETTE.map((c) => (
                       <button
                         key={c.name}
-                        onClick={() => {
+                        type="button"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
                           updateSelectedNode({ color: c.value });
                           setShowStylePalette(false);
                         }}
-                        className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20"
+                        className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20 cursor-pointer"
                         style={{ backgroundColor: c.value }}
                         title={c.name}
                       />
@@ -6568,25 +6791,40 @@ export default function WhiteboardCanvas({
                 </div>
 
                 {/* Stroke Color Swatch & Palette */}
-                <div className="relative">
+                <div className="relative" data-palette-container="true">
                   <button
-                    onClick={() => setShowStylePalette(!showStylePalette)}
-                    className="w-4 h-4 rounded-full border border-white/40 shadow-xs"
+                    type="button"
+                    data-palette-trigger="true"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowStylePalette(!showStylePalette);
+                    }}
+                    className="w-4 h-4 rounded-full border border-white/40 shadow-xs cursor-pointer hover:scale-110 transition-transform relative before:content-[''] before:absolute before:-inset-2 before:rounded-full"
                     style={{ backgroundColor: selectedNode.color || "#60A5FA" }}
                     title="Change Stroke Color"
                   />
 
                   {showStylePalette && (
-                    <div className="absolute top-full left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50">
+                    <div
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-full right-0 sm:right-auto sm:left-0 mt-2 p-2 bg-[#1A1C22] border border-[#2E313B] rounded-lg shadow-2xl flex items-center gap-1 z-50"
+                    >
                       {COLOR_PALETTE.map((c) => (
                         <button
                           key={c.name}
+                          type="button"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onTouchStart={(e) => e.stopPropagation()}
                           onClick={() => {
                             setActiveColor(c.value);
                             updateSelectedNode({ color: c.value });
                             setShowStylePalette(false);
                           }}
-                          className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20"
+                          className="w-5 h-5 rounded-full hover:scale-110 transition-transform border border-white/20 cursor-pointer"
                           style={{ backgroundColor: c.value }}
                           title={c.name}
                         />
@@ -6635,7 +6873,9 @@ export default function WhiteboardCanvas({
         // Position centered above group in screen coordinates, safely clamped to screen viewport
         const groupCenterX = minX + (maxX - minX) / 2;
         const winW = typeof window !== "undefined" ? window.innerWidth : 1400;
-        const screenLeft = Math.max(12, Math.min(winW - 740, groupCenterX * zoom + pan.x - 240));
+        const estMultiBarWidth = 620;
+        const maxMultiLeft = Math.max(12, winW - estMultiBarWidth - 16);
+        const screenLeft = Math.max(12, Math.min(maxMultiLeft, groupCenterX * zoom + pan.x - 240));
         const screenTop = Math.max(65, minY * zoom + pan.y - 54);
 
         const selectedGroupIds = Array.from(
@@ -6655,10 +6895,23 @@ export default function WhiteboardCanvas({
 
         return (
           <div
-            className="absolute z-40 bg-[#1A1C22]/95 backdrop-blur-md border border-cyan-500/50 rounded-xl shadow-2xl px-3 py-1.5 flex items-center gap-2.5 text-xs text-gray-200 animate-in fade-in-50 max-w-[calc(100vw-24px)] overflow-x-auto scrollbar-none"
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onWheel={(e) => {
+              if (e.currentTarget.scrollWidth > e.currentTarget.clientWidth) {
+                if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                  e.currentTarget.scrollLeft += e.deltaY;
+                } else {
+                  e.currentTarget.scrollLeft += e.deltaX;
+                }
+                e.stopPropagation();
+              }
+            }}
+            className="absolute z-40 bg-[#1A1C22]/95 backdrop-blur-md border border-cyan-500/50 rounded-xl shadow-2xl px-3 py-1.5 flex flex-nowrap items-center gap-2.5 text-xs text-gray-200 animate-in fade-in-50 whitespace-nowrap [&>*]:shrink-0 touch-pan-x overflow-x-auto scrollbar-none"
             style={{
               left: screenLeft,
               top: screenTop,
+              maxWidth: Math.max(180, winW - screenLeft - 16),
             }}
           >
             {/* Group Header Badge */}
@@ -9421,8 +9674,19 @@ export default function WhiteboardCanvas({
                           top: `${y1}px`,
                           transform: "translate(-50%, -50%)",
                         }}
-                        className="w-5 h-5 rounded-full bg-blue-500 border-2 border-white shadow-lg cursor-crosshair flex items-center justify-center hover:scale-125 hover:bg-blue-400 transition-transform pointer-events-auto z-30 group"
+                        className="w-5 h-5 rounded-full bg-blue-500 border-2 border-white shadow-lg cursor-crosshair flex items-center justify-center hover:scale-125 hover:bg-blue-400 transition-transform pointer-events-auto z-45 group before:content-[''] before:absolute before:-inset-3 before:rounded-full"
                         onMouseDown={(e) => handleLineTipMouseDown(node, "start", e)}
+                        onTouchStart={(e) => {
+                          if (e.touches.length === 1) {
+                            const t = e.touches[0];
+                            handleLineTipMouseDown(node, "start", {
+                              clientX: t.clientX,
+                              clientY: t.clientY,
+                              stopPropagation: () => e.stopPropagation(),
+                              preventDefault: () => e.preventDefault(),
+                            } as any);
+                          }
+                        }}
                         title="Left Tip: Drag in 360° to rotate or extend (Hold Shift for 15° snap)"
                       >
                         <div className="w-1.5 h-1.5 rounded-full bg-white pointer-events-none" />
@@ -9436,8 +9700,19 @@ export default function WhiteboardCanvas({
                           top: `${y2}px`,
                           transform: "translate(-50%, -50%)",
                         }}
-                        className="w-5 h-5 rounded-full bg-blue-500 border-2 border-white shadow-lg cursor-crosshair flex items-center justify-center hover:scale-125 hover:bg-blue-400 transition-transform pointer-events-auto z-30 group"
+                        className="w-5 h-5 rounded-full bg-blue-500 border-2 border-white shadow-lg cursor-crosshair flex items-center justify-center hover:scale-125 hover:bg-blue-400 transition-transform pointer-events-auto z-45 group before:content-[''] before:absolute before:-inset-3 before:rounded-full"
                         onMouseDown={(e) => handleLineTipMouseDown(node, "end", e)}
+                        onTouchStart={(e) => {
+                          if (e.touches.length === 1) {
+                            const t = e.touches[0];
+                            handleLineTipMouseDown(node, "end", {
+                              clientX: t.clientX,
+                              clientY: t.clientY,
+                              stopPropagation: () => e.stopPropagation(),
+                              preventDefault: () => e.preventDefault(),
+                            } as any);
+                          }
+                        }}
                         title="Right Tip: Drag in 360° to rotate or extend (Hold Shift for 15° snap)"
                       >
                         <div className="w-1.5 h-1.5 rounded-full bg-white pointer-events-none" />
@@ -9451,8 +9726,19 @@ export default function WhiteboardCanvas({
                           top: `${midY}px`,
                           transform: "translate(-50%, -50%)",
                         }}
-                        className="w-4 h-4 rounded-full bg-cyan-400 border-2 border-[#16171E] shadow-md cursor-move flex items-center justify-center hover:scale-125 hover:bg-cyan-300 transition-transform pointer-events-auto z-30"
+                        className="w-4 h-4 rounded-full bg-cyan-400 border-2 border-[#16171E] shadow-md cursor-move flex items-center justify-center hover:scale-125 hover:bg-cyan-300 transition-transform pointer-events-auto z-45 before:content-[''] before:absolute before:-inset-3 before:rounded-full"
                         onMouseDown={(e) => handleLineMiddleMouseDown(node, e)}
+                        onTouchStart={(e) => {
+                          if (e.touches.length === 1) {
+                            const t = e.touches[0];
+                            handleLineMiddleMouseDown(node, {
+                              clientX: t.clientX,
+                              clientY: t.clientY,
+                              stopPropagation: () => e.stopPropagation(),
+                              preventDefault: () => e.preventDefault(),
+                            } as any);
+                          }
+                        }}
                         title="Middle: Drag to move line across canvas"
                       >
                         <div className="w-1 h-1 rounded-full bg-black pointer-events-none" />
@@ -10022,8 +10308,16 @@ export default function WhiteboardCanvas({
         </div>
       )}
 
-      {/* 6. FLOATING BOTTOM TOOLBAR (Matching exact layout from Screenshots 2, 3, 4, 5) */}
-      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-40 bg-[#16171E]/95 backdrop-blur-md border border-[#262832] rounded-xl shadow-2xl px-2 sm:px-3 py-1.5 flex items-center gap-1 sm:gap-1.5 max-w-[calc(100vw-24px)] md:max-w-[calc(100vw-32px)] xl:max-w-none overflow-x-auto scrollbar-none touch-pan-x">
+      <div
+        className={`absolute bottom-5 left-1/2 -translate-x-1/2 z-40 bg-[#16171E]/95 backdrop-blur-md border border-[#262832] rounded-xl shadow-2xl px-2 sm:px-3 py-1.5 flex items-center gap-1 sm:gap-1.5 max-w-[calc(100vw-24px)] md:max-w-[calc(100vw-32px)] xl:max-w-none touch-pan-x scrollbar-none ${showShapePalette ||
+          showTableDialog ||
+          showIconGallery ||
+          showTemplateSelector ||
+          showStylePalette
+          ? "overflow-visible"
+          : "overflow-x-auto"
+          }`}
+      >
         {/* V - Select Tool */}
         <button
           onClick={() => setActiveTool("select")}
