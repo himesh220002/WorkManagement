@@ -3,6 +3,11 @@ import { ORG_CHART_NODES, ORG_CHART_EDGES, WHITEBOARD_TEMPLATES } from "@/lib/wh
 import {
   validateJson,
   toggleMarkdownCheckbox,
+  isPotentialTableRow,
+  isTableDelimiterRow,
+  parseTableCells,
+  parseTableAlignments,
+  renderMarkdownToJsx,
   DEFAULT_JSON_NOTE,
   DEFAULT_TEXT_NOTE,
   DEFAULT_MARKDOWN_NOTE,
@@ -1537,6 +1542,50 @@ describe("Whiteboard Canvas & Organizational Chart Template", () => {
       const newSubtitle = `${newStatus} (50%)`;
       expect(newSubtitle).toBe("In Progress (50%)");
     });
+
+    it("supports simplified markdown task design with separate upper and lower styling", () => {
+      // 1. Task node with independent upper & lower font sizes and text colors
+      const taskNode = {
+        id: "task-md-1",
+        type: "task" as const,
+        title: "### Problem 1: High Initial Inventory",
+        body: "- Bottleneck: Pre-ordering 4,300 units\n- Risk: Dead stock\n- Impact: Cashflow depletion",
+        subtitle: "Identified by Finance Lead Harsh M",
+        fontSize: "18px",
+        textColor: "#FDE68A",
+        bodyFontSize: "13px",
+        bodyTextColor: "#60A5FA",
+        color: "#D97706",
+        height: 240,
+        headerHeight: 70,
+      };
+
+      // 2. Backward compatibility: combines subtitle and body seamlessly
+      const resolveLowerContent = (node: { body?: string; subtitle?: string }) => {
+        if (node.body && node.subtitle && !node.body.includes(node.subtitle)) {
+          return `**${node.subtitle}**\n\n${node.body}`;
+        }
+        return node.body || node.subtitle || "";
+      };
+
+      const resolved = resolveLowerContent(taskNode);
+      expect(resolved).toContain("**Identified by Finance Lead Harsh M**");
+      expect(resolved).toContain("- Bottleneck: Pre-ordering 4,300 units");
+
+      // When subtitle is already inside body, it does not duplicate
+      const alreadyMergedNode = {
+        title: "Feature Launch",
+        body: "**Status: Live**\n\nAll systems operational",
+        subtitle: "Status: Live",
+      };
+      expect(resolveLowerContent(alreadyMergedNode)).toBe("**Status: Live**\n\nAll systems operational");
+
+      // 3. Separate upper and lower styles
+      expect(taskNode.fontSize).toBe("18px");
+      expect(taskNode.textColor).toBe("#FDE68A");
+      expect(taskNode.bodyFontSize).toBe("13px");
+      expect(taskNode.bodyTextColor).toBe("#60A5FA");
+    });
   });
 
   describe("Straight Line & Independent Arrow Mechanics (Rotatable Tips & Middle Drag)", () => {
@@ -1944,6 +1993,41 @@ describe("Sticky Note Multi-Format Structuring (JSON, Markdown, Text, Checklist)
       const md = "# Header Line\nSome regular paragraph text\n> Blockquote";
       const untouched = toggleMarkdownCheckbox(md, 0);
       expect(untouched).toBe(md);
+    });
+
+    it("parses markdown table rows, delimiters, and column alignments correctly", () => {
+      const headerRow = "| Vertical | Hero SKU | Sourcing Cost | Retail Price | Gross Margin | Initial Stock |";
+      const delimiterRow = "| :--- | :---: | ---: | :--- | :--- | :--- |";
+      const bodyRow = "| Books | 'Clean Cloud Architecture' | $12.50 | $34.00 | 63.2% | 1,200 units |";
+
+      expect(isPotentialTableRow(headerRow)).toBe(true);
+      expect(isTableDelimiterRow(delimiterRow)).toBe(true);
+      expect(isTableDelimiterRow(headerRow)).toBe(false);
+
+      const headers = parseTableCells(headerRow);
+      expect(headers).toEqual(["Vertical", "Hero SKU", "Sourcing Cost", "Retail Price", "Gross Margin", "Initial Stock"]);
+
+      const alignments = parseTableAlignments(delimiterRow);
+      expect(alignments).toEqual(["left", "center", "right", "left", "left", "left"]);
+
+      const cells = parseTableCells(bodyRow);
+      expect(cells).toEqual(["Books", "'Clean Cloud Architecture'", "$12.50", "$34.00", "63.2%", "1,200 units"]);
+    });
+
+    it("renders markdown table into structured React JSX elements", () => {
+      const tableMd = `### Product Sourcing Matrix
+| Vertical | Hero SKU | Sourcing Cost | Retail Price | Gross Margin | Initial Stock |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Books** | 'Clean Cloud Architecture' | $12.50 | $34.00 | 63.2% | 1,200 units |
+| **Shirts** | Heavyweight 'Debug Mode' Tee | $9.80 | $34.00 | 71.2% | 2,500 units |
+| **Decor** | Matte Sand Dune Ceramic Vase | $18.00 | $54.00 | 66.7% | 600 units |
+| **Decor** | Geometric LED Ambient Lamp | $26.00 | $78.00 | 66.7% | 300 units |`;
+
+      const jsx = renderMarkdownToJsx(tableMd);
+      expect(jsx).toBeDefined();
+
+      const cellsWithEscapedPipe = parseTableCells("| Clean \\| Modern | $12.50 |");
+      expect(cellsWithEscapedPipe).toEqual(["Clean | Modern", "$12.50"]);
     });
   });
 

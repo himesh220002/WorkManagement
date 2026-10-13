@@ -65,6 +65,8 @@ export interface IWhiteboardNode {
   groupId?: string;
   iconName?: string;
   iconGroup?: string;
+  bodyTextColor?: string;
+  bodyFontSize?: string;
 }
 
 export interface IWhiteboardEdge {
@@ -242,6 +244,8 @@ const whiteboardSchema = new Schema<IWhiteboard>(
         pathData: { type: String, default: "" },
         strokeWidth: { type: Number, default: 3 },
         groupId: { type: String, default: "" },
+        bodyTextColor: { type: String, default: "" },
+        bodyFontSize: { type: String, default: "" },
       },
     ],
     edges: [

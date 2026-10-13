@@ -545,7 +545,7 @@ export default function WhiteboardCanvas({
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
-  const [editingField, setEditingField] = useState<"title" | "subtitle" | null>(null);
+  const [editingField, setEditingField] = useState<"title" | "subtitle" | "body" | null>(null);
 
   // Interactive Line Drawing on Canvas (Straight Line & Independent Arrow)
   const [interactiveLineDrawing, setInteractiveLineDrawing] = useState<{
@@ -2348,15 +2348,19 @@ export default function WhiteboardCanvas({
       newNode = {
         id: newId,
         type: "task",
-        x: coords.x - 100,
-        y: coords.y - 60,
-        width: 200,
-        height: 120,
-        title: "Add a task here to represent this team member!",
-        subtitle: "Team Member / Role",
+        x: coords.x - 110,
+        y: coords.y - 65,
+        width: 220,
+        height: 130,
+        title: initialTitle || "Task Title",
+        body: initialBody || "- Key deliverable or note\n- Status or progress details",
+        subtitle: "",
         color: customColor || "#0078D4",
         fillType: "solid",
-        status: "Active",
+        textColor: "#FFFFFF",
+        fontSize: "14px",
+        bodyTextColor: "#FFFFFF",
+        bodyFontSize: "12px",
         zIndex: nodes.length + 1,
       };
     } else if (type === "text") {
@@ -2560,6 +2564,10 @@ export default function WhiteboardCanvas({
         color: templateNode.color || "#0078D4",
         headerHeight: templateNode.headerHeight,
         fillType: templateNode.fillType || "solid",
+        textColor: templateNode.textColor || "#FFFFFF",
+        fontSize: templateNode.fontSize,
+        bodyTextColor: templateNode.bodyTextColor || "#FFFFFF",
+        bodyFontSize: templateNode.bodyFontSize,
         zIndex: 2,
       };
     } else if (templateNode.type === "shape") {
@@ -2692,6 +2700,10 @@ export default function WhiteboardCanvas({
         color: parentNode.color || "#0078D4",
         headerHeight: parentNode.headerHeight,
         fillType: parentNode.fillType || "solid",
+        textColor: parentNode.textColor || "#FFFFFF",
+        fontSize: parentNode.fontSize,
+        bodyTextColor: parentNode.bodyTextColor || "#FFFFFF",
+        bodyFontSize: parentNode.bodyFontSize,
         zIndex: 2,
       };
     } else if (parentNode.type === "shape") {
@@ -3978,12 +3990,50 @@ export default function WhiteboardCanvas({
       // Allow internal scrolling inside inputs / textareas / scrollable note bodies
       const target = e.target as HTMLElement | null;
       if (target && !e.ctrlKey && !e.metaKey) {
-        const scrollable = (target.closest(
-          "textarea, select, [data-scrollable='true'], .overflow-y-auto, .overflow-auto, .overflow-y-scroll, .overflow-x-auto"
-        ) ||
-          target.closest("[data-note-card='true']")?.querySelector(
-            "textarea, [data-scrollable='true'], .overflow-y-auto, .overflow-auto"
-          )) as HTMLElement | null;
+        let scrollable: HTMLElement | null = null;
+        let currentEl: HTMLElement | null = target;
+
+        // Traverse upwards to find an ancestor with actual scroll overflow in wheel direction
+        while (currentEl && currentEl !== canvasEl && currentEl !== document.body) {
+          const isScrollCandidate =
+            currentEl.hasAttribute("data-scrollable") ||
+            currentEl.tagName === "TEXTAREA" ||
+            currentEl.tagName === "SELECT" ||
+            currentEl.classList.contains("overflow-y-auto") ||
+            currentEl.classList.contains("overflow-auto") ||
+            currentEl.classList.contains("overflow-y-scroll") ||
+            currentEl.classList.contains("overflow-x-auto");
+
+          if (isScrollCandidate) {
+            const hasVert = e.deltaY !== 0 && currentEl.scrollHeight > currentEl.clientHeight + 1;
+            const hasHoriz = e.deltaX !== 0 && currentEl.scrollWidth > currentEl.clientWidth + 1;
+            if (hasVert || hasHoriz) {
+              scrollable = currentEl;
+              break;
+            }
+          }
+          currentEl = currentEl.parentElement;
+        }
+
+        // Fallback: If cursor is anywhere inside a note card, find the card's scrollable container
+        if (!scrollable && target) {
+          const noteCard = target.closest("[data-note-card='true']");
+          if (noteCard) {
+            const candidates = Array.from(
+              noteCard.querySelectorAll(
+                "[data-scrollable='true'], textarea, .overflow-y-auto, .overflow-auto"
+              )
+            ) as HTMLElement[];
+            for (const cand of candidates) {
+              const hasVert = e.deltaY !== 0 && cand.scrollHeight > cand.clientHeight + 1;
+              const hasHoriz = e.deltaX !== 0 && cand.scrollWidth > cand.clientWidth + 1;
+              if (hasVert || hasHoriz) {
+                scrollable = cand;
+                break;
+              }
+            }
+          }
+        }
 
         if (scrollable) {
           const hasVerticalOverflow = scrollable.scrollHeight > scrollable.clientHeight + 1;
@@ -3998,6 +4048,7 @@ export default function WhiteboardCanvas({
               scrollable.scrollLeft += e.deltaX;
             }
             e.preventDefault(); // Stop canvas from panning underneath!
+            e.stopPropagation();
             return;
           }
         }
@@ -5481,7 +5532,7 @@ export default function WhiteboardCanvas({
           {/* B. TASK CONTROLS */}
           {selectedNode.type === "task" && (
             <>
-              {/* Box Color Swatch - Placed first so it is immediately prominent and never cut off */}
+              {/* Box Color Swatch */}
               <div className="relative shrink-0" data-palette-container="true">
                 <button
                   type="button"
@@ -5521,103 +5572,45 @@ export default function WhiteboardCanvas({
                 )}
               </div>
 
-              {/* Text / Header Color Picker */}
-              <TextColorPicker
-                value={selectedNode.textColor}
-                onChange={(color) => updateSelectedNode({ textColor: color })}
-                defaultColor="#FDE68A"
-              />
-
               <div className="h-4 w-px bg-[#30333D] shrink-0" />
 
-              {/* Status pills with smart progress presets */}
-              <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33] shrink-0">
-                {(["Active", "In Progress", "Completed", "Backlog"] as const).map((st) => {
-                  const isCurrent = (selectedNode.status || "").toLowerCase() === st.toLowerCase();
-                  return (
-                    <button
-                      key={st}
-                      type="button"
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        let newSubtitle = st as string;
-                        let prog = 0;
-                        if (st === "Completed") {
-                          newSubtitle = "Completed (100%)";
-                          prog = 100;
-                        } else if (st === "In Progress") {
-                          const match = (selectedNode.subtitle || "").match(/\((\d+)%\)/);
-                          prog = match ? parseInt(match[1], 10) : 50;
-                          newSubtitle = `In Progress (${prog}%)`;
-                        } else if (st === "Active") {
-                          const match = (selectedNode.subtitle || "").match(/\((\d+)%\)/);
-                          prog = match ? parseInt(match[1], 10) : 100;
-                          newSubtitle = `Active (${prog}%)`;
-                        } else if (st === "Backlog") {
-                          newSubtitle = "Planned (0%)";
-                          prog = 0;
-                        }
-                        handleLiveTextChange(selectedNode.id, { status: st, subtitle: newSubtitle, progress: prog });
-                        updateSelectedNode({ status: st, subtitle: newSubtitle, progress: prog });
-                      }}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${isCurrent
-                        ? "bg-blue-600 text-white font-bold"
-                        : "text-gray-400 hover:text-white"
-                        }`}
-                    >
-                      {st}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Tag / Progress Name & Percentage Input */}
+              {/* Upper Section Controls */}
               <div className="flex items-center gap-1 bg-[#121316] px-1.5 py-0.5 rounded border border-[#282B33] shrink-0">
-                <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">Tag / Progress:</span>
-                <input
-                  type="text"
-                  value={selectedNode.subtitle || ""}
-                  placeholder="e.g. Completed (100%) or President"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    handleLiveTextChange(selectedNode.id, { subtitle: val });
-                    updateSelectedNode({ subtitle: val });
-                  }}
-                  className="bg-[#1A1C22] text-xs text-blue-200 border border-blue-500/30 focus:border-blue-400 px-1.5 py-0.5 rounded w-32 md:w-36 focus:outline-none font-bold placeholder:text-gray-500"
-                  title="Edit bottom tag or progress name & percentage"
+                <span className="text-[10px] text-amber-400 font-semibold tracking-wider uppercase select-none">
+                  Upper:
+                </span>
+                <TextColorPicker
+                  value={selectedNode.textColor}
+                  onChange={(color) => updateSelectedNode({ textColor: color })}
+                  defaultColor="#FDE68A"
+                />
+                <FontSizeControl
+                  fontSize={selectedNode.fontSize}
+                  onChange={(sz) => updateSelectedNode({ fontSize: sz })}
+                  defaultPx={16}
                 />
               </div>
 
-              {/* Quick Percentage Presets */}
-              <div className="flex items-center gap-0.5 bg-[#121316] p-0.5 rounded border border-[#282B33] shrink-0">
-                {[0, 25, 50, 75, 90, 100].map((pct) => (
-                  <button
-                    key={pct}
-                    type="button"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const curr = selectedNode.subtitle || selectedNode.status || "In Progress";
-                      const base = curr.replace(/\s*\(\d+%\)/, "").trim() || "Progress";
-                      const newSub = `${base} (${pct}%)`;
-                      handleLiveTextChange(selectedNode.id, { subtitle: newSub, progress: pct });
-                      updateSelectedNode({ subtitle: newSub, progress: pct });
-                    }}
-                    className="px-1 py-0.5 rounded text-[9px] font-bold text-blue-300 hover:text-white hover:bg-blue-600/40 transition-colors cursor-pointer"
-                    title={`Set progress to ${pct}%`}
-                  >
-                    {pct}%
-                  </button>
-                ))}
+              <div className="h-4 w-px bg-[#30333D] shrink-0" />
+
+              {/* Lower Section Controls */}
+              <div className="flex items-center gap-1 bg-[#121316] px-1.5 py-0.5 rounded border border-[#282B33] shrink-0">
+                <span className="text-[10px] text-blue-400 font-semibold tracking-wider uppercase select-none">
+                  Lower:
+                </span>
+                <TextColorPicker
+                  value={selectedNode.bodyTextColor}
+                  onChange={(color) => updateSelectedNode({ bodyTextColor: color })}
+                  defaultColor="#FFFFFF"
+                />
+                <FontSizeControl
+                  fontSize={selectedNode.bodyFontSize}
+                  onChange={(sz) => updateSelectedNode({ bodyFontSize: sz })}
+                  defaultPx={12}
+                />
               </div>
 
-              <FontSizeControl
-                fontSize={selectedNode.fontSize}
-                onChange={(sz) => updateSelectedNode({ fontSize: sz })}
-                defaultPx={11}
-              />
+              <div className="h-4 w-px bg-[#30333D] shrink-0" />
 
               <button
                 type="button"
@@ -7414,6 +7407,8 @@ export default function WhiteboardCanvas({
                 totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
               const jsonInfo = isJson ? validateJson(node.body || "") : null;
 
+              const fontSizePx = parseFontSizePx(node.fontSize, 14);
+
               return (
                 <div
                   key={node.id}
@@ -7432,183 +7427,160 @@ export default function WhiteboardCanvas({
                   className={`p-3 rounded-xl border-2 cursor-pointer shadow-lg flex flex-col justify-between transition-all relative overflow-visible group/sticky ${isSelected ? "ring-2 ring-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.3)]" : ""
                     }`}
                 >
-                  {/* HEADER FOR ALL FORMATS */}
-                  <div className="flex items-center justify-between gap-1.5 pb-1.5 border-b border-white/10 shrink-0 select-none">
-                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                      {/* Format Badge Indicator */}
-                      {isJson && (
-                        <span className="px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-300 font-mono text-[9px] font-bold border border-amber-500/30 flex items-center gap-1 shrink-0">
-                          <Braces className="w-2.5 h-2.5" /> JSON
-                        </span>
-                      )}
-                      {isMarkdown && (
-                        <span className="px-1.5 py-0.5 rounded bg-indigo-500/25 text-indigo-300 font-mono text-[9px] font-bold border border-indigo-500/30 flex items-center gap-1 shrink-0">
-                          <FileCode className="w-2.5 h-2.5" /> MD
-                        </span>
-                      )}
-                      {isChecklist && (
-                        <span className="px-1.5 py-0.5 rounded bg-cyan-500/25 text-cyan-300 font-mono text-[9px] font-bold border border-cyan-500/30 flex items-center gap-1 shrink-0">
-                          <ListTodo className="w-2.5 h-2.5" /> TODO
-                        </span>
-                      )}
-                      {isText && (
-                        <span className="px-1.5 py-0.5 rounded bg-pink-500/25 text-pink-300 font-mono text-[9px] font-bold border border-pink-500/30 flex items-center gap-1 shrink-0">
-                          <FileText className="w-2.5 h-2.5" /> TXT
-                        </span>
-                      )}
+                  {/* SUBTLE UNINTRUSIVE MD TAG (Takes 0 vertical space, easy to identify note format) */}
+                  {isMarkdown && (
+                    <span className="absolute top-2.5 right-2.5 px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono text-[9px] font-bold border border-indigo-500/30 opacity-40 hover:opacity-100 transition-opacity pointer-events-none select-none z-10">
+                      MD
+                    </span>
+                  )}
 
-                      {/* Editable Note Title (Double-click or click pencil to edit) */}
-                      <div className="flex items-center gap-1 min-w-0 flex-1">
-                        {editingTitleId === node.id ? (
-                          <input
-                            type="text"
-                            defaultValue={node.title || (isJson ? "data.json" : isMarkdown ? "notes.md" : isChecklist ? "Action Items" : "notes.txt")}
-                            autoFocus
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onChange={(e) => handleLiveTextChange(node.id, { title: e.target.value })}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === "Escape") e.currentTarget.blur();
-                            }}
-                            onBlur={(e) => {
-                              updateNode(node.id, { title: e.target.value });
-                              setEditingTitleId(null);
-                            }}
-                            className="bg-black/50 border border-amber-400/80 rounded px-1.5 py-0.5 text-xs font-semibold text-white focus:outline-none w-full shadow-inner"
-                            placeholder="Note Title"
-                          />
-                        ) : (
-                          <div
-                            className="flex items-center gap-1 min-w-0 group/title cursor-text flex-1"
-                            onDoubleClick={(e) => {
-                              e.stopPropagation();
-                              setEditingTitleId(node.id);
-                            }}
-                            onClick={(e) => {
-                              if (isSelected) {
+                  {/* HEADER FOR NON-MARKDOWN FORMATS (Markdown renders clean edge-to-edge content without header clutter) */}
+                  {!isMarkdown && (
+                    <div className="flex items-center justify-between gap-1.5 pb-1.5 border-b border-white/10 shrink-0 select-none">
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        {/* Format Badge Indicator */}
+                        {isJson && (
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-300 font-mono text-[9px] font-bold border border-amber-500/30 flex items-center gap-1 shrink-0">
+                            <Braces className="w-2.5 h-2.5" /> JSON
+                          </span>
+                        )}
+                        {isChecklist && (
+                          <span className="px-1.5 py-0.5 rounded bg-cyan-500/25 text-cyan-300 font-mono text-[9px] font-bold border border-cyan-500/30 flex items-center gap-1 shrink-0">
+                            <ListTodo className="w-2.5 h-2.5" /> TODO
+                          </span>
+                        )}
+                        {isText && (
+                          <span className="px-1.5 py-0.5 rounded bg-pink-500/25 text-pink-300 font-mono text-[9px] font-bold border border-pink-500/30 flex items-center gap-1 shrink-0">
+                            <FileText className="w-2.5 h-2.5" /> TXT
+                          </span>
+                        )}
+
+                        {/* Editable Note Title (Double-click or click pencil to edit) */}
+                        <div className="flex items-center gap-1 min-w-0 flex-1">
+                          {editingTitleId === node.id ? (
+                            <input
+                              type="text"
+                              defaultValue={node.title || (isJson ? "data.json" : isChecklist ? "Action Items" : "notes.txt")}
+                              autoFocus
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onChange={(e) => handleLiveTextChange(node.id, { title: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === "Escape") e.currentTarget.blur();
+                              }}
+                              onBlur={(e) => {
+                                updateNode(node.id, { title: e.target.value });
+                                setEditingTitleId(null);
+                              }}
+                              className="bg-black/50 border border-amber-400/80 rounded px-1.5 py-0.5 text-xs font-semibold text-white focus:outline-none w-full shadow-inner"
+                              placeholder="Note Title"
+                            />
+                          ) : (
+                            <div
+                              className="flex items-center gap-1 min-w-0 group/title cursor-text flex-1"
+                              onDoubleClick={(e) => {
                                 e.stopPropagation();
                                 setEditingTitleId(node.id);
-                              }
-                            }}
-                            title="Click or double-click to edit note title"
-                          >
-                            <span
-                              className="text-xs font-bold truncate tracking-wide hover:underline"
-                              style={{ color: stickyTextColor }}
+                              }}
+                              onClick={(e) => {
+                                if (isSelected) {
+                                  e.stopPropagation();
+                                  setEditingTitleId(node.id);
+                                }
+                              }}
+                              title="Click or double-click to edit note title"
                             >
-                              {node.title || (isJson ? "data.json" : isMarkdown ? "notes.md" : isChecklist ? "Action Items" : "notes.txt")}
-                            </span>
-                            <Edit3 className="w-2.5 h-2.5 opacity-0 group-hover/title:opacity-80 transition-opacity text-white/60 shrink-0" />
-                          </div>
+                              <span
+                                className="text-xs font-bold truncate tracking-wide hover:underline"
+                                style={{ color: stickyTextColor }}
+                              >
+                                {node.title || (isJson ? "data.json" : isChecklist ? "Action Items" : "notes.txt")}
+                              </span>
+                              <Edit3 className="w-2.5 h-2.5 opacity-0 group-hover/title:opacity-80 transition-opacity text-white/60 shrink-0" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right Header Actions */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {isJson && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingNodeId(isEditing ? null : node.id);
+                              }}
+                              className="p-1 hover:bg-white/10 rounded text-amber-300 transition-colors cursor-pointer"
+                              title={isEditing ? "View Highlighting" : "Edit JSON Raw"}
+                            >
+                              {isEditing ? <Eye className="w-3 h-3" /> : <Edit3 className="w-3 h-3" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePrettifyJson(node.id);
+                              }}
+                              className="p-1 hover:bg-white/10 rounded text-amber-300 transition-colors cursor-pointer"
+                              title="Format / Prettify JSON"
+                            >
+                              <Sparkles className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (node.body) navigator.clipboard.writeText(node.body);
+                              }}
+                              className="p-1 hover:bg-white/10 rounded text-gray-300 hover:text-white transition-colors cursor-pointer"
+                              title="Copy JSON"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </button>
+                          </>
+                        )}
+
+                        {isChecklist && (
+                          <span
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-colors ${completedCount === totalCount && totalCount > 0
+                              ? "bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
+                              : "bg-black/25 text-gray-300 border border-white/10"
+                              }`}
+                          >
+                            {completedCount}/{totalCount}
+                          </span>
+                        )}
+
+                        {isText && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingNodeId(isEditing ? null : node.id);
+                              }}
+                              className="p-1 hover:bg-white/10 rounded text-pink-300 transition-colors cursor-pointer"
+                              title={isEditing ? "Finish Editing Text" : "Edit Note Text"}
+                            >
+                              <Edit3 className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (node.body) navigator.clipboard.writeText(node.body);
+                              }}
+                              className="p-1 hover:bg-white/10 rounded text-gray-300 hover:text-white transition-colors cursor-pointer"
+                              title="Copy Text"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
-
-                    {/* Right Header Actions */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      {isJson && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingNodeId(isEditing ? null : node.id);
-                            }}
-                            className="p-1 hover:bg-white/10 rounded text-amber-300 transition-colors cursor-pointer"
-                            title={isEditing ? "View Highlighting" : "Edit JSON Raw"}
-                          >
-                            {isEditing ? <Eye className="w-3 h-3" /> : <Edit3 className="w-3 h-3" />}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handlePrettifyJson(node.id);
-                            }}
-                            className="p-1 hover:bg-white/10 rounded text-amber-300 transition-colors cursor-pointer"
-                            title="Format / Prettify JSON"
-                          >
-                            <Sparkles className="w-3 h-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (node.body) navigator.clipboard.writeText(node.body);
-                            }}
-                            className="p-1 hover:bg-white/10 rounded text-gray-300 hover:text-white transition-colors cursor-pointer"
-                            title="Copy JSON"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
-                        </>
-                      )}
-
-                      {isMarkdown && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingNodeId(isEditing ? null : node.id);
-                            }}
-                            className="p-1 hover:bg-white/10 rounded text-indigo-300 transition-colors cursor-pointer"
-                            title={isEditing ? "Switch to Rendered Preview" : "Edit Raw Markdown"}
-                          >
-                            {isEditing ? <Eye className="w-3 h-3" /> : <Edit3 className="w-3 h-3" />}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (node.body) navigator.clipboard.writeText(node.body);
-                            }}
-                            className="p-1 hover:bg-white/10 rounded text-gray-300 hover:text-white transition-colors cursor-pointer"
-                            title="Copy Markdown"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
-                        </>
-                      )}
-
-                      {isChecklist && (
-                        <span
-                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-colors ${completedCount === totalCount && totalCount > 0
-                            ? "bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
-                            : "bg-black/25 text-gray-300 border border-white/10"
-                            }`}
-                        >
-                          {completedCount}/{totalCount}
-                        </span>
-                      )}
-
-                      {isText && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingNodeId(isEditing ? null : node.id);
-                            }}
-                            className="p-1 hover:bg-white/10 rounded text-pink-300 transition-colors cursor-pointer"
-                            title={isEditing ? "Finish Editing Text" : "Edit Note Text"}
-                          >
-                            <Edit3 className="w-3 h-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (node.body) navigator.clipboard.writeText(node.body);
-                            }}
-                            className="p-1 hover:bg-white/10 rounded text-gray-300 hover:text-white transition-colors cursor-pointer"
-                            title="Copy Text"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
+                  )}
 
                   {/* BODY CONTENT BY FORMAT */}
                   {isChecklist && (
@@ -7747,20 +7719,29 @@ export default function WhiteboardCanvas({
                             updateNode(node.id, { body: e.target.value });
                             setEditingNodeId(null);
                           }}
-                          className="w-full flex-1 bg-black/40 text-amber-200 font-mono text-[11px] p-2 rounded-lg border border-amber-500/30 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none leading-relaxed overflow-y-auto scrollbar-thin shadow-inner"
+                          style={{
+                            fontSize: `${parseFontSizePx(node.fontSize, 11)}px`,
+                          }}
+                          className="w-full flex-1 bg-black/40 text-amber-200 font-mono p-2 rounded-lg border border-amber-500/30 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none leading-relaxed overflow-y-auto scrollbar-thin shadow-inner"
                           placeholder="{\n  &quot;key&quot;: &quot;value&quot;\n}"
                         />
                       ) : (
                         <div
                           data-scrollable="true"
+                          onWheel={(e) => e.stopPropagation()}
                           onDoubleClick={(e) => {
                             e.stopPropagation();
                             setEditingNodeId(node.id);
                           }}
-                          className="flex-1 overflow-auto p-1.5 bg-black/40 rounded-lg border border-amber-500/10 font-mono text-[11px] leading-relaxed scrollbar-thin cursor-text"
+                          style={{
+                            fontSize: `${parseFontSizePx(node.fontSize, 11)}px`,
+                          }}
+                          className="flex-1 overflow-auto p-1.5 bg-black/40 rounded-lg border border-amber-500/10 font-mono leading-relaxed scrollbar-thin cursor-text"
                           title="Double-click to edit JSON raw code"
                         >
-                          {renderJsonSyntaxHighlighted(node.body || "{}")}
+                          {renderJsonSyntaxHighlighted(node.body || "{}", {
+                            baseFontSize: parseFontSizePx(node.fontSize, 11),
+                          })}
                         </div>
                       )}
 
@@ -7783,7 +7764,7 @@ export default function WhiteboardCanvas({
                   )}
 
                   {isMarkdown && (
-                    <div className="w-full flex-1 flex flex-col overflow-hidden mt-1.5" data-scrollable="true">
+                    <div className="w-full h-full flex-1 flex flex-col overflow-hidden" data-scrollable="true">
                       {isEditing ? (
                         <textarea
                           data-scrollable="true"
@@ -7798,29 +7779,35 @@ export default function WhiteboardCanvas({
                             updateNode(node.id, { body: e.target.value });
                             setEditingNodeId(null);
                           }}
-                          className="w-full flex-1 bg-black/40 text-indigo-100 font-mono text-xs p-2.5 rounded-lg border border-indigo-500/30 focus:outline-none focus:ring-1 focus:ring-indigo-400 resize-none leading-relaxed overflow-y-auto scrollbar-thin shadow-inner"
-                          placeholder="# Write markdown...\n- [ ] Task item\n**Bold** text"
+                          style={{
+                            fontSize: `${fontSizePx}px`,
+                            color: stickyTextColor,
+                            textAlign: node.textAlign || "left",
+                          }}
+                          className="w-full h-full flex-1 bg-transparent text-gray-100 font-mono p-1 rounded focus:outline-none resize-none leading-relaxed overflow-y-auto scrollbar-thin cursor-text"
+                          placeholder="# Write markdown...\n**Bold** text\n- [ ] Task item"
                         />
                       ) : (
                         <div
                           data-scrollable="true"
+                          onWheel={(e) => e.stopPropagation()}
                           onDoubleClick={(e) => {
                             e.stopPropagation();
                             setEditingNodeId(node.id);
                           }}
-                          className="flex-1 overflow-y-auto p-2.5 bg-black/35 rounded-lg border border-indigo-500/10 select-text text-gray-200 text-xs leading-relaxed scrollbar-thin cursor-text"
+                          style={{
+                            fontSize: `${fontSizePx}px`,
+                            textAlign: node.textAlign || "left",
+                          }}
+                          className="w-full h-full flex-1 overflow-y-auto select-text text-gray-200 leading-relaxed scrollbar-thin cursor-text pr-1"
                           title="Double-click to edit Markdown raw text"
                         >
                           {renderMarkdownToJsx(node.body || "", {
                             onToggleCheckbox: (lineIdx) => handleToggleMarkdownCheckboxOnNode(node.id, lineIdx),
+                            baseFontSize: fontSizePx,
                           })}
                         </div>
                       )}
-
-                      <div className="mt-1 pt-1 border-t border-indigo-500/15 flex items-center justify-between text-[9px] text-gray-400 font-mono shrink-0 select-none">
-                        <span className="text-indigo-300/80">Markdown Rendered</span>
-                        <span className="text-gray-500">Double-click to edit raw</span>
-                      </div>
                     </div>
                   )}
 
@@ -7889,6 +7876,18 @@ export default function WhiteboardCanvas({
               );
               const bottomHeight = node.height - safeHeaderHeight;
 
+              const upperFontSize = parseFontSizePx(node.fontSize, 16);
+              const upperTextColor = node.textColor || "#FFFFFF";
+              const lowerFontSize = parseFontSizePx(node.bodyFontSize, 12);
+              const lowerTextColor = node.bodyTextColor || "#FFFFFF";
+
+              const lowerContent = (() => {
+                if (node.body && node.subtitle && !node.body.includes(node.subtitle)) {
+                  return `**${node.subtitle}**\n\n${node.body}`;
+                }
+                return node.body || node.subtitle || "";
+              })();
+
               return (
                 <div
                   key={node.id}
@@ -7928,42 +7927,55 @@ export default function WhiteboardCanvas({
                         setEditingField("title");
                       }}
                       className="p-2 bg-[#1A1813] border-2 rounded-t-md flex items-center justify-center text-center overflow-hidden relative group/header transition-colors"
+                      data-scrollable="true"
                     >
                       {isEditing && (editingField === "title" || !editingField) ? (
                         <textarea
+                          data-scrollable="true"
                           defaultValue={node.title}
                           autoFocus={editingField === "title" || !editingField}
                           rows={safeHeaderHeight > 70 ? 3 : 2}
                           onMouseDown={(e) => e.stopPropagation()}
                           onChange={(e) => handleLiveTextChange(node.id, { title: e.target.value })}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
+                            if (e.key === "Escape") {
+                              e.currentTarget.blur();
+                              setEditingNodeId(null);
+                              setEditingField(null);
+                            } else if (e.key === "Tab" && !e.shiftKey) {
                               e.preventDefault();
                               updateNode(node.id, { title: e.currentTarget.value });
-                              setEditingField("subtitle");
+                              setEditingField("body");
                             }
                           }}
                           onBlur={(e) => {
                             updateNode(node.id, { title: e.target.value });
                           }}
-                          className="bg-transparent text-center w-full h-full resize-none focus:outline-none font-medium leading-tight scrollbar-none"
+                          className="bg-transparent text-center w-full h-full resize-none focus:outline-none font-medium leading-relaxed scrollbar-thin p-1"
                           style={{
-                            fontSize: `${parseFontSizePx(node.fontSize, 10)}px`,
-                            color: node.textColor || "#FDE68A",
+                            fontSize: `${upperFontSize}px`,
+                            color: upperTextColor,
                           }}
-                          placeholder="Task title..."
+                          placeholder="Task title (markdown)..."
                         />
                       ) : (
-                        <span
-                          className={`font-medium leading-tight ${safeHeaderHeight <= 60 ? "line-clamp-2" : "line-clamp-none max-h-full overflow-y-auto"
-                            }`}
+                        <div
+                          data-scrollable="true"
+                          className="w-full h-full flex flex-col items-center justify-center text-center overflow-y-auto select-text scrollbar-thin px-1"
                           style={{
-                            fontSize: `${parseFontSizePx(node.fontSize, 10)}px`,
-                            color: node.textColor || "#FDE68A",
+                            fontSize: `${upperFontSize}px`,
+                            color: upperTextColor,
                           }}
                         >
-                          {node.title || "Add a task here to represent this team member!"}
-                        </span>
+                          {node.title ? (
+                            renderMarkdownToJsx(node.title, {
+                              baseFontSize: upperFontSize,
+                              textColor: upperTextColor,
+                            })
+                          ) : (
+                            <span className="opacity-40 italic">Add task title (markdown)...</span>
+                          )}
+                        </div>
                       )}
                     </div>
 
@@ -7989,7 +8001,7 @@ export default function WhiteboardCanvas({
                       </div>
                     </div>
 
-                    {/* Bottom Position / Progress Box (Dynamic Color Box) */}
+                    {/* Bottom Position / Details Box (Dynamic Color Box) */}
                     <div
                       style={{
                         height: `${bottomHeight}px`,
@@ -8006,39 +8018,57 @@ export default function WhiteboardCanvas({
                         setSelectedNodeId(node.id);
                         setSelectedNodeIds([node.id]);
                         setEditingNodeId(node.id);
-                        setEditingField("subtitle");
+                        setEditingField("body");
                       }}
-                      className="p-2 border-2 border-t-0 rounded-b-md flex flex-col items-center justify-center text-center overflow-hidden relative group/bottom transition-colors"
+                      className="p-2 border-2 border-t-0 rounded-b-md flex flex-col items-center justify-start text-left overflow-hidden relative group/bottom transition-colors"
+                      data-scrollable="true"
                     >
-                      {isEditing && (editingField === "subtitle" || !editingField) ? (
-                        <input
-                          type="text"
-                          defaultValue={node.subtitle}
-                          autoFocus={editingField === "subtitle"}
+                      {isEditing && editingField === "body" ? (
+                        <textarea
+                          data-scrollable="true"
+                          defaultValue={lowerContent}
+                          autoFocus={editingField === "body"}
                           onMouseDown={(e) => e.stopPropagation()}
-                          onChange={(e) => handleLiveTextChange(node.id, { subtitle: e.target.value })}
+                          onChange={(e) => handleLiveTextChange(node.id, { body: e.target.value })}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter") {
+                            if (e.key === "Escape") {
                               e.currentTarget.blur();
                               setEditingNodeId(null);
                               setEditingField(null);
+                            } else if (e.key === "Tab" && e.shiftKey) {
+                              e.preventDefault();
+                              updateNode(node.id, { body: e.currentTarget.value, subtitle: "" });
+                              setEditingField("title");
                             }
                           }}
                           onBlur={(e) => {
-                            updateNode(node.id, { subtitle: e.target.value });
+                            updateNode(node.id, { body: e.target.value, subtitle: "" });
                           }}
-                          placeholder="e.g. Completed (100%) or President"
-                          className="bg-transparent text-xs text-blue-200 text-center w-full focus:outline-none font-bold placeholder:text-blue-400/50"
+                          placeholder="Task details (markdown: **bold**, - list, > quote, etc.)..."
+                          className="bg-transparent text-left w-full h-full resize-none focus:outline-none font-normal leading-relaxed scrollbar-thin p-1"
+                          style={{
+                            fontSize: `${lowerFontSize}px`,
+                            color: lowerTextColor,
+                          }}
                         />
                       ) : (
-                        <div className="flex flex-col items-center justify-center gap-1 w-full">
-                          <span className="text-xs font-bold text-blue-200 leading-snug">
-                            {node.subtitle || "Position"}
-                          </span>
-                          {node.body && bottomHeight > 70 && (
-                            <p className="text-[10px] text-blue-300/80 line-clamp-3 leading-tight mt-1 whitespace-pre-wrap">
-                              {node.body}
-                            </p>
+                        <div
+                          data-scrollable="true"
+                          className="w-full h-full flex flex-col justify-start text-left overflow-y-auto select-text scrollbar-thin p-1"
+                          style={{
+                            fontSize: `${lowerFontSize}px`,
+                            color: lowerTextColor,
+                          }}
+                        >
+                          {lowerContent ? (
+                            renderMarkdownToJsx(lowerContent, {
+                              baseFontSize: lowerFontSize,
+                              textColor: lowerTextColor,
+                            })
+                          ) : (
+                            <span className="opacity-40 italic text-center my-auto">
+                              Double-click to add markdown details...
+                            </span>
                           )}
                         </div>
                       )}
@@ -8457,8 +8487,13 @@ export default function WhiteboardCanvas({
                   </div>
 
                   {/* Markdown Body Preview */}
-                  <div className="flex-1 p-3 bg-black/30 overflow-y-auto select-text text-gray-200 text-xs leading-relaxed font-sans scrollbar-thin">
-                    {renderMarkdownToJsx(node.previewText || node.body || "Empty markdown document.")}
+                  <div
+                    style={{ fontSize: `${parseFontSizePx(node.fontSize, 13)}px` }}
+                    className="flex-1 p-3 bg-black/30 overflow-y-auto select-text text-gray-200 leading-relaxed font-sans scrollbar-thin"
+                  >
+                    {renderMarkdownToJsx(node.previewText || node.body || "Empty markdown document.", {
+                      baseFontSize: parseFontSizePx(node.fontSize, 13),
+                    })}
                   </div>
 
                   {/* Markdown Footer Actions */}

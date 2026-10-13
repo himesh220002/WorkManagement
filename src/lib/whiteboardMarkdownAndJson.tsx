@@ -75,17 +75,27 @@ export function validateJson(raw: string): {
 /**
  * Syntax-highlights JSON string into React elements
  */
-export function renderJsonSyntaxHighlighted(jsonString: string): React.ReactNode {
+export function renderJsonSyntaxHighlighted(
+  jsonString: string,
+  options?: { baseFontSize?: number }
+): React.ReactNode {
   const { isValid, formatted, error } = validateJson(jsonString);
+  const baseFontSize = options?.baseFontSize || 11;
 
   if (!isValid) {
     return (
-      <div className="font-mono text-[11px] leading-relaxed p-2 text-rose-300 bg-rose-950/20 rounded border border-rose-500/30">
+      <div
+        style={{ fontSize: `${baseFontSize}px` }}
+        className="font-mono leading-relaxed p-2 text-rose-300 bg-rose-950/20 rounded border border-rose-500/30"
+      >
         <div className="flex items-center gap-1.5 text-rose-400 font-bold mb-1">
           <span>Invalid JSON Syntax:</span>
         </div>
         <p className="text-[10px] text-rose-300/90 mb-2">{error}</p>
-        <pre className="whitespace-pre-wrap break-all text-gray-300 font-mono text-[10px] bg-black/40 p-2 rounded">
+        <pre
+          style={{ fontSize: `${baseFontSize}px` }}
+          className="whitespace-pre-wrap break-all text-gray-300 font-mono bg-black/40 p-2 rounded"
+        >
           {jsonString}
         </pre>
       </div>
@@ -95,7 +105,10 @@ export function renderJsonSyntaxHighlighted(jsonString: string): React.ReactNode
   const lines = (formatted || jsonString).split("\n");
 
   return (
-    <pre className="font-mono text-[11px] leading-relaxed select-text whitespace-pre overflow-x-auto p-1">
+    <pre
+      style={{ fontSize: `${baseFontSize}px` }}
+      className="font-mono leading-relaxed select-text whitespace-pre p-1 w-full"
+    >
       {lines.map((line, lineIdx) => {
         // Match key-value line:  "key": value
         const kvMatch = line.match(/^(\s*)("([^"]+)")(\s*:\s*)(.*)$/);
@@ -167,7 +180,12 @@ export function renderJsonSyntaxHighlighted(jsonString: string): React.ReactNode
 /**
  * Parses inline markdown tokens (bold, italic, inline code, strike, link)
  */
-export function renderInlineMarkdown(text: string, keyPrefix: string = "m"): React.ReactNode[] {
+export function renderInlineMarkdown(
+  text: string,
+  keyPrefix: string = "m",
+  options?: { isLight?: boolean }
+): React.ReactNode[] {
+  const isLight = Boolean(options?.isLight);
   const regex = /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|~~[^~]+~~|\[[^\]]+\]\([^)]+\))/g;
   const parts = text.split(regex);
   return parts.map((part, idx) => {
@@ -178,7 +196,11 @@ export function renderInlineMarkdown(text: string, keyPrefix: string = "m"): Rea
       return (
         <code
           key={key}
-          className="px-1.5 py-0.5 rounded bg-black/50 text-amber-300 font-mono text-[11px] border border-white/10 mx-0.5 select-all"
+          className={`px-1.5 py-0.5 rounded font-mono text-[11px] mx-0.5 select-all ${
+            isLight
+              ? "bg-slate-100 text-slate-800 border border-slate-200"
+              : "bg-black/50 text-amber-300 border border-white/10"
+          }`}
         >
           {part.slice(1, -1)}
         </code>
@@ -189,7 +211,10 @@ export function renderInlineMarkdown(text: string, keyPrefix: string = "m"): Rea
       (part.startsWith("__") && part.endsWith("__") && part.length > 4)
     ) {
       return (
-        <strong key={key} className="font-bold text-white">
+        <strong
+          key={key}
+          className={`font-bold ${isLight ? "text-slate-900" : "text-current"}`}
+        >
           {part.slice(2, -2)}
         </strong>
       );
@@ -199,14 +224,17 @@ export function renderInlineMarkdown(text: string, keyPrefix: string = "m"): Rea
       (part.startsWith("_") && part.endsWith("_") && part.length > 2)
     ) {
       return (
-        <em key={key} className="italic text-gray-200">
+        <em
+          key={key}
+          className={`italic ${isLight ? "text-slate-700" : "text-current opacity-90"}`}
+        >
           {part.slice(1, -1)}
         </em>
       );
     }
     if (part.startsWith("~~") && part.endsWith("~~") && part.length > 4) {
       return (
-        <del key={key} className="line-through text-gray-400">
+        <del key={key} className={`line-through ${isLight ? "text-slate-400" : "text-gray-400"}`}>
           {part.slice(2, -2)}
         </del>
       );
@@ -219,7 +247,11 @@ export function renderInlineMarkdown(text: string, keyPrefix: string = "m"): Rea
           href={linkMatch[2]}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-cyan-400 underline hover:text-cyan-300 transition-colors"
+          className={`underline transition-colors ${
+            isLight
+              ? "text-blue-600 hover:text-blue-700"
+              : "text-cyan-400 hover:text-cyan-300"
+          }`}
           onClick={(e) => e.stopPropagation()}
         >
           {linkMatch[1]}
@@ -231,6 +263,74 @@ export function renderInlineMarkdown(text: string, keyPrefix: string = "m"): Rea
 }
 
 /**
+ * Checks if a string contains pipe characters indicating a potential markdown table row
+ */
+export function isPotentialTableRow(str: string): boolean {
+  const t = str.trim();
+  return t.includes("|");
+}
+
+/**
+ * Checks if a string is a markdown table delimiter row (e.g. | :--- | :---: | ---: |)
+ */
+export function isTableDelimiterRow(str: string): boolean {
+  const t = str.trim();
+  if (!t.includes("-")) return false;
+  let clean = t;
+  if (clean.startsWith("|")) clean = clean.slice(1);
+  if (clean.endsWith("|")) clean = clean.slice(0, -1);
+  const parts = clean.split("|");
+  if (parts.length === 0) return false;
+  return parts.every((part) => {
+    const trimmedPart = part.trim();
+    return /^:?-+:?$/.test(trimmedPart);
+  });
+}
+
+/**
+ * Splits a markdown table row into individual cell strings, respecting escaped pipes (\\|)
+ */
+export function parseTableCells(rowStr: string): string[] {
+  let clean = rowStr.trim();
+  if (clean.startsWith("|")) clean = clean.slice(1);
+  if (clean.endsWith("|")) clean = clean.slice(0, -1);
+  const cells: string[] = [];
+  let current = "";
+  let inEscape = false;
+  for (let i = 0; i < clean.length; i++) {
+    const char = clean[i];
+    if (inEscape) {
+      current += char;
+      inEscape = false;
+    } else if (char === "\\") {
+      inEscape = true;
+    } else if (char === "|") {
+      cells.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+/**
+ * Parses column alignments from the delimiter row
+ */
+export function parseTableAlignments(delimStr: string): Array<"left" | "center" | "right"> {
+  const cells = parseTableCells(delimStr);
+  return cells.map((cell) => {
+    const trimmed = cell.trim();
+    const starts = trimmed.startsWith(":");
+    const ends = trimmed.endsWith(":");
+    if (starts && ends) return "center";
+    if (ends) return "right";
+    return "left";
+  });
+}
+
+/**
  * Renders full markdown string into rich, beautiful React JSX
  */
 export function renderMarkdownToJsx(
@@ -238,10 +338,17 @@ export function renderMarkdownToJsx(
   options?: {
     onToggleCheckbox?: (rawLineIdx: number) => void;
     textColor?: string;
+    baseFontSize?: number;
   }
 ): React.ReactNode {
+  const baseFontSize = options?.baseFontSize || 13;
+
   if (!markdownText || !markdownText.trim()) {
-    return <p className="text-gray-400 italic text-xs">Empty markdown document.</p>;
+    return (
+      <p style={{ fontSize: `${baseFontSize}px` }} className="text-gray-400 italic">
+        Empty markdown document.
+      </p>
+    );
   }
 
   const rawLines = markdownText.split("\n");
@@ -296,12 +403,112 @@ export function renderMarkdownToJsx(
       continue;
     }
 
+    // 2.5 Markdown Table: | Col 1 | Col 2 | ...
+    if (
+      isPotentialTableRow(trimmed) &&
+      i + 1 < rawLines.length &&
+      isTableDelimiterRow(rawLines[i + 1])
+    ) {
+      const headerCells = parseTableCells(trimmed);
+      const colCount = headerCells.length;
+      const alignments = parseTableAlignments(rawLines[i + 1]);
+
+      const bodyRows: string[][] = [];
+      let j = i + 2;
+      while (j < rawLines.length) {
+        const candidate = rawLines[j].trim();
+        if (!candidate || !isPotentialTableRow(candidate) || isTableDelimiterRow(candidate)) {
+          break;
+        }
+        const cells = parseTableCells(rawLines[j]);
+        while (cells.length < colCount) {
+          cells.push("");
+        }
+        bodyRows.push(cells.slice(0, colCount));
+        j++;
+      }
+
+      nodes.push(
+        <div
+          key={`tbl-wrap-${i}`}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          className="my-2.5 w-full overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm select-text scrollbar-thin"
+        >
+          <table
+            style={{ fontSize: `${Math.max(11, baseFontSize - 1)}px` }}
+            className="w-full text-left border-collapse font-sans"
+          >
+            <thead>
+              <tr className="bg-[#f8fafc] border-b border-slate-200">
+                {headerCells.map((headerText, colIdx) => {
+                  const align = alignments[colIdx] || "left";
+                  const alignClass =
+                    align === "center"
+                      ? "text-center"
+                      : align === "right"
+                      ? "text-right"
+                      : "text-left";
+                  return (
+                    <th
+                      key={`th-${i}-${colIdx}`}
+                      className={`px-4 py-3.5 font-bold text-slate-900 tracking-wide border-r last:border-r-0 border-slate-200 leading-snug align-middle min-w-[70px] ${alignClass}`}
+                    >
+                      {renderInlineMarkdown(headerText, `th-${i}-${colIdx}`, { isLight: true })}
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {bodyRows.map((rowCells, rowIdx) => (
+                <tr
+                  key={`tr-${i}-${rowIdx}`}
+                  className="bg-white hover:bg-slate-50/70 transition-colors"
+                >
+                  {rowCells.map((cellText, colIdx) => {
+                    const align = alignments[colIdx] || "left";
+                    const alignClass =
+                      align === "center"
+                        ? "text-center"
+                        : align === "right"
+                        ? "text-right"
+                        : "text-left";
+                    const isFirstCol = colIdx === 0;
+                    return (
+                      <td
+                        key={`td-${i}-${rowIdx}-${colIdx}`}
+                        className={`px-4 py-3.5 text-slate-700 border-r last:border-r-0 border-slate-200 leading-normal align-middle ${
+                          isFirstCol ? "font-bold text-slate-900" : ""
+                        } ${alignClass}`}
+                      >
+                        {renderInlineMarkdown(cellText, `td-${i}-${rowIdx}-${colIdx}`, { isLight: true })}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+
+      i = j - 1;
+      continue;
+    }
+
     // 3. Headers: #, ##, ###, ####
     if (/^#\s+/.test(trimmed)) {
       nodes.push(
         <h1
           key={`h1-${i}`}
-          className="text-sm font-extrabold text-white border-b border-white/15 pb-1 mb-1.5 mt-2 flex items-center gap-1.5"
+          style={{
+            fontSize: `${Math.round(baseFontSize * 1.35)}px`,
+            color: options?.textColor || undefined,
+          }}
+          className={`font-extrabold border-b border-white/15 pb-1 mb-1.5 mt-2 flex items-center gap-1.5 leading-snug ${
+            options?.textColor ? "" : "text-white"
+          }`}
         >
           {renderInlineMarkdown(trimmed.replace(/^#\s+/, ""), `h1-${i}`)}
         </h1>
@@ -312,7 +519,13 @@ export function renderMarkdownToJsx(
       nodes.push(
         <h2
           key={`h2-${i}`}
-          className="text-xs font-bold text-cyan-300 mb-1 mt-1.5 flex items-center gap-1.5"
+          style={{
+            fontSize: `${Math.round(baseFontSize * 1.2)}px`,
+            color: options?.textColor || undefined,
+          }}
+          className={`font-bold mb-1 mt-1.5 flex items-center gap-1.5 leading-snug ${
+            options?.textColor ? "" : "text-cyan-300"
+          }`}
         >
           {renderInlineMarkdown(trimmed.replace(/^##\s+/, ""), `h2-${i}`)}
         </h2>
@@ -323,7 +536,13 @@ export function renderMarkdownToJsx(
       nodes.push(
         <h3
           key={`h3-${i}`}
-          className="text-xs font-bold text-amber-300 mb-1 mt-1 flex items-center gap-1.5"
+          style={{
+            fontSize: `${Math.round(baseFontSize * 1.1)}px`,
+            color: options?.textColor || undefined,
+          }}
+          className={`font-bold mb-1 mt-1 flex items-center gap-1.5 leading-snug ${
+            options?.textColor ? "" : "text-amber-300"
+          }`}
         >
           {renderInlineMarkdown(trimmed.replace(/^###\s+/, ""), `h3-${i}`)}
         </h3>
@@ -334,7 +553,13 @@ export function renderMarkdownToJsx(
       nodes.push(
         <h4
           key={`h4-${i}`}
-          className="text-[11px] font-semibold text-pink-300 mb-0.5 mt-1"
+          style={{
+            fontSize: `${Math.round(baseFontSize * 1.05)}px`,
+            color: options?.textColor || undefined,
+          }}
+          className={`font-semibold mb-0.5 mt-1 leading-snug ${
+            options?.textColor ? "" : "text-pink-300"
+          }`}
         >
           {renderInlineMarkdown(trimmed.replace(/^####\s+/, ""), `h4-${i}`)}
         </h4>
@@ -347,7 +572,13 @@ export function renderMarkdownToJsx(
       nodes.push(
         <blockquote
           key={`bq-${i}`}
-          className="border-l-2 border-cyan-400 bg-white/5 pl-2.5 py-1 my-1 rounded-r text-gray-300 italic text-xs leading-relaxed"
+          style={{
+            fontSize: `${baseFontSize}px`,
+            color: options?.textColor || undefined,
+          }}
+          className={`border-l-2 border-cyan-400 bg-white/5 pl-2.5 py-1 my-1 rounded-r italic leading-relaxed ${
+            options?.textColor ? "" : "text-gray-300"
+          }`}
         >
           {renderInlineMarkdown(trimmed.replace(/^>\s*/, ""), `bq-${i}`)}
         </blockquote>
@@ -365,7 +596,8 @@ export function renderMarkdownToJsx(
       nodes.push(
         <div
           key={`cb-item-${i}`}
-          className="flex items-start gap-2 my-1 text-xs group/cb cursor-pointer select-none"
+          style={{ fontSize: `${baseFontSize}px` }}
+          className="flex items-start gap-2 my-1 group/cb cursor-pointer select-none leading-relaxed"
           onClick={(e) => {
             e.stopPropagation();
             if (options?.onToggleCheckbox) {
@@ -384,8 +616,13 @@ export function renderMarkdownToJsx(
             {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
           </button>
           <span
+            style={{ color: isChecked ? undefined : options?.textColor || undefined }}
             className={`flex-1 transition-all break-words ${
-              isChecked ? "line-through text-gray-400 italic" : "text-gray-200"
+              isChecked
+                ? "line-through text-gray-400 italic"
+                : options?.textColor
+                ? ""
+                : "text-gray-200"
             }`}
           >
             {renderInlineMarkdown(taskText, `cbt-${i}`)}
@@ -398,8 +635,20 @@ export function renderMarkdownToJsx(
     // 6. Bullet lists: - item or * item
     if (/^[-*]\s+/.test(trimmed)) {
       nodes.push(
-        <div key={`li-${i}`} className="flex items-start gap-1.5 my-0.5 text-xs text-gray-200 pl-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 mt-1.5 shrink-0" />
+        <div
+          key={`li-${i}`}
+          style={{
+            fontSize: `${baseFontSize}px`,
+            color: options?.textColor || undefined,
+          }}
+          className={`flex items-start gap-1.5 my-0.5 pl-1 leading-relaxed ${
+            options?.textColor ? "" : "text-gray-200"
+          }`}
+        >
+          <span
+            className="w-1.5 h-1.5 rounded-full mt-2 shrink-0"
+            style={{ backgroundColor: options?.textColor || "#22d3ee" }}
+          />
           <span className="flex-1 break-words">
             {renderInlineMarkdown(trimmed.replace(/^[-*]\s+/, ""), `li-${i}`)}
           </span>
@@ -412,8 +661,23 @@ export function renderMarkdownToJsx(
     const numMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
     if (numMatch) {
       nodes.push(
-        <div key={`num-${i}`} className="flex items-start gap-1.5 my-0.5 text-xs text-gray-200 pl-1">
-          <span className="text-[10px] font-mono text-cyan-400 font-semibold mt-0.5 shrink-0">
+        <div
+          key={`num-${i}`}
+          style={{
+            fontSize: `${baseFontSize}px`,
+            color: options?.textColor || undefined,
+          }}
+          className={`flex items-start gap-1.5 my-0.5 pl-1 leading-relaxed ${
+            options?.textColor ? "" : "text-gray-200"
+          }`}
+        >
+          <span
+            style={{
+              fontSize: `${Math.max(10, baseFontSize - 2)}px`,
+              color: options?.textColor || "#22d3ee",
+            }}
+            className="font-mono font-semibold mt-0.5 shrink-0"
+          >
             {numMatch[1]}.
           </span>
           <span className="flex-1 break-words">
@@ -432,7 +696,16 @@ export function renderMarkdownToJsx(
 
     // 9. Standard Paragraph
     nodes.push(
-      <p key={`p-${i}`} className="text-xs leading-relaxed my-0.5 text-gray-200 break-words">
+      <p
+        key={`p-${i}`}
+        style={{
+          fontSize: `${baseFontSize}px`,
+          color: options?.textColor || undefined,
+        }}
+        className={`leading-relaxed my-0.5 break-words ${
+          options?.textColor ? "" : "text-gray-200"
+        }`}
+      >
         {renderInlineMarkdown(line, `p-${i}`)}
       </p>
     );
@@ -450,7 +723,14 @@ export function renderMarkdownToJsx(
     );
   }
 
-  return <div className="space-y-0.5">{nodes}</div>;
+  return (
+    <div
+      className="space-y-0.5"
+      style={{ color: options?.textColor || undefined }}
+    >
+      {nodes}
+    </div>
+  );
 }
 
 /**
