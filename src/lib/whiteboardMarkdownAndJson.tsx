@@ -339,13 +339,21 @@ export function renderMarkdownToJsx(
     onToggleCheckbox?: (rawLineIdx: number) => void;
     textColor?: string;
     baseFontSize?: number;
+    textAlign?: "left" | "center" | "right";
   }
 ): React.ReactNode {
   const baseFontSize = options?.baseFontSize || 13;
 
   if (!markdownText || !markdownText.trim()) {
     return (
-      <p style={{ fontSize: `${baseFontSize}px` }} className="text-gray-400 italic">
+      <p
+        style={{
+          fontSize: `${baseFontSize}px`,
+          color: options?.textColor || undefined,
+          textAlign: options?.textAlign || undefined,
+        }}
+        className={`italic ${options?.textColor ? "" : "text-gray-400"}`}
+      >
         Empty markdown document.
       </p>
     );
@@ -505,6 +513,7 @@ export function renderMarkdownToJsx(
           style={{
             fontSize: `${Math.round(baseFontSize * 1.35)}px`,
             color: options?.textColor || undefined,
+            textAlign: options?.textAlign || undefined,
           }}
           className={`font-extrabold border-b border-white/15 pb-1 mb-1.5 mt-2 flex items-center gap-1.5 leading-snug ${
             options?.textColor ? "" : "text-white"
@@ -522,6 +531,7 @@ export function renderMarkdownToJsx(
           style={{
             fontSize: `${Math.round(baseFontSize * 1.2)}px`,
             color: options?.textColor || undefined,
+            textAlign: options?.textAlign || undefined,
           }}
           className={`font-bold mb-1 mt-1.5 flex items-center gap-1.5 leading-snug ${
             options?.textColor ? "" : "text-cyan-300"
@@ -539,6 +549,7 @@ export function renderMarkdownToJsx(
           style={{
             fontSize: `${Math.round(baseFontSize * 1.1)}px`,
             color: options?.textColor || undefined,
+            textAlign: options?.textAlign || undefined,
           }}
           className={`font-bold mb-1 mt-1 flex items-center gap-1.5 leading-snug ${
             options?.textColor ? "" : "text-amber-300"
@@ -556,6 +567,7 @@ export function renderMarkdownToJsx(
           style={{
             fontSize: `${Math.round(baseFontSize * 1.05)}px`,
             color: options?.textColor || undefined,
+            textAlign: options?.textAlign || undefined,
           }}
           className={`font-semibold mb-0.5 mt-1 leading-snug ${
             options?.textColor ? "" : "text-pink-300"
@@ -575,6 +587,7 @@ export function renderMarkdownToJsx(
           style={{
             fontSize: `${baseFontSize}px`,
             color: options?.textColor || undefined,
+            textAlign: options?.textAlign || undefined,
           }}
           className={`border-l-2 border-cyan-400 bg-white/5 pl-2.5 py-1 my-1 rounded-r italic leading-relaxed ${
             options?.textColor ? "" : "text-gray-300"
@@ -616,7 +629,10 @@ export function renderMarkdownToJsx(
             {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
           </button>
           <span
-            style={{ color: isChecked ? undefined : options?.textColor || undefined }}
+            style={{
+              color: isChecked ? undefined : options?.textColor || undefined,
+              textAlign: options?.textAlign || undefined,
+            }}
             className={`flex-1 transition-all break-words ${
               isChecked
                 ? "line-through text-gray-400 italic"
@@ -640,6 +656,7 @@ export function renderMarkdownToJsx(
           style={{
             fontSize: `${baseFontSize}px`,
             color: options?.textColor || undefined,
+            textAlign: options?.textAlign || undefined,
           }}
           className={`flex items-start gap-1.5 my-0.5 pl-1 leading-relaxed ${
             options?.textColor ? "" : "text-gray-200"
@@ -666,6 +683,7 @@ export function renderMarkdownToJsx(
           style={{
             fontSize: `${baseFontSize}px`,
             color: options?.textColor || undefined,
+            textAlign: options?.textAlign || undefined,
           }}
           className={`flex items-start gap-1.5 my-0.5 pl-1 leading-relaxed ${
             options?.textColor ? "" : "text-gray-200"
@@ -701,6 +719,7 @@ export function renderMarkdownToJsx(
         style={{
           fontSize: `${baseFontSize}px`,
           color: options?.textColor || undefined,
+          textAlign: options?.textAlign || undefined,
         }}
         className={`leading-relaxed my-0.5 break-words ${
           options?.textColor ? "" : "text-gray-200"
@@ -726,7 +745,10 @@ export function renderMarkdownToJsx(
   return (
     <div
       className="space-y-0.5"
-      style={{ color: options?.textColor || undefined }}
+      style={{
+        color: options?.textColor || undefined,
+        textAlign: options?.textAlign || undefined,
+      }}
     >
       {nodes}
     </div>

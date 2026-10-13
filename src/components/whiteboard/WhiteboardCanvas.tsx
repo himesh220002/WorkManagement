@@ -5683,8 +5683,8 @@ export default function WhiteboardCanvas({
             onClick={handleForcePush}
             disabled={isPushing}
             className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-md transition-all shadow-xs cursor-pointer ${pushBlink
-              ? "bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-300 border border-emerald-400 ring-2 ring-emerald-400/80 animate-pulse shadow-emerald-500/20"
-              : "bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/50"
+              ? "bg-emerald-500 hover:bg-emerald-500/75 text-emerald-300 border border-emerald-400 ring-2 ring-emerald-400/80 animate-pulse shadow-emerald-500/20"
+              : "bg-emerald-600/80 hover:bg-emerald-600/90 text-emerald-300 border border-emerald-500/50"
               } ${isPushing ? "opacity-70 cursor-not-allowed" : ""}`}
             title={
               pushBlink
@@ -5708,7 +5708,7 @@ export default function WhiteboardCanvas({
             onClick={handleForcePull}
             disabled={isPulling}
             className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-md transition-all shadow-xs cursor-pointer ${pullBlink
-              ? "bg-cyan-500/25 hover:bg-cyan-500/35 text-cyan-200 border border-cyan-400 ring-2 ring-cyan-400/80 animate-pulse shadow-cyan-500/20"
+              ? "bg-cyan-500 hover:bg-cyan-500/75 text-cyan-200 border border-cyan-400 ring-2 ring-cyan-400/80 animate-pulse shadow-cyan-500/20"
               : "bg-[#202228] hover:bg-[#282B33] text-gray-300 hover:text-white border border-[#30333D]"
               } ${isPulling ? "opacity-70 cursor-not-allowed" : ""}`}
             title={
@@ -5830,11 +5830,10 @@ export default function WhiteboardCanvas({
               e.stopPropagation();
             }
           }}
-          className={`absolute z-40 bg-[#1A1C22] border border-[#2D3039] rounded-lg shadow-2xl px-2.5 py-1.5 flex flex-nowrap items-center gap-1.5 sm:gap-2 text-xs text-gray-300 animate-in fade-in-50 whitespace-nowrap [&>*]:shrink-0 touch-pan-x ${
-            showStylePalette || showShapeSwitcher || isTextColorPickerOpen
-              ? "overflow-visible"
-              : "overflow-x-auto scrollbar-none"
-          }`}
+          className={`absolute z-40 bg-[#1A1C22] border border-[#2D3039] rounded-lg shadow-2xl px-2.5 py-1.5 flex flex-nowrap items-center gap-1.5 sm:gap-2 text-xs text-gray-300 animate-in fade-in-50 whitespace-nowrap [&>*]:shrink-0 touch-pan-x ${showStylePalette || showShapeSwitcher || isTextColorPickerOpen
+            ? "overflow-visible"
+            : "overflow-x-auto scrollbar-none"
+            }`}
           style={(() => {
             const isLineNode = selectedNode.type === "line";
             const maxW = typeof window !== "undefined" ? window.innerWidth : 1200;
@@ -8333,7 +8332,8 @@ export default function WhiteboardCanvas({
                                 updateNode(node.id, { title: e.target.value });
                                 setEditingTitleId(null);
                               }}
-                              className="bg-black/50 border border-amber-400/80 rounded px-1.5 py-0.5 text-xs font-semibold text-white focus:outline-none w-full shadow-inner"
+                              style={{ color: stickyTextColor }}
+                              className="bg-black/50 border border-amber-400/80 rounded px-1.5 py-0.5 text-xs font-semibold focus:outline-none w-full shadow-inner"
                               placeholder="Note Title"
                             />
                           ) : (
@@ -8646,7 +8646,7 @@ export default function WhiteboardCanvas({
                             color: stickyTextColor,
                             textAlign: node.textAlign || "left",
                           }}
-                          className="w-full h-full flex-1 bg-transparent text-gray-100 font-mono p-1 rounded focus:outline-none resize-none leading-relaxed overflow-y-auto scrollbar-thin cursor-text"
+                          className="w-full h-full flex-1 bg-transparent font-mono p-1 rounded focus:outline-none resize-none leading-relaxed overflow-y-auto scrollbar-thin cursor-text"
                           placeholder="# Write markdown...\n**Bold** text\n- [ ] Task item"
                         />
                       ) : (
@@ -8660,13 +8660,16 @@ export default function WhiteboardCanvas({
                           style={{
                             fontSize: `${fontSizePx}px`,
                             textAlign: node.textAlign || "left",
+                            color: stickyTextColor,
                           }}
-                          className="w-full h-full flex-1 overflow-y-auto select-text text-gray-200 leading-relaxed scrollbar-thin cursor-text pr-1"
+                          className="w-full h-full flex-1 overflow-y-auto select-text leading-relaxed scrollbar-thin cursor-text pr-1"
                           title="Double-click to edit Markdown raw text"
                         >
                           {renderMarkdownToJsx(node.body || "", {
                             onToggleCheckbox: (lineIdx) => handleToggleMarkdownCheckboxOnNode(node.id, lineIdx),
                             baseFontSize: fontSizePx,
+                            textColor: stickyTextColor,
+                            textAlign: node.textAlign,
                           })}
                         </div>
                       )}
@@ -8689,7 +8692,7 @@ export default function WhiteboardCanvas({
                             updateNode(node.id, { body: e.target.value });
                             setEditingNodeId(null);
                           }}
-                          className="w-full flex-1 bg-black/40 focus:outline-none border border-pink-400/50 rounded-lg p-2 resize-none leading-relaxed text-xs text-gray-200 font-sans overflow-y-auto scrollbar-thin shadow-inner"
+                          className="w-full flex-1 bg-black/40 focus:outline-none border border-pink-400/50 rounded-lg p-2 resize-none leading-relaxed text-xs font-sans overflow-y-auto scrollbar-thin shadow-inner"
                           style={{
                             textAlign: node.textAlign || "left",
                             fontSize: `${parseFontSizePx(node.fontSize, 12)}px`,
@@ -9368,11 +9371,18 @@ export default function WhiteboardCanvas({
 
                   {/* Markdown Body Preview */}
                   <div
-                    style={{ fontSize: `${parseFontSizePx(node.fontSize, 13)}px` }}
-                    className="flex-1 p-3 bg-black/30 overflow-y-auto select-text text-gray-200 leading-relaxed font-sans scrollbar-thin"
+                    style={{
+                      fontSize: `${parseFontSizePx(node.fontSize, 13)}px`,
+                      color: node.textColor || undefined,
+                      textAlign: node.textAlign || "left",
+                    }}
+                    className={`flex-1 p-3 bg-black/30 overflow-y-auto select-text leading-relaxed font-sans scrollbar-thin ${node.textColor ? "" : "text-gray-200"
+                      }`}
                   >
                     {renderMarkdownToJsx(node.previewText || node.body || "Empty markdown document.", {
                       baseFontSize: parseFontSizePx(node.fontSize, 13),
+                      textColor: node.textColor || undefined,
+                      textAlign: node.textAlign,
                     })}
                   </div>
 
@@ -9853,7 +9863,8 @@ export default function WhiteboardCanvas({
                           updateNode(node.id, { title: e.target.value });
                           setEditingNodeId(null);
                         }}
-                        className="bg-black/80 border border-white/30 rounded px-1 text-center w-full focus:outline-none font-bold text-white text-xs"
+                        style={{ color: node.textColor || "#FFFFFF" }}
+                        className="bg-black/80 border border-white/30 rounded px-1 text-center w-full focus:outline-none font-bold text-xs"
                       />
                     ) : (
                       <div
@@ -10691,128 +10702,218 @@ export default function WhiteboardCanvas({
           onTouchStart={(e) => e.stopPropagation()}
           className="absolute bottom-18 sm:bottom-20 left-1/2 -translate-x-1/2 mb-1 bg-[#151720] border border-[#2D3039] rounded-2xl shadow-2xl p-3 w-[min(460px,calc(100vw-32px))] max-h-[min(520px,75vh)] flex flex-col gap-2.5 z-50 animate-in fade-in-50 backdrop-blur-xl"
         >              {/* Header */}
-              <div className="flex items-center justify-between pb-1.5 border-b border-[#252834]">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-                    <Boxes className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <span>Tech & Product Icons</span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 font-semibold">
-                        42 Icons
+          <div className="flex items-center justify-between pb-1.5 border-b border-[#252834]">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                <Boxes className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>Tech & Product Icons</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 font-semibold">
+                    42 Icons
+                  </span>
+                </div>
+                <div className="text-[10px] text-gray-400">
+                  Click to add or hold & drag onto canvas
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowIconGallery(false)}
+              className="p-1 rounded-lg hover:bg-[#232530] text-gray-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Search Box: Direct Dynamic React-Icons Search */}
+          <div className="relative">
+            <input
+              type="text"
+              value={iconGallerySearch}
+              onChange={(e) => setIconGallerySearch(e.target.value)}
+              placeholder="Direct dynamic search (e.g. rocket, chart, flag, cloud, gear, user, wifi)..."
+              className="w-full bg-[#0D0E13] border border-[#2B2E3C] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none transition-colors"
+            />
+            {iconGallerySearch && (
+              <button
+                type="button"
+                onClick={() => setIconGallerySearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-xs"
+                title="Clear search"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Category Filter Tabs */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none text-[10px]">
+            {[
+              {
+                id: "all" as const,
+                label: `All (${ICON_GALLERY_GROUPS.reduce((acc, g) => acc + g.items.length, 0)})`,
+                emoji: "✨",
+              },
+              {
+                id: "react-icons" as const,
+                label: "⚡ React-Icons",
+                emoji: "⚡",
+              },
+              {
+                id: "infra" as const,
+                label: `Infra (${ICON_GALLERY_GROUPS.find((g) => g.type === "infra")?.items.length || 0})`,
+                emoji: "🌐",
+              },
+              {
+                id: "flow" as const,
+                label: `Flow (${ICON_GALLERY_GROUPS.find((g) => g.type === "flow")?.items.length || 0})`,
+                emoji: "🔄",
+              },
+              {
+                id: "ideation" as const,
+                label: `Ideation (${ICON_GALLERY_GROUPS.find((g) => g.type === "ideation")?.items.length || 0})`,
+                emoji: "💡",
+              },
+              {
+                id: "logic" as const,
+                label: `Logic (${ICON_GALLERY_GROUPS.find((g) => g.type === "logic")?.items.length || 0})`,
+                emoji: "🔢",
+              },
+              {
+                id: "metrics" as const,
+                label: `Metrics (${ICON_GALLERY_GROUPS.find((g) => g.type === "metrics")?.items.length || 0})`,
+                emoji: "📊",
+              },
+              {
+                id: "media" as const,
+                label: `Media (${ICON_GALLERY_GROUPS.find((g) => g.type === "media")?.items.length || 0})`,
+                emoji: "🎭",
+              },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setIconGalleryActiveTab(tab.id);
+                  if (iconGallerySearch) setIconGallerySearch("");
+                }}
+                className={`px-2 py-1 rounded-md shrink-0 font-medium transition-colors cursor-pointer flex items-center gap-1 ${!iconGallerySearch && iconGalleryActiveTab === tab.id
+                  ? "bg-cyan-600 text-white font-bold"
+                  : "bg-[#1E202B] text-gray-400 hover:text-gray-200 hover:bg-[#252837]"
+                  }`}
+              >
+                <span>{tab.emoji}</span>
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Grouped & Dynamic Icons Content Area */}
+          <div className="overflow-y-auto max-h-[360px] space-y-3 pr-1 scrollbar-thin">
+            {/* 1. DIRECT DYNAMIC SEARCH MODE (Active whenever search text is entered) */}
+            {iconGallerySearch.trim() ? (() => {
+              const dynamicItems = searchDynamicReactIcons(iconGallerySearch, 60);
+              return (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-cyan-400">
+                      <span>⚡</span>
+                      <span>Dynamic React-Icons Search Results</span>
+                      <span className="text-[9px] text-gray-500 font-mono">
+                        ({dynamicItems.length} found)
                       </span>
                     </div>
-                    <div className="text-[10px] text-gray-400">
-                      Click to add or hold & drag onto canvas
-                    </div>
+                    <span className="text-[9px] text-gray-400">
+                      Hold &amp; Drag onto canvas
+                    </span>
                   </div>
+
+                  {dynamicItems.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-gray-500">
+                      No React-Icons found for &quot;{iconGallerySearch}&quot;.
+                      <div className="text-[10px] text-gray-600 mt-1">
+                        Try general terms like &quot;chart&quot;, &quot;flag&quot;, &quot;rocket&quot;, &quot;cloud&quot;, &quot;user&quot;, &quot;gear&quot;, &quot;home&quot;.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {dynamicItems.map((item) => {
+                        const IconComp = getWhiteboardIcon(item.iconName);
+                        return (
+                          <div
+                            key={item.id}
+                            draggable={true}
+                            onDragStart={(e) =>
+                              handleItemDragStart(e, {
+                                category: "node",
+                                type: "icon",
+                                iconName: item.iconName,
+                                initialTitle: item.name,
+                                subtitle: item.subtitle,
+                                iconGroup: "react-icons",
+                                color: item.color,
+                              })
+                            }
+                            onClick={() => {
+                              handleAddNode(
+                                "icon",
+                                "rectangle",
+                                item.color,
+                                false,
+                                undefined,
+                                undefined,
+                                item.name,
+                                undefined,
+                                item.iconName,
+                                item.subtitle,
+                                "react-icons"
+                              );
+                              setShowIconGallery(false);
+                            }}
+                            className="p-2 rounded-xl bg-[#1C1E27] hover:bg-[#242735] border border-[#2B2E3D] hover:border-cyan-500/40 transition-all flex items-start gap-2.5 cursor-grab active:cursor-grabbing group hover:shadow-lg"
+                            title={`${item.name} (${item.iconName}) - Click or Hold & Drag onto canvas`}
+                          >
+                            <div
+                              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 shadow-xs"
+                              style={{
+                                backgroundColor: `${item.color}20`,
+                                color: item.color,
+                                border: `1px solid ${item.color}40`,
+                              }}
+                            >
+                              <IconComp className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-semibold text-gray-200 group-hover:text-white truncate">
+                                {item.name}
+                              </div>
+                              <div className="text-[10px] text-gray-400 line-clamp-1 leading-tight mt-0.5 font-mono">
+                                {item.subtitle}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowIconGallery(false)}
-                  className="p-1 rounded-lg hover:bg-[#232530] text-gray-400 hover:text-white transition-colors cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Search Box: Direct Dynamic React-Icons Search */}
-              <div className="relative">
-                <input
-                  type="text"
-                  value={iconGallerySearch}
-                  onChange={(e) => setIconGallerySearch(e.target.value)}
-                  placeholder="Direct dynamic search (e.g. rocket, chart, flag, cloud, gear, user, wifi)..."
-                  className="w-full bg-[#0D0E13] border border-[#2B2E3C] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none transition-colors"
-                />
-                {iconGallerySearch && (
-                  <button
-                    type="button"
-                    onClick={() => setIconGallerySearch("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-xs"
-                    title="Clear search"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-
-              {/* Category Filter Tabs */}
-              <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none text-[10px]">
-                {[
-                  {
-                    id: "all" as const,
-                    label: `All (${ICON_GALLERY_GROUPS.reduce((acc, g) => acc + g.items.length, 0)})`,
-                    emoji: "✨",
-                  },
-                  {
-                    id: "react-icons" as const,
-                    label: "⚡ React-Icons",
-                    emoji: "⚡",
-                  },
-                  {
-                    id: "infra" as const,
-                    label: `Infra (${ICON_GALLERY_GROUPS.find((g) => g.type === "infra")?.items.length || 0})`,
-                    emoji: "🌐",
-                  },
-                  {
-                    id: "flow" as const,
-                    label: `Flow (${ICON_GALLERY_GROUPS.find((g) => g.type === "flow")?.items.length || 0})`,
-                    emoji: "🔄",
-                  },
-                  {
-                    id: "ideation" as const,
-                    label: `Ideation (${ICON_GALLERY_GROUPS.find((g) => g.type === "ideation")?.items.length || 0})`,
-                    emoji: "💡",
-                  },
-                  {
-                    id: "logic" as const,
-                    label: `Logic (${ICON_GALLERY_GROUPS.find((g) => g.type === "logic")?.items.length || 0})`,
-                    emoji: "🔢",
-                  },
-                  {
-                    id: "metrics" as const,
-                    label: `Metrics (${ICON_GALLERY_GROUPS.find((g) => g.type === "metrics")?.items.length || 0})`,
-                    emoji: "📊",
-                  },
-                  {
-                    id: "media" as const,
-                    label: `Media (${ICON_GALLERY_GROUPS.find((g) => g.type === "media")?.items.length || 0})`,
-                    emoji: "🎭",
-                  },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => {
-                      setIconGalleryActiveTab(tab.id);
-                      if (iconGallerySearch) setIconGallerySearch("");
-                    }}
-                    className={`px-2 py-1 rounded-md shrink-0 font-medium transition-colors cursor-pointer flex items-center gap-1 ${!iconGallerySearch && iconGalleryActiveTab === tab.id
-                      ? "bg-cyan-600 text-white font-bold"
-                      : "bg-[#1E202B] text-gray-400 hover:text-gray-200 hover:bg-[#252837]"
-                      }`}
-                  >
-                    <span>{tab.emoji}</span>
-                    <span>{tab.label}</span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Grouped & Dynamic Icons Content Area */}
-              <div className="overflow-y-auto max-h-[360px] space-y-3 pr-1 scrollbar-thin">
-                {/* 1. DIRECT DYNAMIC SEARCH MODE (Active whenever search text is entered) */}
-                {iconGallerySearch.trim() ? (() => {
-                  const dynamicItems = searchDynamicReactIcons(iconGallerySearch, 60);
+              );
+            })() : (
+              /* 2. CATEGORY BROWSING (When search bar is empty) */
+              <>
+                {iconGalleryActiveTab === "react-icons" ? (() => {
+                  const popularReactIcons = searchDynamicReactIcons("", 60);
                   return (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between px-1">
                         <div className="flex items-center gap-1.5 text-[11px] font-bold text-cyan-400">
                           <span>⚡</span>
-                          <span>Dynamic React-Icons Search Results</span>
+                          <span>Popular React-Icons Showcase</span>
                           <span className="text-[9px] text-gray-500 font-mono">
-                            ({dynamicItems.length} found)
+                            ({popularReactIcons.length})
                           </span>
                         </div>
                         <span className="text-[9px] text-gray-400">
@@ -10820,16 +10921,92 @@ export default function WhiteboardCanvas({
                         </span>
                       </div>
 
-                      {dynamicItems.length === 0 ? (
-                        <div className="py-8 text-center text-xs text-gray-500">
-                          No React-Icons found for &quot;{iconGallerySearch}&quot;.
-                          <div className="text-[10px] text-gray-600 mt-1">
-                            Try general terms like &quot;chart&quot;, &quot;flag&quot;, &quot;rocket&quot;, &quot;cloud&quot;, &quot;user&quot;, &quot;gear&quot;, &quot;home&quot;.
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {popularReactIcons.map((item) => {
+                          const IconComp = getWhiteboardIcon(item.iconName);
+                          return (
+                            <div
+                              key={item.id}
+                              draggable={true}
+                              onDragStart={(e) =>
+                                handleItemDragStart(e, {
+                                  category: "node",
+                                  type: "icon",
+                                  iconName: item.iconName,
+                                  initialTitle: item.name,
+                                  subtitle: item.subtitle,
+                                  iconGroup: "react-icons",
+                                  color: item.color,
+                                })
+                              }
+                              onClick={() => {
+                                handleAddNode(
+                                  "icon",
+                                  "rectangle",
+                                  item.color,
+                                  false,
+                                  undefined,
+                                  undefined,
+                                  item.name,
+                                  undefined,
+                                  item.iconName,
+                                  item.subtitle,
+                                  "react-icons"
+                                );
+                                setShowIconGallery(false);
+                              }}
+                              className="p-2 rounded-xl bg-[#1C1E27] hover:bg-[#242735] border border-[#2B2E3D] hover:border-cyan-500/40 transition-all flex items-start gap-2.5 cursor-grab active:cursor-grabbing group hover:shadow-lg"
+                              title={`${item.name} (${item.iconName}) - Click or Hold & Drag onto canvas`}
+                            >
+                              <div
+                                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 shadow-xs"
+                                style={{
+                                  backgroundColor: `${item.color}20`,
+                                  color: item.color,
+                                  border: `1px solid ${item.color}40`,
+                                }}
+                              >
+                                <IconComp className="w-4 h-4" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-semibold text-gray-200 group-hover:text-white truncate">
+                                  {item.name}
+                                </div>
+                                <div className="text-[10px] text-gray-400 line-clamp-1 leading-tight mt-0.5 font-mono">
+                                  {item.subtitle}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  ICON_GALLERY_GROUPS.filter(
+                    (grp) =>
+                      iconGalleryActiveTab === "all" || iconGalleryActiveTab === grp.type
+                  ).map((group) => {
+                    const items = group.items;
+                    if (items.length === 0) return null;
+
+                    return (
+                      <div key={group.type} className="space-y-1.5">
+                        <div className="flex items-center justify-between px-1">
+                          <div className="flex items-center gap-1 text-[11px] font-bold text-gray-200">
+                            <span>{group.emoji}</span>
+                            <span>{group.title}</span>
+                            <span className="text-[9px] text-gray-500 font-mono">
+                              ({items.length})
+                            </span>
                           </div>
+                          <span className="text-[9px] text-gray-500 font-mono">
+                            type: &quot;{group.type}&quot;
+                          </span>
                         </div>
-                      ) : (
+
                         <div className="grid grid-cols-2 gap-1.5">
-                          {dynamicItems.map((item) => {
+                          {items.map((item) => {
                             const IconComp = getWhiteboardIcon(item.iconName);
                             return (
                               <div
@@ -10842,7 +11019,7 @@ export default function WhiteboardCanvas({
                                     iconName: item.iconName,
                                     initialTitle: item.name,
                                     subtitle: item.subtitle,
-                                    iconGroup: "react-icons",
+                                    iconGroup: item.group,
                                     color: item.color,
                                   })
                                 }
@@ -10858,12 +11035,12 @@ export default function WhiteboardCanvas({
                                     undefined,
                                     item.iconName,
                                     item.subtitle,
-                                    "react-icons"
+                                    item.group
                                   );
                                   setShowIconGallery(false);
                                 }}
                                 className="p-2 rounded-xl bg-[#1C1E27] hover:bg-[#242735] border border-[#2B2E3D] hover:border-cyan-500/40 transition-all flex items-start gap-2.5 cursor-grab active:cursor-grabbing group hover:shadow-lg"
-                                title={`${item.name} (${item.iconName}) - Click or Hold & Drag onto canvas`}
+                                title={`${item.name} - ${item.subtitle} (Click or Hold & Drag onto canvas)`}
                               >
                                 <div
                                   className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 shadow-xs"
@@ -10879,7 +11056,7 @@ export default function WhiteboardCanvas({
                                   <div className="text-xs font-semibold text-gray-200 group-hover:text-white truncate">
                                     {item.name}
                                   </div>
-                                  <div className="text-[10px] text-gray-400 line-clamp-1 leading-tight mt-0.5 font-mono">
+                                  <div className="text-[10px] text-gray-400 line-clamp-1 leading-tight mt-0.5">
                                     {item.subtitle}
                                   </div>
                                 </div>
@@ -10887,181 +11064,15 @@ export default function WhiteboardCanvas({
                             );
                           })}
                         </div>
-                      )}
-                    </div>
-                  );
-                })() : (
-                  /* 2. CATEGORY BROWSING (When search bar is empty) */
-                  <>
-                    {iconGalleryActiveTab === "react-icons" ? (() => {
-                      const popularReactIcons = searchDynamicReactIcons("", 60);
-                      return (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between px-1">
-                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-cyan-400">
-                              <span>⚡</span>
-                              <span>Popular React-Icons Showcase</span>
-                              <span className="text-[9px] text-gray-500 font-mono">
-                                ({popularReactIcons.length})
-                              </span>
-                            </div>
-                            <span className="text-[9px] text-gray-400">
-                              Hold &amp; Drag onto canvas
-                            </span>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-1.5">
-                            {popularReactIcons.map((item) => {
-                              const IconComp = getWhiteboardIcon(item.iconName);
-                              return (
-                                <div
-                                  key={item.id}
-                                  draggable={true}
-                                  onDragStart={(e) =>
-                                    handleItemDragStart(e, {
-                                      category: "node",
-                                      type: "icon",
-                                      iconName: item.iconName,
-                                      initialTitle: item.name,
-                                      subtitle: item.subtitle,
-                                      iconGroup: "react-icons",
-                                      color: item.color,
-                                    })
-                                  }
-                                  onClick={() => {
-                                    handleAddNode(
-                                      "icon",
-                                      "rectangle",
-                                      item.color,
-                                      false,
-                                      undefined,
-                                      undefined,
-                                      item.name,
-                                      undefined,
-                                      item.iconName,
-                                      item.subtitle,
-                                      "react-icons"
-                                    );
-                                    setShowIconGallery(false);
-                                  }}
-                                  className="p-2 rounded-xl bg-[#1C1E27] hover:bg-[#242735] border border-[#2B2E3D] hover:border-cyan-500/40 transition-all flex items-start gap-2.5 cursor-grab active:cursor-grabbing group hover:shadow-lg"
-                                  title={`${item.name} (${item.iconName}) - Click or Hold & Drag onto canvas`}
-                                >
-                                  <div
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 shadow-xs"
-                                    style={{
-                                      backgroundColor: `${item.color}20`,
-                                      color: item.color,
-                                      border: `1px solid ${item.color}40`,
-                                    }}
-                                  >
-                                    <IconComp className="w-4 h-4" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-xs font-semibold text-gray-200 group-hover:text-white truncate">
-                                      {item.name}
-                                    </div>
-                                    <div className="text-[10px] text-gray-400 line-clamp-1 leading-tight mt-0.5 font-mono">
-                                      {item.subtitle}
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })() : (
-                      ICON_GALLERY_GROUPS.filter(
-                        (grp) =>
-                          iconGalleryActiveTab === "all" || iconGalleryActiveTab === grp.type
-                      ).map((group) => {
-                        const items = group.items;
-                        if (items.length === 0) return null;
-
-                        return (
-                          <div key={group.type} className="space-y-1.5">
-                            <div className="flex items-center justify-between px-1">
-                              <div className="flex items-center gap-1 text-[11px] font-bold text-gray-200">
-                                <span>{group.emoji}</span>
-                                <span>{group.title}</span>
-                                <span className="text-[9px] text-gray-500 font-mono">
-                                  ({items.length})
-                                </span>
-                              </div>
-                              <span className="text-[9px] text-gray-500 font-mono">
-                                type: &quot;{group.type}&quot;
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-1.5">
-                              {items.map((item) => {
-                                const IconComp = getWhiteboardIcon(item.iconName);
-                                return (
-                                  <div
-                                    key={item.id}
-                                    draggable={true}
-                                    onDragStart={(e) =>
-                                      handleItemDragStart(e, {
-                                        category: "node",
-                                        type: "icon",
-                                        iconName: item.iconName,
-                                        initialTitle: item.name,
-                                        subtitle: item.subtitle,
-                                        iconGroup: item.group,
-                                        color: item.color,
-                                      })
-                                    }
-                                    onClick={() => {
-                                      handleAddNode(
-                                        "icon",
-                                        "rectangle",
-                                        item.color,
-                                        false,
-                                        undefined,
-                                        undefined,
-                                        item.name,
-                                        undefined,
-                                        item.iconName,
-                                        item.subtitle,
-                                        item.group
-                                      );
-                                      setShowIconGallery(false);
-                                    }}
-                                    className="p-2 rounded-xl bg-[#1C1E27] hover:bg-[#242735] border border-[#2B2E3D] hover:border-cyan-500/40 transition-all flex items-start gap-2.5 cursor-grab active:cursor-grabbing group hover:shadow-lg"
-                                    title={`${item.name} - ${item.subtitle} (Click or Hold & Drag onto canvas)`}
-                                  >
-                                    <div
-                                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 shadow-xs"
-                                      style={{
-                                        backgroundColor: `${item.color}20`,
-                                        color: item.color,
-                                        border: `1px solid ${item.color}40`,
-                                      }}
-                                    >
-                                      <IconComp className="w-4 h-4" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="text-xs font-semibold text-gray-200 group-hover:text-white truncate">
-                                        {item.name}
-                                      </div>
-                                      <div className="text-[10px] text-gray-400 line-clamp-1 leading-tight mt-0.5">
-                                        {item.subtitle}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </>
+                      </div>
+                    );
+                  })
                 )}
-              </div>
-            </div>
-          )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 5g. FLOATING TEMPLATE SELECTOR DRAWER */}
       {showTemplateSelector && (

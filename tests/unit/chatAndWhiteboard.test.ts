@@ -2111,6 +2111,26 @@ describe("Sticky Note Multi-Format Structuring (JSON, Markdown, Text, Checklist)
       const cellsWithEscapedPipe = parseTableCells("| Clean \\| Modern | $12.50 |");
       expect(cellsWithEscapedPipe).toEqual(["Clean | Modern", "$12.50"]);
     });
+
+    it("verifies renderMarkdownToJsx applies custom textColor and textAlign to elements", () => {
+      const sampleMd = "# Header 1\nProposal: Outsource checkout\n- [ ] Task item";
+      const jsx = renderMarkdownToJsx(sampleMd, {
+        textColor: "#10B981",
+        textAlign: "center",
+      }) as any;
+
+      expect(jsx).toBeDefined();
+      expect(jsx.props.style.color).toBe("#10B981");
+      expect(jsx.props.style.textAlign).toBe("center");
+      // Check that h1 has textColor
+      const h1Node = jsx.props.children[0];
+      expect(h1Node.props.style.color).toBe("#10B981");
+      expect(h1Node.props.style.textAlign).toBe("center");
+      // Check that p node has textColor
+      const pNode = jsx.props.children[1];
+      expect(pNode.props.style.color).toBe("#10B981");
+      expect(pNode.props.style.textAlign).toBe("center");
+    });
   });
 
   describe("Text File Structuring", () => {
