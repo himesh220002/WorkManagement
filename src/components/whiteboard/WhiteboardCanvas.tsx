@@ -489,7 +489,7 @@ export default function WhiteboardCanvas({
           localStorage.removeItem(`wb_edit_grant_${activeId}`);
         }
       }
-    } catch {}
+    } catch { }
   }, [boardId, initialBoard._id, isCreator]);
 
   const [title, setTitle] = useState(initialBoard.title || "Organizational Chart");
@@ -1370,10 +1370,10 @@ export default function WhiteboardCanvas({
 
         const cacheKeys = isDefaultOrTemplate
           ? [
-              `taskflow_wb_cache_${activeId}`,
-              "taskflow_wb_cache_default-org-chart",
-              "taskflow_wb_cache_org-chart",
-            ]
+            `taskflow_wb_cache_${activeId}`,
+            "taskflow_wb_cache_default-org-chart",
+            "taskflow_wb_cache_org-chart",
+          ]
           : [`taskflow_wb_cache_${activeId}`];
 
         let cached: any = null;
@@ -2267,11 +2267,13 @@ export default function WhiteboardCanvas({
     subtitle?: string,
     iconGroup?: string
   ) => {
+    const viewW = canvasRef.current?.clientWidth || 800;
+    const viewH = canvasRef.current?.clientHeight || 600;
     const coords = explicitCoords
       ? explicitCoords
       : doubleClickMenu
         ? { x: doubleClickMenu.canvasX, y: doubleClickMenu.canvasY }
-        : { x: Math.round(-pan.x / zoom + 400), y: Math.round(-pan.y / zoom + 300) };
+        : { x: Math.round((-pan.x + viewW / 2) / zoom), y: Math.round((-pan.y + viewH / 2) / zoom) };
 
     const newId = `node-${Date.now()}`;
     let newNode: IWhiteboardNode;
@@ -4018,15 +4020,19 @@ export default function WhiteboardCanvas({
     showTemporaryToast,
   ]);
 
-  // Synchronize zoom and pan refs for wheel listener
+  // Synchronize zoom, pan, and activeTool refs for wheel and touch listeners
   const zoomRef = useRef(zoom);
   const panRef = useRef(pan);
+  const activeToolRef = useRef(activeTool);
   useEffect(() => {
     zoomRef.current = zoom;
   }, [zoom]);
   useEffect(() => {
     panRef.current = pan;
   }, [pan]);
+  useEffect(() => {
+    activeToolRef.current = activeTool;
+  }, [activeTool]);
 
   // Mouse Wheel Navigation:
   // - scroll: Y axis scroll
@@ -4148,6 +4154,174 @@ export default function WhiteboardCanvas({
       canvasEl.removeEventListener("wheel", handleWheel);
     };
   }, []);
+
+  // Tablet Touch Navigation (10 inches or above):
+  // - 2 fingers: pinch-to-zoom centered at touch midpoint & two-finger pan
+  // - 1 finger: pan when hand tool is active
+  useEffect(() => {
+    const canvasEl = canvasRef.current;
+    if (!canvasEl) return;
+
+    let touchStartDist: number | null = null;
+    let touchStartZoom = 1;
+    let touchStartPan = { x: 0, y: 0 };
+    let touchStartCenter: { x: number; y: number } | null = null;
+    let isSingleTouchPanning = false;
+    let singleTouchPanStart = { x: 0, y: 0 };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        touchStartDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+        touchStartZoom = zoomRef.current;
+        touchStartPan = { ...panRef.current };
+        touchStartCenter = {
+          x: (t1.clientX + t2.clientX) / 2,
+          y: (t1.clientY + t2.clientY) / 2,
+        };
+        isSingleTouchPanning = false;
+        return;
+      }
+
+      if (e.touches.length === 1) {
+        const t = e.touches[0];
+        if (activeToolRef.current === "hand") {
+          isSingleTouchPanning = true;
+          singleTouchPanStart = {
+            x: t.clientX - panRef.current.x,
+            y: t.clientY - panRef.current.y,
+          };
+        }
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      // 1. Two-finger pinch to zoom & pan
+      if (e.touches.length === 2 && touchStartDist !== null && touchStartCenter !== null) {
+        e.preventDefault();
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const newDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+        const newCenter = {
+          x: (t1.clientX + t2.clientX) / 2,
+          y: (t1.clientY + t2.clientY) / 2,
+        };
+
+        const factor = newDist / (touchStartDist || 1);
+        const newZoom = Math.max(0.1, Math.min(2.5, Number((touchStartZoom * factor).toFixed(2))));
+
+        const newPanX = newCenter.x - ((touchStartCenter.x - touchStartPan.x) / touchStartZoom) * newZoom;
+        const newPanY = newCenter.y - ((touchStartCenter.y - touchStartPan.y) / touchStartZoom) * newZoom;
+
+        setZoom(newZoom);
+        setPan({ x: Math.round(newPanX), y: Math.round(newPanY) });
+        return;
+      }
+
+      // 2. Single finger pan with hand tool
+      if (e.touches.length === 1 && isSingleTouchPanning) {
+        e.preventDefault();
+        const t = e.touches[0];
+        setPan({
+          x: Math.round(t.clientX - singleTouchPanStart.x),
+          y: Math.round(t.clientY - singleTouchPanStart.y),
+        });
+        return;
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        touchStartDist = null;
+        touchStartCenter = null;
+      }
+      if (e.touches.length === 0) {
+        isSingleTouchPanning = false;
+      }
+    };
+
+    canvasEl.addEventListener("touchstart", handleTouchStart, { passive: false });
+    canvasEl.addEventListener("touchmove", handleTouchMove, { passive: false });
+    canvasEl.addEventListener("touchend", handleTouchEnd, { passive: false });
+    canvasEl.addEventListener("touchcancel", handleTouchEnd, { passive: false });
+
+    return () => {
+      canvasEl.removeEventListener("touchstart", handleTouchStart);
+      canvasEl.removeEventListener("touchmove", handleTouchMove);
+      canvasEl.removeEventListener("touchend", handleTouchEnd);
+      canvasEl.removeEventListener("touchcancel", handleTouchEnd);
+    };
+  }, []);
+
+  // Global touch drag tracking for dragging nodes, resize handles, or edge control points on tablet
+  useEffect(() => {
+    const isDraggingSomething = Boolean(
+      draggingNodeId ||
+      draggingLineTip ||
+      draggingLineMiddle ||
+      resizing ||
+      resizingDivider ||
+      draggingEdgeControlPoint
+    );
+    if (!isDraggingSomething) return;
+
+    const handleWindowTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        e.preventDefault();
+        const t = e.touches[0];
+        handleMouseMove({
+          clientX: t.clientX,
+          clientY: t.clientY,
+        } as unknown as React.MouseEvent);
+      }
+    };
+
+    const handleWindowTouchEnd = () => {
+      handleMouseUp();
+    };
+
+    window.addEventListener("touchmove", handleWindowTouchMove, { passive: false });
+    window.addEventListener("touchend", handleWindowTouchEnd, { passive: false });
+    window.addEventListener("touchcancel", handleWindowTouchEnd, { passive: false });
+
+    return () => {
+      window.removeEventListener("touchmove", handleWindowTouchMove);
+      window.removeEventListener("touchend", handleWindowTouchEnd);
+      window.removeEventListener("touchcancel", handleWindowTouchEnd);
+    };
+  }, [
+    draggingNodeId,
+    draggingLineTip,
+    draggingLineMiddle,
+    resizing,
+    resizingDivider,
+    draggingEdgeControlPoint,
+    handleMouseMove,
+    handleMouseUp,
+  ]);
+
+  // Touch start bridge for nodes on tablet
+  const handleNodeTouchStart = useCallback(
+    (node: IWhiteboardNode, e: React.TouchEvent) => {
+      if (e.touches.length === 1) {
+        const t = e.touches[0];
+        const syntheticEvent = {
+          button: 0,
+          clientX: t.clientX,
+          clientY: t.clientY,
+          stopPropagation: () => e.stopPropagation(),
+          preventDefault: () => { },
+          ctrlKey: false,
+          metaKey: false,
+          shiftKey: false,
+        } as unknown as React.MouseEvent;
+        handleNodeMouseDown(node, syntheticEvent);
+      }
+    },
+    [handleNodeMouseDown]
+  );
 
   // Selected Node Reference
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
@@ -4686,6 +4860,17 @@ export default function WhiteboardCanvas({
           <div
             key={h.name}
             onMouseDown={(e) => handleResizeMouseDown(node, h.name, e)}
+            onTouchStart={(e) => {
+              if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                handleResizeMouseDown(node, h.name, {
+                  clientX: touch.clientX,
+                  clientY: touch.clientY,
+                  stopPropagation: () => e.stopPropagation(),
+                  preventDefault: () => { },
+                } as any);
+              }
+            }}
             style={{ ...h.style, cursor: h.cursor }}
             className="absolute w-2.5 h-2.5 bg-white border border-blue-600 rounded-[2px] shadow-md z-30 hover:scale-125 transition-transform"
             title={`Resize ${h.name.toUpperCase()}`}
@@ -4982,6 +5167,18 @@ export default function WhiteboardCanvas({
                     initialY: cp1.y,
                   });
                 }}
+                onTouchStart={(e) => {
+                  if (e.touches.length === 1) {
+                    e.stopPropagation();
+                    setSelectedEdgeId(edge.id);
+                    setDraggingEdgeControlPoint({
+                      edgeId: edge.id,
+                      pointIndex: 1,
+                      initialX: cp1.x,
+                      initialY: cp1.y,
+                    });
+                  }
+                }}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
@@ -5035,6 +5232,18 @@ export default function WhiteboardCanvas({
                     initialY: cp2.y,
                   });
                 }}
+                onTouchStart={(e) => {
+                  if (e.touches.length === 1) {
+                    e.stopPropagation();
+                    setSelectedEdgeId(edge.id);
+                    setDraggingEdgeControlPoint({
+                      edgeId: edge.id,
+                      pointIndex: 2,
+                      initialX: cp2.x,
+                      initialY: cp2.y,
+                    });
+                  }
+                }}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
@@ -5081,6 +5290,15 @@ export default function WhiteboardCanvas({
             <g
               className="pointer-events-auto cursor-pointer animate-in fade-in-50"
               onClick={(e) => {
+                e.stopPropagation();
+                setSelectedEdgeId(edge.id);
+                setEdgeSettingsPopover({
+                  edgeId: edge.id,
+                  x: midPointX,
+                  y: midPointY,
+                });
+              }}
+              onTouchStart={(e) => {
                 e.stopPropagation();
                 setSelectedEdgeId(edge.id);
                 setEdgeSettingsPopover({
@@ -5248,8 +5466,8 @@ export default function WhiteboardCanvas({
       />
 
       {/* 1. TOP HEADER BAR (Breadcrumb, Title, Favorite, Author Avatar, Share, Fullscreen) */}
-      <header className="absolute top-0 left-0 right-0 h-13 px-4 bg-[#121316]/10 border-b border-[#22242B] flex items-center justify-between z-30 shadow-md">
-        <div className="flex items-center gap-3">
+      <header className="absolute top-0 left-0 right-0 h-13 px-3 sm:px-4 bg-[#121316]/10 backdrop-blur-sm border-b border-[#22242B] flex items-center justify-between z-30 shadow-md max-w-full overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <button
             type="button"
             onClick={(e) => {
@@ -5266,7 +5484,7 @@ export default function WhiteboardCanvas({
             <ArrowLeft className="w-4 h-4" />
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <input
               type="text"
               value={title}
@@ -5274,7 +5492,7 @@ export default function WhiteboardCanvas({
                 setTitle(e.target.value);
                 triggerAutoSave(nodes, edges, e.target.value);
               }}
-              className="bg-transparent text-sm font-bold text-white focus:bg-[#1A1C23] px-2 py-1 rounded border border-transparent focus:border-blue-500 focus:outline-none transition-all"
+              className="bg-transparent text-xs lg:text-sm font-bold text-white focus:bg-[#1A1C23] px-2 py-1 rounded border border-transparent focus:border-blue-500 focus:outline-none transition-all max-w-[120px] sm:max-w-[180px] xl:max-w-none truncate"
             />
             <button
               onClick={() => {
@@ -5291,7 +5509,7 @@ export default function WhiteboardCanvas({
           </div>
 
           {/* Auto-save telemetry status */}
-          <div className="text-[10px] text-gray-400 flex items-center gap-1 font-mono transition-colors">
+          <div className="text-[10px] text-gray-400 hidden xl:flex items-center gap-1 font-mono transition-colors shrink-0">
             {saveStatus === "saving" ? (
               <span className="text-amber-400 flex items-center gap-1">
                 <Loader2 className="w-2.5 h-2.5 animate-spin" /> Pushing to cloud...
@@ -5307,16 +5525,15 @@ export default function WhiteboardCanvas({
         </div>
 
         {/* Header Right Tools */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2 xl:gap-2.5 shrink-0">
           {/* Push Button (Up Blink when local has changes) */}
           <button
             onClick={handleForcePush}
             disabled={isPushing}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all shadow-xs cursor-pointer ${
-              pushBlink
-                ? "bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-300 border border-emerald-400 ring-2 ring-emerald-400/80 animate-pulse shadow-emerald-500/20"
-                : "bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/50"
-            } ${isPushing ? "opacity-70 cursor-not-allowed" : ""}`}
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-md transition-all shadow-xs cursor-pointer ${pushBlink
+              ? "bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-300 border border-emerald-400 ring-2 ring-emerald-400/80 animate-pulse shadow-emerald-500/20"
+              : "bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/50"
+              } ${isPushing ? "opacity-70 cursor-not-allowed" : ""}`}
             title={
               pushBlink
                 ? "Local has changes ready to Push! Click to force-save to cloud database."
@@ -5328,7 +5545,7 @@ export default function WhiteboardCanvas({
             ) : (
               <Upload className={`w-3.5 h-3.5 ${pushBlink ? "text-emerald-400 animate-bounce" : "text-emerald-400"}`} />
             )}
-            <span>{isPushing ? "Pushing..." : pushBlink ? "Push (Changes)" : "Push"}</span>
+            <span>{isPushing ? "Pushing..." : pushBlink ? (<>Push<span className="hidden xl:inline"> (Changes)</span></>) : "Push"}</span>
             {pushBlink && (
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
             )}
@@ -5338,11 +5555,10 @@ export default function WhiteboardCanvas({
           <button
             onClick={handleForcePull}
             disabled={isPulling}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all shadow-xs cursor-pointer ${
-              pullBlink
-                ? "bg-cyan-500/25 hover:bg-cyan-500/35 text-cyan-200 border border-cyan-400 ring-2 ring-cyan-400/80 animate-pulse shadow-cyan-500/20"
-                : "bg-[#202228] hover:bg-[#282B33] text-gray-300 hover:text-white border border-[#30333D]"
-            } ${isPulling ? "opacity-70 cursor-not-allowed" : ""}`}
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-md transition-all shadow-xs cursor-pointer ${pullBlink
+              ? "bg-cyan-500/25 hover:bg-cyan-500/35 text-cyan-200 border border-cyan-400 ring-2 ring-cyan-400/80 animate-pulse shadow-cyan-500/20"
+              : "bg-[#202228] hover:bg-[#282B33] text-gray-300 hover:text-white border border-[#30333D]"
+              } ${isPulling ? "opacity-70 cursor-not-allowed" : ""}`}
             title={
               pullBlink
                 ? "Cloud database has updates! Click Pull to load latest into canvas."
@@ -5354,7 +5570,7 @@ export default function WhiteboardCanvas({
             ) : (
               <Download className={`w-3.5 h-3.5 ${pullBlink ? "text-cyan-400 animate-bounce" : "text-cyan-400"}`} />
             )}
-            <span>{isPulling ? "Pulling..." : pullBlink ? "Pull (New Data)" : "Pull"}</span>
+            <span>{isPulling ? "Pulling..." : pullBlink ? (<>Pull<span className="hidden xl:inline"> (New Data)</span></>) : "Pull"}</span>
             {pullBlink && (
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping inline-block" />
             )}
@@ -5364,13 +5580,12 @@ export default function WhiteboardCanvas({
           <button
             onClick={() => triggerAutoSave(nodesRef.current, edgesRef.current, undefined, undefined, true)}
             disabled={saveStatus === "saving"}
-            className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all shadow-xs ${
-              saveStatus === "unsaved"
-                ? "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/25 border border-blue-400/50 cursor-pointer"
-                : saveStatus === "saving"
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 text-xs font-semibold rounded-md transition-all shadow-xs ${saveStatus === "unsaved"
+              ? "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/25 border border-blue-400/50 cursor-pointer"
+              : saveStatus === "saving"
                 ? "bg-amber-600/30 text-amber-200 border border-amber-500/40 cursor-not-allowed"
                 : "bg-[#202228] hover:bg-[#282B33] text-gray-300 border border-[#30333D] cursor-pointer"
-            }`}
+              }`}
             title={
               saveStatus === "unsaved"
                 ? "Unsaved modifications. Click to save now or auto-saves every 20s"
@@ -5397,7 +5612,7 @@ export default function WhiteboardCanvas({
 
           {/* Author avatar from screenshot ("HS") */}
           <div
-            className="w-7 h-7 rounded-full bg-[#2A2D36] border border-[#3A3D49] text-gray-200 font-bold text-[10px] flex items-center justify-center shadow-xs"
+            className="w-7 h-7 rounded-full bg-[#2A2D36] border border-[#3A3D49] text-gray-200 font-bold text-[10px] flex items-center justify-center shadow-xs shrink-0"
             title={`Created by: ${initialBoard.authorName || currentUserName}`}
           >
             {initialBoard.authorInitials || "HS"}
@@ -5407,22 +5622,22 @@ export default function WhiteboardCanvas({
           {!isEditUnlocked && (
             <button
               onClick={() => setIsUnlockModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 rounded-md transition-colors"
+              className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 rounded-md transition-colors shrink-0"
               title={`Restricted Edit: Ask ${initialBoard.authorName || "creator"} for the 6-digit approval phrase`}
             >
               <Lock className="w-3.5 h-3.5 text-amber-400" />
-              <span>Unlock Edit</span>
+              <span className="hidden sm:inline">Unlock Edit</span>
             </button>
           )}
 
           {/* Settings Popup Button */}
           <button
             onClick={() => setIsSettingsModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-[#202228] hover:bg-[#282B33] text-gray-200 border border-[#30333D] rounded-md transition-colors"
+            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-semibold bg-[#202228] hover:bg-[#282B33] text-gray-200 border border-[#30333D] rounded-md transition-colors shrink-0"
             title="Whiteboard Settings, Passwords & Approval Tokens"
           >
             <Settings className="w-3.5 h-3.5 text-blue-400" />
-            <span>Settings</span>
+            <span className="hidden xl:inline">Settings</span>
           </button>
 
           <button
@@ -5430,16 +5645,16 @@ export default function WhiteboardCanvas({
               navigator.clipboard?.writeText(window.location.href);
               alert("Board link copied to clipboard!");
             }}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-[#202228] hover:bg-[#282B33] text-gray-200 border border-[#30333D] rounded-md transition-colors"
+            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-semibold bg-[#202228] hover:bg-[#282B33] text-gray-200 border border-[#30333D] rounded-md transition-colors shrink-0"
           >
             <Share2 className="w-3.5 h-3.5" />
-            <span>Share</span>
+            <span className="hidden xl:inline">Share</span>
           </button>
 
           {/* Edge-to-Edge True Fullscreen Maximize Toggle */}
           <button
             onClick={toggleFullscreen}
-            className={`p-1.5 rounded-md hover:bg-[#202228] transition-colors ${isFullscreen ? "text-cyan-400 bg-[#202228]" : "text-gray-400 hover:text-white"
+            className={`p-1.5 rounded-md hover:bg-[#202228] transition-colors shrink-0 ${isFullscreen ? "text-cyan-400 bg-[#202228]" : "text-gray-400 hover:text-white"
               }`}
             title={isFullscreen ? "Exit Fullscreen (Esc)" : "Full Screen (Zero Spaces)"}
           >
@@ -5452,9 +5667,9 @@ export default function WhiteboardCanvas({
       {selectedNode && selectedNodeIds.length <= 1 && (
         <div
           onMouseDown={(e) => e.stopPropagation()}
-          className="absolute z-40 bg-[#1A1C22] border border-[#2D3039] rounded-lg shadow-2xl px-2.5 py-1.5 flex items-center gap-2 text-xs text-gray-300 animate-in fade-in-50"
+          className="absolute z-40 bg-[#1A1C22] border border-[#2D3039] rounded-lg shadow-2xl px-2.5 py-1.5 flex items-center gap-2 text-xs text-gray-300 animate-in fade-in-50 max-w-[calc(100vw-24px)] overflow-x-auto scrollbar-none"
           style={{
-            left: Math.max(20, Math.min(window.innerWidth - 760, selectedNode.x * zoom + pan.x)),
+            left: Math.max(12, Math.min(window.innerWidth - 760, selectedNode.x * zoom + pan.x)),
             top: Math.max(60, selectedNode.y * zoom + pan.y - 48),
           }}
         >
@@ -6420,7 +6635,7 @@ export default function WhiteboardCanvas({
         // Position centered above group in screen coordinates, safely clamped to screen viewport
         const groupCenterX = minX + (maxX - minX) / 2;
         const winW = typeof window !== "undefined" ? window.innerWidth : 1400;
-        const screenLeft = Math.max(20, Math.min(winW - 740, groupCenterX * zoom + pan.x - 240));
+        const screenLeft = Math.max(12, Math.min(winW - 740, groupCenterX * zoom + pan.x - 240));
         const screenTop = Math.max(65, minY * zoom + pan.y - 54);
 
         const selectedGroupIds = Array.from(
@@ -6440,7 +6655,7 @@ export default function WhiteboardCanvas({
 
         return (
           <div
-            className="absolute z-40 bg-[#1A1C22]/95 backdrop-blur-md border border-cyan-500/50 rounded-xl shadow-2xl px-3 py-1.5 flex items-center gap-2.5 text-xs text-gray-200 animate-in fade-in-50"
+            className="absolute z-40 bg-[#1A1C22]/95 backdrop-blur-md border border-cyan-500/50 rounded-xl shadow-2xl px-3 py-1.5 flex items-center gap-2.5 text-xs text-gray-200 animate-in fade-in-50 max-w-[calc(100vw-24px)] overflow-x-auto scrollbar-none"
             style={{
               left: screenLeft,
               top: screenTop,
@@ -6782,11 +6997,10 @@ export default function WhiteboardCanvas({
                       pushHistory(nodes, updated);
                       triggerAutoSave(nodes, updated);
                     }}
-                    className={`py-1 px-1.5 rounded flex flex-col items-center justify-center gap-0.5 text-[10px] transition-all cursor-pointer ${
-                      isOrthogonal
-                        ? "bg-blue-600 text-white font-bold shadow"
-                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
-                    }`}
+                    className={`py-1 px-1.5 rounded flex flex-col items-center justify-center gap-0.5 text-[10px] transition-all cursor-pointer ${isOrthogonal
+                      ? "bg-blue-600 text-white font-bold shadow"
+                      : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                      }`}
                     title="Right-angle stepped connector"
                   >
                     <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
@@ -6805,11 +7019,10 @@ export default function WhiteboardCanvas({
                       pushHistory(nodes, updated);
                       triggerAutoSave(nodes, updated);
                     }}
-                    className={`py-1 px-1.5 rounded flex flex-col items-center justify-center gap-0.5 text-[10px] transition-all cursor-pointer ${
-                      isCurved
-                        ? "bg-blue-600 text-white font-bold shadow"
-                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
-                    }`}
+                    className={`py-1 px-1.5 rounded flex flex-col items-center justify-center gap-0.5 text-[10px] transition-all cursor-pointer ${isCurved
+                      ? "bg-blue-600 text-white font-bold shadow"
+                      : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                      }`}
                     title="Smooth Bézier curve with 2 control points at 1/3 and 2/3 sections"
                   >
                     <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
@@ -6828,11 +7041,10 @@ export default function WhiteboardCanvas({
                       pushHistory(nodes, updated);
                       triggerAutoSave(nodes, updated);
                     }}
-                    className={`py-1 px-1.5 rounded flex flex-col items-center justify-center gap-0.5 text-[10px] transition-all cursor-pointer ${
-                      isStraight
-                        ? "bg-blue-600 text-white font-bold shadow"
-                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
-                    }`}
+                    className={`py-1 px-1.5 rounded flex flex-col items-center justify-center gap-0.5 text-[10px] transition-all cursor-pointer ${isStraight
+                      ? "bg-blue-600 text-white font-bold shadow"
+                      : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                      }`}
                     title="Straight polyline shaped by control points"
                   >
                     <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
@@ -6864,9 +7076,8 @@ export default function WhiteboardCanvas({
                       pushHistory(nodes, updated);
                       triggerAutoSave(nodes, updated);
                     }}
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
-                      !isDashed ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
-                    }`}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${!isDashed ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
+                      }`}
                   >
                     Solid
                   </button>
@@ -6882,9 +7093,8 @@ export default function WhiteboardCanvas({
                       pushHistory(nodes, updated);
                       triggerAutoSave(nodes, updated);
                     }}
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
-                      isDashed ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
-                    }`}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${isDashed ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
+                      }`}
                   >
                     Dashed
                   </button>
@@ -6905,9 +7115,8 @@ export default function WhiteboardCanvas({
                         pushHistory(nodes, updated);
                         triggerAutoSave(nodes, updated);
                       }}
-                      className={`w-5 h-5 rounded-full transition-transform hover:scale-110 border cursor-pointer ${
-                        edge.color === c ? "ring-2 ring-white scale-110" : "border-white/20"
-                      }`}
+                      className={`w-5 h-5 rounded-full transition-transform hover:scale-110 border cursor-pointer ${edge.color === c ? "ring-2 ring-white scale-110" : "border-white/20"
+                        }`}
                       style={{ backgroundColor: c }}
                     />
                   ))}
@@ -6928,11 +7137,10 @@ export default function WhiteboardCanvas({
                       pushHistory(nodes, updated);
                       triggerAutoSave(nodes, updated);
                     }}
-                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
-                      edge.arrowDirection === "backward"
-                        ? "bg-blue-600 text-white shadow"
-                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
-                    }`}
+                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${edge.arrowDirection === "backward"
+                      ? "bg-blue-600 text-white shadow"
+                      : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                      }`}
                     title="Backward arrow: Target points to Source (<-)"
                   >
                     <MoveLeft className="w-3.5 h-3.5" />
@@ -6948,11 +7156,10 @@ export default function WhiteboardCanvas({
                       pushHistory(nodes, updated);
                       triggerAutoSave(nodes, updated);
                     }}
-                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
-                      edge.arrowDirection === "forward" || !edge.arrowDirection
-                        ? "bg-blue-600 text-white shadow"
-                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
-                    }`}
+                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${edge.arrowDirection === "forward" || !edge.arrowDirection
+                      ? "bg-blue-600 text-white shadow"
+                      : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                      }`}
                     title="Forward arrow: Source points to Target (->)"
                   >
                     <span>-&gt;</span>
@@ -6968,11 +7175,10 @@ export default function WhiteboardCanvas({
                       pushHistory(nodes, updated);
                       triggerAutoSave(nodes, updated);
                     }}
-                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
-                      edge.arrowDirection === "bidirectional"
-                        ? "bg-blue-600 text-white shadow"
-                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
-                    }`}
+                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${edge.arrowDirection === "bidirectional"
+                      ? "bg-blue-600 text-white shadow"
+                      : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                      }`}
                     title="Bidirectional arrow: Double-ended (<->)"
                   >
                     <ArrowLeftRight className="w-3.5 h-3.5" />
@@ -7334,7 +7540,7 @@ export default function WhiteboardCanvas({
           e.dataTransfer.dropEffect = "copy";
         }}
         onDrop={handleCanvasDrop}
-        className={`w-full h-full relative overflow-hidden ${activeTool === "hand" || isPanning
+        className={`w-full h-full relative overflow-hidden touch-none ${activeTool === "hand" || isPanning
           ? "cursor-grab active:cursor-grabbing"
           : activeTool === "draw" || activeTool === "arrow" || activeTool === "line" || activeTool === "arrow-line"
             ? "cursor-crosshair"
@@ -7342,6 +7548,7 @@ export default function WhiteboardCanvas({
           }`}
         style={{
           backgroundColor: canvasBgColor,
+          touchAction: "none",
         }}
       >
         {/* SVG Infinite Dot Grid Pattern */}
@@ -7782,6 +7989,7 @@ export default function WhiteboardCanvas({
                   key={node.id}
                   data-note-card="true"
                   onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onTouchStart={(e) => handleNodeTouchStart(node, e)}
                   onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
                   style={{
                     position: "absolute",
@@ -8260,6 +8468,7 @@ export default function WhiteboardCanvas({
                 <div
                   key={node.id}
                   onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onTouchStart={(e) => handleNodeTouchStart(node, e)}
                   onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
                   style={{
                     position: "absolute",
@@ -8350,6 +8559,18 @@ export default function WhiteboardCanvas({
                     {/* Draggable Divider Line (Horizontal split handle) */}
                     <div
                       onMouseDown={(e) => handleDividerMouseDown(node, safeHeaderHeight, e)}
+                      onTouchStart={(e) => {
+                        if (e.touches.length === 1) {
+                          const t = e.touches[0];
+                          handleDividerMouseDown(node, safeHeaderHeight, {
+                            button: 0,
+                            clientX: t.clientX,
+                            clientY: t.clientY,
+                            stopPropagation: () => e.stopPropagation(),
+                            preventDefault: () => { },
+                          } as unknown as React.MouseEvent);
+                        }
+                      }}
                       className="relative w-full h-2.5 -my-1 z-30 cursor-row-resize group/divider flex items-center justify-center select-none"
                       title="Drag up or down to adjust header and bottom height"
                     >
@@ -8469,6 +8690,7 @@ export default function WhiteboardCanvas({
                 <div
                   key={node.id}
                   onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onTouchStart={(e) => handleNodeTouchStart(node, e)}
                   onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
                   style={{
                     position: "absolute",
@@ -8541,6 +8763,7 @@ export default function WhiteboardCanvas({
                 <div
                   key={node.id}
                   onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onTouchStart={(e) => handleNodeTouchStart(node, e)}
                   onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
                   style={{
                     position: "absolute",
@@ -8633,6 +8856,7 @@ export default function WhiteboardCanvas({
                 <div
                   key={node.id}
                   onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onTouchStart={(e) => handleNodeTouchStart(node, e)}
                   onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
                   style={{
                     position: "absolute",
@@ -8731,6 +8955,7 @@ export default function WhiteboardCanvas({
                 <div
                   key={node.id}
                   onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onTouchStart={(e) => handleNodeTouchStart(node, e)}
                   onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
                   style={{
                     position: "absolute",
@@ -8818,6 +9043,7 @@ export default function WhiteboardCanvas({
                 <div
                   key={node.id}
                   onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onTouchStart={(e) => handleNodeTouchStart(node, e)}
                   onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
                   style={{
                     position: "absolute",
@@ -8905,6 +9131,7 @@ export default function WhiteboardCanvas({
                 <div
                   key={node.id}
                   onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onTouchStart={(e) => handleNodeTouchStart(node, e)}
                   onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
                   style={{
                     position: "absolute",
@@ -8978,6 +9205,7 @@ export default function WhiteboardCanvas({
                 <div
                   key={node.id}
                   onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onTouchStart={(e) => handleNodeTouchStart(node, e)}
                   onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
                   style={{
                     position: "absolute",
@@ -9254,6 +9482,7 @@ export default function WhiteboardCanvas({
                 <div
                   key={node.id}
                   onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                  onTouchStart={(e) => handleNodeTouchStart(node, e)}
                   onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
                   style={{
                     position: "absolute",
@@ -9332,6 +9561,7 @@ export default function WhiteboardCanvas({
               <div
                 key={node.id}
                 onMouseDown={(e) => handleNodeMouseDown(node, e)}
+                onTouchStart={(e) => handleNodeTouchStart(node, e)}
                 onDoubleClick={(e) => handleNodeDoubleClick(node, e)}
                 style={{
                   position: "absolute",
@@ -9393,7 +9623,7 @@ export default function WhiteboardCanvas({
       </div>
 
       {/* 5. BOTTOM-LEFT ZOOM CONTROLS (Matching Screenshots 2-5) */}
-      <div className="absolute bottom-5 left-5 z-40 bg-[#14151B]/95 backdrop-blur-md border border-[#262832] rounded-lg shadow-xl px-2 py-1 flex items-center gap-1.5 text-xs text-gray-300">
+      <div className="absolute bottom-20 xl:bottom-5 left-3 xl:left-5 z-40 bg-[#14151B]/95 backdrop-blur-md border border-[#262832] rounded-lg shadow-xl px-2 py-1 flex items-center gap-1.5 text-xs text-gray-300">
         <button
           onClick={() => {
             setZoom(0.5);
@@ -9505,7 +9735,7 @@ export default function WhiteboardCanvas({
       </div>
 
       {/* 5a. BOTTOM-RIGHT CANVAS NAVIGATOR / MINIMAP RADAR ("small section at right corner which displays position ontime") */}
-      <div className="absolute bottom-3 right-3 z-40 select-none">
+      <div className="hidden xl:block absolute bottom-20 xl:bottom-3 right-3 xl:right-3 z-40 select-none">
         {isMounted && (
           showMinimap ? (
             <div className="bg-[#14151B]/10 border border-[#262832] rounded-xl shadow-2xl p-2 animate-in fade-in-50 duration-150">
@@ -9647,7 +9877,7 @@ export default function WhiteboardCanvas({
 
       {/* 5b. FLOATING ARROW CONNECTION TOOLBAR ("connect two different nodes by arrows <- or -> or <->") */}
       {activeTool === "arrow" && (
-        <div className="absolute bottom-18 left-1/2 -translate-x-1/2 z-40 bg-[#16171E]/95 backdrop-blur-md border border-blue-500/60 rounded-xl shadow-2xl px-3.5 py-2 flex items-center gap-3 text-xs animate-in slide-in-from-bottom-2 duration-150">
+        <div className="absolute bottom-18 left-1/2 -translate-x-1/2 z-40 bg-[#16171E]/95 backdrop-blur-md border border-blue-500/60 rounded-xl shadow-2xl px-3.5 py-2 flex items-center gap-2 sm:gap-3 text-xs animate-in slide-in-from-bottom-2 duration-150 max-w-[calc(100vw-24px)] md:max-w-none overflow-x-auto scrollbar-none">
           <div className="flex items-center gap-1.5 pr-2 border-r border-[#2A2C37]">
             <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
             <span className="font-bold text-white text-[11px] tracking-wide whitespace-nowrap">Arrow Link</span>
@@ -9725,7 +9955,7 @@ export default function WhiteboardCanvas({
 
       {/* 5c. FLOATING PEN DRAWING TOOLBAR ("draw by pen needed to activate") */}
       {activeTool === "draw" && (
-        <div className="absolute bottom-18 left-1/2 -translate-x-1/2 z-40 bg-[#16171E]/95 backdrop-blur-md border border-pink-500/60 rounded-xl shadow-2xl px-3.5 py-2 flex items-center gap-3 text-xs animate-in slide-in-from-bottom-2 duration-150">
+        <div className="absolute bottom-18 left-1/2 -translate-x-1/2 z-40 bg-[#16171E]/95 backdrop-blur-md border border-pink-500/60 rounded-xl shadow-2xl px-3.5 py-2 flex items-center gap-2 sm:gap-3 text-xs animate-in slide-in-from-bottom-2 duration-150 max-w-[calc(100vw-24px)] md:max-w-none overflow-x-auto scrollbar-none">
           <div className="flex items-center gap-1.5 pr-2 border-r border-[#2A2C37]">
             <div
               className="w-2.5 h-2.5 rounded-full shadow-sm animate-pulse"
@@ -9793,7 +10023,7 @@ export default function WhiteboardCanvas({
       )}
 
       {/* 6. FLOATING BOTTOM TOOLBAR (Matching exact layout from Screenshots 2, 3, 4, 5) */}
-      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-40 bg-[#16171E]/95 backdrop-blur-md border border-[#262832] rounded-xl shadow-2xl px-3 py-1.5 flex items-center gap-1.5">
+      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-40 bg-[#16171E]/95 backdrop-blur-md border border-[#262832] rounded-xl shadow-2xl px-2 sm:px-3 py-1.5 flex items-center gap-1 sm:gap-1.5 max-w-[calc(100vw-24px)] md:max-w-[calc(100vw-32px)] xl:max-w-none overflow-x-auto scrollbar-none touch-pan-x">
         {/* V - Select Tool */}
         <button
           onClick={() => setActiveTool("select")}
@@ -9872,7 +10102,7 @@ export default function WhiteboardCanvas({
 
           {/* Screenshot 4: Shape Grid Palette Popover */}
           {showShapePalette && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-3 grid grid-cols-3 gap-2 w-56 z-50 animate-in fade-in-50">
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-3 grid grid-cols-3 gap-2 w-56 max-w-[calc(100vw-32px)] z-50 animate-in fade-in-50">
               <button
                 draggable={true}
                 onDragStart={(e) =>
@@ -10240,7 +10470,7 @@ export default function WhiteboardCanvas({
           {showTableDialog && (
             <div
               onMouseDown={(e) => e.stopPropagation()}
-              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#151720] border border-[#2D3039] rounded-2xl shadow-2xl p-3.5 w-72 flex flex-col gap-3 z-50 animate-in fade-in-50 backdrop-blur-xl"
+              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#151720] border border-[#2D3039] rounded-2xl shadow-2xl p-3.5 w-72 max-w-[calc(100vw-32px)] flex flex-col gap-3 z-50 animate-in fade-in-50 backdrop-blur-xl"
             >
               {/* Header */}
               <div className="flex items-center justify-between pb-1.5 border-b border-[#252834]">
@@ -10449,7 +10679,7 @@ export default function WhiteboardCanvas({
           {showIconGallery && (
             <div
               onMouseDown={(e) => e.stopPropagation()}
-              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#151720] border border-[#2D3039] rounded-2xl shadow-2xl p-3 w-[460px] max-h-[520px] flex flex-col gap-2.5 z-50 animate-in fade-in-50 backdrop-blur-xl"
+              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#151720] border border-[#2D3039] rounded-2xl shadow-2xl p-3 w-[min(460px,calc(100vw-32px))] max-h-[min(520px,75vh)] flex flex-col gap-2.5 z-50 animate-in fade-in-50 backdrop-blur-xl"
             >
               {/* Header */}
               <div className="flex items-center justify-between pb-1.5 border-b border-[#252834]">
@@ -10550,11 +10780,10 @@ export default function WhiteboardCanvas({
                       setIconGalleryActiveTab(tab.id);
                       if (iconGallerySearch) setIconGallerySearch("");
                     }}
-                    className={`px-2 py-1 rounded-md shrink-0 font-medium transition-colors cursor-pointer flex items-center gap-1 ${
-                      !iconGallerySearch && iconGalleryActiveTab === tab.id
-                        ? "bg-cyan-600 text-white font-bold"
-                        : "bg-[#1E202B] text-gray-400 hover:text-gray-200 hover:bg-[#252837]"
-                    }`}
+                    className={`px-2 py-1 rounded-md shrink-0 font-medium transition-colors cursor-pointer flex items-center gap-1 ${!iconGallerySearch && iconGalleryActiveTab === tab.id
+                      ? "bg-cyan-600 text-white font-bold"
+                      : "bg-[#1E202B] text-gray-400 hover:text-gray-200 hover:bg-[#252837]"
+                      }`}
                   >
                     <span>{tab.emoji}</span>
                     <span>{tab.label}</span>
@@ -10847,7 +11076,7 @@ export default function WhiteboardCanvas({
           </button>
 
           {showTemplateSelector && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-2.5 w-64 z-50 animate-in fade-in-50">
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-2.5 w-64 max-w-[calc(100vw-32px)] z-50 animate-in fade-in-50">
               <div className="px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center justify-between">
                 <span>Insert Functional Area</span>
                 <button
@@ -10976,7 +11205,7 @@ export default function WhiteboardCanvas({
             <div
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
-              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-3 w-64 z-50 animate-in fade-in-50"
+              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-3 w-64 max-w-[calc(100vw-32px)] z-50 animate-in fade-in-50"
             >
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
                 Color Palette

@@ -35,6 +35,7 @@ import {
   Loader2,
   Sliders,
   CornerDownLeft,
+  Menu,
 } from "lucide-react";
 import { compressImageFile } from "@/utils/imageCompressor";
 
@@ -157,6 +158,7 @@ export default function ChatSpaceClient({
   const [activeChannelId, setActiveChannelId] = useState<string>("global");
   const [activeScope, setActiveScope] = useState<"global" | "team" | "group" | "direct">("global");
   const [activeScopeName, setActiveScopeName] = useState<string>("Global All-Hands");
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
 
   // Dynamic Channels State
   const [teams, setTeams] = useState<ChannelItem[]>([]);
@@ -408,6 +410,7 @@ export default function ChatSpaceClient({
     setComposerTargetName(ch.name);
     setSelectedRecipientFilter(null);
     setShowChannelMembersPopover(false);
+    setIsMobileSidebarOpen(false);
   };
 
   const handleSelectTeam = (t: ChannelItem) => {
@@ -418,6 +421,7 @@ export default function ChatSpaceClient({
     setComposerTargetName(t.name);
     setSelectedRecipientFilter(null);
     setShowChannelMembersPopover(false);
+    setIsMobileSidebarOpen(false);
   };
 
   const handleSelectGroup = (g: ChannelItem) => {
@@ -428,6 +432,7 @@ export default function ChatSpaceClient({
     setComposerTargetName(g.name);
     setSelectedRecipientFilter(null);
     setShowChannelMembersPopover(false);
+    setIsMobileSidebarOpen(false);
   };
 
   const handleSelectDirect = (d: ChannelItem) => {
@@ -438,6 +443,7 @@ export default function ChatSpaceClient({
     setComposerTargetName(d.name);
     setSelectedRecipientFilter(null);
     setShowChannelMembersPopover(false);
+    setIsMobileSidebarOpen(false);
   };
 
   // Toggle selection for Team modal
@@ -1124,255 +1130,300 @@ export default function ChatSpaceClient({
     }
   };
 
-  return (
-    <div className="flex h-[calc(95vh-64px)] overflow-hidden bg-[#FAF9F8] dark:bg-[#121316] text-[#242424] dark:text-[#E1DFDD]">
-      {/* 1. LEFT SIDEBAR: Channels & Message Scopes */}
-      <aside className="w-72 shrink-0 border-r border-[#E1DFDD] dark:border-[#26282E] bg-white dark:bg-[#18191E] flex flex-col justify-between">
-        <div className="p-3.5 border-b border-[#E1DFDD] dark:border-[#26282E]">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-sm">
-                <MessageSquare className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
-                  Chat Space
-                </h2>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                  {companyCode ? `${companyCode} Workspace` : "Corporate Hub"}
-                </p>
-              </div>
+  const renderSidebarContent = (isMobile = false) => (
+    <>
+      <div className="p-3.5 border-b border-[#E1DFDD] dark:border-[#26282E]">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-sm">
+              <MessageSquare className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                Chat Space
+              </h2>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                {companyCode ? `${companyCode} Workspace` : "Corporate Hub"}
+              </p>
             </div>
           </div>
-
-          {/* Quick Search */}
-          <div className="relative mt-2">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search chat or @mentions..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 rounded-md text-xs bg-[#F3F2F1] dark:bg-[#202228] border border-transparent focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none transition-all placeholder:text-gray-400"
-            />
-          </div>
+          {isMobile && (
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(false)}
+              className="p-1.5 rounded-lg text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#252830] transition-colors"
+              title="Close Channels Menu"
+              aria-label="Close Channels Menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
-        {/* Channel Navigation Groups */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-4">
-          {/* Global Broadcast */}
-          <div>
-            <div className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-gray-400">
-              Global Level in Company
+        {/* Quick Search */}
+        <div className="relative mt-2">
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search chat or @mentions..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-8 pr-3 py-1.5 rounded-md text-xs bg-[#F3F2F1] dark:bg-[#202228] border border-transparent focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none transition-all placeholder:text-gray-400"
+          />
+        </div>
+      </div>
+
+      {/* Channel Navigation Groups */}
+      <div className="flex-1 overflow-y-auto p-2 space-y-4">
+        {/* Global Broadcast */}
+        <div>
+          <div className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-gray-400">
+            Global Level in Company
+          </div>
+          {PREDEFINED_CHANNELS.filter((c) => c.scope === "global").map((ch) => {
+            const Icon = ch.icon;
+            const isActive = activeChannelId === ch.id;
+            return (
+              <button
+                key={ch.id}
+                onClick={() => handleSelectChannel(ch)}
+                className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-xs font-medium text-left transition-colors ${isActive
+                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold"
+                  : "hover:bg-gray-100 dark:hover:bg-[#22242B] text-gray-700 dark:text-gray-300"
+                  }`}
+              >
+                <Icon className="w-4 h-4 text-blue-500 shrink-0" />
+                <span className="truncate flex-1">{ch.name}</span>
+                <span className="text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full font-bold">
+                  All
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Team Message Option */}
+        <div>
+          <div className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-gray-400 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span>Team Message Option</span>
+              <span className="text-[9px] text-gray-400">Departments</span>
             </div>
-            {PREDEFINED_CHANNELS.filter((c) => c.scope === "global").map((ch) => {
-              const Icon = ch.icon;
-              const isActive = activeChannelId === ch.id;
-              return (
-                <button
-                  key={ch.id}
-                  onClick={() => handleSelectChannel(ch)}
-                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-xs font-medium text-left transition-colors ${isActive
-                    ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold"
-                    : "hover:bg-gray-100 dark:hover:bg-[#22242B] text-gray-700 dark:text-gray-300"
-                    }`}
-                >
-                  <Icon className="w-4 h-4 text-blue-500 shrink-0" />
-                  <span className="truncate flex-1">{ch.name}</span>
-                  <span className="text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full font-bold">
-                    All
+            <button
+              onClick={() => {
+                setSelectedTeamMemberIds(allMembers.map((m) => m._id));
+                setShowCreateTeamModal(true);
+              }}
+              className="p-1 rounded hover:bg-gray-200 dark:hover:bg-[#282B33] text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+              title="Create Team (Select Members)"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {displayTeams.map((ch) => {
+            const isActive = activeChannelId === (ch.channelId || ch.name);
+            const memberCount = ch.members?.length || 0;
+            return (
+              <button
+                key={ch.channelId || ch.name}
+                onClick={() => handleSelectTeam(ch)}
+                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-left transition-colors group ${isActive
+                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold"
+                  : "hover:bg-gray-100 dark:hover:bg-[#22242B] text-gray-700 dark:text-gray-300"
+                  }`}
+                title={`${ch.name} (${memberCount} members) - ${ch.description || "Department team"}`}
+              >
+                <Layers className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                <span className="truncate flex-1">{ch.name}</span>
+                {memberCount > 0 && (
+                  <span className="text-[10px] bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 px-1.5 py-0.2 rounded-full font-semibold shrink-0">
+                    {memberCount}
                   </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Team Message Option */}
-          <div>
-            <div className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-gray-400 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span>Team Message Option</span>
-                <span className="text-[9px] text-gray-400">Departments</span>
-              </div>
-              <button
-                onClick={() => {
-                  setSelectedTeamMemberIds(allMembers.map((m) => m._id));
-                  setShowCreateTeamModal(true);
-                }}
-                className="p-1 rounded hover:bg-gray-200 dark:hover:bg-[#282B33] text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
-                title="Create Team (Select Members)"
-              >
-                <Plus className="w-3.5 h-3.5" />
+                )}
               </button>
+            );
+          })}
+        </div>
+
+        {/* Group Message Option */}
+        <div>
+          <div className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-gray-400 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span>Group Message Option</span>
+              <span className="text-[9px] text-gray-400">Squads</span>
             </div>
-            {displayTeams.map((ch) => {
-              const isActive = activeChannelId === (ch.channelId || ch.name);
-              const memberCount = ch.members?.length || 0;
+            <button
+              onClick={() => {
+                setSelectedGroupMemberIds([]);
+                setShowCreateGroupModal(true);
+              }}
+              className="p-1 rounded hover:bg-gray-200 dark:hover:bg-[#282B33] text-gray-500 hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors"
+              title="Create Group (Select Members)"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {displayGroups.map((ch) => {
+            const isActive = activeChannelId === (ch.channelId || ch.name);
+            const memberCount = ch.members?.length || 0;
+            return (
+              <button
+                key={ch.channelId || ch.name}
+                onClick={() => handleSelectGroup(ch)}
+                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-left transition-colors group ${isActive
+                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold"
+                  : "hover:bg-gray-100 dark:hover:bg-[#22242B] text-gray-700 dark:text-gray-300"
+                  }`}
+                title={`#${ch.name} (${memberCount} members) - ${ch.description || "Squad group"}`}
+              >
+                <Hash className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span className="truncate flex-1">#{ch.name.replace(/^#+/, "")}</span>
+                {memberCount > 0 && (
+                  <span className="text-[10px] bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 px-1.5 py-0.2 rounded-full font-semibold shrink-0">
+                    {memberCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Direct Messages (1:1) */}
+        <div>
+          <div className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-gray-400 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span>Direct Messages</span>
+              <span className="text-[9px] text-gray-400">1-to-1</span>
+            </div>
+            <button
+              onClick={() => setShowDirectMemberModal(true)}
+              className="p-1 rounded hover:bg-gray-200 dark:hover:bg-[#282B33] text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
+              title="Add Direct Member for 1-to-1 Chat"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {directs.length === 0 ? (
+            <button
+              onClick={() => setShowDirectMemberModal(true)}
+              className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 italic text-left"
+            >
+              <Plus className="w-3 h-3 text-gray-400" />
+              <span>Add member for 1:1 chat</span>
+            </button>
+          ) : (
+            directs.map((ch) => {
+              const isActive = activeChannelId === ch.channelId;
+              const otherMember = ch.members?.find((m) => m.userId !== currentUserId) || ch.members?.[0];
               return (
                 <button
-                  key={ch.channelId || ch.name}
-                  onClick={() => handleSelectTeam(ch)}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-left transition-colors group ${isActive
+                  key={ch.channelId}
+                  onClick={() => handleSelectDirect(ch)}
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-left transition-colors ${isActive
                     ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold"
                     : "hover:bg-gray-100 dark:hover:bg-[#22242B] text-gray-700 dark:text-gray-300"
                     }`}
-                  title={`${ch.name} (${memberCount} members) - ${ch.description || "Department team"}`}
                 >
-                  <Layers className="w-3.5 h-3.5 text-purple-500 shrink-0" />
-                  <span className="truncate flex-1">{ch.name}</span>
-                  {memberCount > 0 && (
-                    <span className="text-[10px] bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 px-1.5 py-0.2 rounded-full font-semibold shrink-0">
-                      {memberCount}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Group Message Option */}
-          <div>
-            <div className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-gray-400 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span>Group Message Option</span>
-                <span className="text-[9px] text-gray-400">Squads</span>
-              </div>
-              <button
-                onClick={() => {
-                  setSelectedGroupMemberIds([]);
-                  setShowCreateGroupModal(true);
-                }}
-                className="p-1 rounded hover:bg-gray-200 dark:hover:bg-[#282B33] text-gray-500 hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors"
-                title="Create Group (Select Members)"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            {displayGroups.map((ch) => {
-              const isActive = activeChannelId === (ch.channelId || ch.name);
-              const memberCount = ch.members?.length || 0;
-              return (
-                <button
-                  key={ch.channelId || ch.name}
-                  onClick={() => handleSelectGroup(ch)}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-left transition-colors group ${isActive
-                    ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold"
-                    : "hover:bg-gray-100 dark:hover:bg-[#22242B] text-gray-700 dark:text-gray-300"
-                    }`}
-                  title={`#${ch.name} (${memberCount} members) - ${ch.description || "Squad group"}`}
-                >
-                  <Hash className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <span className="truncate flex-1">#{ch.name.replace(/^#+/, "")}</span>
-                  {memberCount > 0 && (
-                    <span className="text-[10px] bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 px-1.5 py-0.2 rounded-full font-semibold shrink-0">
-                      {memberCount}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Direct Messages (1:1) */}
-          <div>
-            <div className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-gray-400 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span>Direct Messages</span>
-                <span className="text-[9px] text-gray-400">1-to-1</span>
-              </div>
-              <button
-                onClick={() => setShowDirectMemberModal(true)}
-                className="p-1 rounded hover:bg-gray-200 dark:hover:bg-[#282B33] text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
-                title="Add Direct Member for 1-to-1 Chat"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            {directs.length === 0 ? (
-              <button
-                onClick={() => setShowDirectMemberModal(true)}
-                className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 italic text-left"
-              >
-                <Plus className="w-3 h-3 text-gray-400" />
-                <span>Add member for 1:1 chat</span>
-              </button>
-            ) : (
-              directs.map((ch) => {
-                const isActive = activeChannelId === ch.channelId;
-                const otherMember = ch.members?.find((m) => m.userId !== currentUserId) || ch.members?.[0];
-                return (
-                  <button
-                    key={ch.channelId}
-                    onClick={() => handleSelectDirect(ch)}
-                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-left transition-colors ${isActive
-                      ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold"
-                      : "hover:bg-gray-100 dark:hover:bg-[#22242B] text-gray-700 dark:text-gray-300"
-                      }`}
-                  >
-                    <div className="relative shrink-0">
-                      <div className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[9px] font-bold flex items-center justify-center">
-                        {otherMember?.avatar || ch.name.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500 border border-white dark:border-[#1E2026]" />
+                  <div className="relative shrink-0">
+                    <div className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[9px] font-bold flex items-center justify-center">
+                      {otherMember?.avatar || ch.name.slice(0, 2).toUpperCase()}
                     </div>
-                    <span className="truncate flex-1">{otherMember?.name || ch.name}</span>
-                  </button>
-                );
-              })
-            )}
-          </div>
+                    <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500 border border-white dark:border-[#1E2026]" />
+                  </div>
+                  <span className="truncate flex-1">{otherMember?.name || ch.name}</span>
+                </button>
+              );
+            })
+          )}
         </div>
+      </div>
 
-        {/* User Card at bottom of Left Sidebar */}
-        <div className="p-3 border-t border-[#E1DFDD] dark:border-[#26282E] bg-gray-50/50 dark:bg-[#15161B] flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-sm">
-            {currentUserName
-              .split(" ")
-              .map((n) => n[0])
-              .join("")
-              .slice(0, 2)
-              .toUpperCase()}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold text-gray-900 dark:text-white truncate">
-              {currentUserName}
-            </p>
-            <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
-              {currentUserRole}
-            </p>
-          </div>
+      {/* User Card at bottom of Left Sidebar */}
+      <div className="p-3 border-t border-[#E1DFDD] dark:border-[#26282E] bg-gray-50/50 dark:bg-[#15161B] flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-sm">
+          {currentUserName
+            .split(" ")
+            .map((n) => n[0])
+            .join("")
+            .slice(0, 2)
+            .toUpperCase()}
         </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-bold text-gray-900 dark:text-white truncate">
+            {currentUserName}
+          </p>
+          <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
+            {currentUserRole}
+          </p>
+        </div>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex h-[calc(95vh-64px)] overflow-hidden bg-[#FAF9F8] dark:bg-[#121316] text-[#242424] dark:text-[#E1DFDD] relative">
+      {/* 1a. MOBILE SLIDE-OVER SIDEBAR DRAWER */}
+      {isMobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in"
+            onClick={() => setIsMobileSidebarOpen(false)}
+          />
+          <aside className="fixed inset-y-0 left-0 w-80 max-w-[85vw] h-full bg-white dark:bg-[#18191E] border-r border-[#E1DFDD] dark:border-[#26282E] shadow-2xl flex flex-col justify-between z-50 animate-in slide-in-from-left duration-200">
+            {renderSidebarContent(true)}
+          </aside>
+        </div>
+      )}
+
+      {/* 1b. DESKTOP STATIC LEFT SIDEBAR */}
+      <aside className="hidden lg:flex w-72 shrink-0 border-r border-[#E1DFDD] dark:border-[#26282E] bg-white dark:bg-[#18191E] flex-col justify-between">
+        {renderSidebarContent(false)}
       </aside>
 
       {/* 2. MAIN CHAT CONTAINER */}
       <div className="flex-1 flex flex-col min-w-0 bg-[#FAF9F8] dark:bg-[#121316]">
         {/* Chat Header */}
-        <div className="h-14 px-5 border-b border-[#E1DFDD] dark:border-[#26282E] bg-white dark:bg-[#18191E] flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm text-gray-900 dark:text-white">
+        <div className="h-14 px-3 sm:px-5 border-b border-[#E1DFDD] dark:border-[#26282E] bg-white dark:bg-[#18191E] flex items-center justify-between shadow-sm shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {/* Mobile Hamburger Toggle for Channels Sidebar */}
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="p-1.5 -ml-1 sm:p-2 sm:-ml-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#252830] transition-colors lg:hidden flex items-center gap-1 shrink-0 cursor-pointer"
+              title="Open Channels & Chats"
+              aria-label="Open Channels Menu"
+            >
+              <Menu className="w-5 h-5 text-blue-500" />
+              <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 hidden xs:inline">
+                Channels
+              </span>
+            </button>
+
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <span className="font-bold text-xs sm:text-sm text-gray-900 dark:text-white truncate max-w-[120px] xs:max-w-[160px] sm:max-w-none">
                 {activeScope === "group" ? `#${activeScopeName.replace(/^#/, "")}` : activeScopeName}
               </span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 dark:bg-[#252830] text-gray-600 dark:text-gray-300 capitalize">
+              <span className="px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-gray-100 dark:bg-[#252830] text-gray-600 dark:text-gray-300 capitalize shrink-0">
                 {activeScope} Level
               </span>
             </div>
 
             {/* View Channel Members Popover Button */}
-            <div className="relative">
+            <div className="relative shrink-0">
               <button
                 onClick={() => setShowChannelMembersPopover(!showChannelMembersPopover)}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 hover:bg-gray-200 dark:bg-[#252830] dark:hover:bg-[#2D303B] rounded-md transition-colors"
+                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 hover:bg-gray-200 dark:bg-[#252830] dark:hover:bg-[#2D303B] rounded-md transition-colors"
                 title="View members assigned to this scope"
               >
                 <Users className="w-3.5 h-3.5 text-blue-500" />
-                <span>{activeChannelMembers.length} Members</span>
+                <span>{activeChannelMembers.length}</span>
+                <span className="hidden sm:inline"> Members</span>
                 <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${showChannelMembersPopover ? "rotate-180" : ""}`} />
               </button>
 
               {/* Members Popover */}
               {showChannelMembersPopover && (
-                <div className="absolute left-0 mt-2 w-80 bg-white dark:bg-[#1E2026] border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl p-3 z-40 animate-in fade-in-50 zoom-in-95">
+                <div className="absolute left-0 mt-2 w-[min(320px,calc(100vw-24px))] bg-white dark:bg-[#1E2026] border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl p-3 z-40 animate-in fade-in-50 zoom-in-95">
                   <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-100 dark:border-gray-800">
                     <div>
                       <p className="text-xs font-bold text-gray-900 dark:text-white">
@@ -1464,7 +1515,7 @@ export default function ChatSpaceClient({
 
             {selectedRecipientFilter && (
               <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-medium">
-                <span>Filtered by Saved Person</span>
+                <span>Filtered</span>
                 <button
                   onClick={() => setSelectedRecipientFilter(null)}
                   className="hover:text-blue-800"
@@ -1475,22 +1526,23 @@ export default function ChatSpaceClient({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
               onClick={() => setShowAddPersonModal(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors shrink-0 cursor-pointer"
             >
               <UserCheck className="w-3.5 h-3.5" />
-              <span>+ Pin to Saved Persons</span>
+              <span className="hidden sm:inline">+ Pin to Saved Persons</span>
+              <span className="sm:hidden">+ Pin</span>
             </button>
           </div>
         </div>
 
         {/* 3. SAVED PERSONS SECTION (Prompt requirement: "and those will be saved into saved persons section for easy picking to whom this message will deliver") */}
-        <div className="px-5 py-2.5 bg-[#F3F2F1] dark:bg-[#1B1D23] border-b border-[#E1DFDD] dark:border-[#26282E] flex items-center gap-3 overflow-x-auto">
+        <div className="px-3 sm:px-5 py-2 sm:py-2.5 bg-[#F3F2F1] dark:bg-[#1B1D23] border-b border-[#E1DFDD] dark:border-[#26282E] flex items-center gap-2 sm:gap-3 overflow-x-auto scrollbar-none">
           <div className="flex items-center gap-1 text-[11px] font-bold text-gray-600 dark:text-gray-300 shrink-0">
             <Pin className="w-3.5 h-3.5 text-blue-500" />
-            <span>Saved Persons:</span>
+            <span className="hidden xs:inline">Saved Persons:</span>
           </div>
 
           <div className="flex items-center gap-2 flex-nowrap min-w-0">
@@ -1505,7 +1557,7 @@ export default function ChatSpaceClient({
                   <div
                     key={p.personUserId}
                     onClick={() => handlePickSavedPerson(p)}
-                    className={`group relative flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition-all border ${isSelected
+                    className={`group relative flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium cursor-pointer transition-all border ${isSelected
                       ? "bg-blue-600 text-white border-blue-600 shadow-sm"
                       : "bg-white dark:bg-[#23252C] hover:bg-blue-50 dark:hover:bg-[#2B2E37] text-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-700 hover:border-blue-400"
                       }`}
@@ -1514,16 +1566,16 @@ export default function ChatSpaceClient({
                     <span className="w-4 h-4 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-300 text-[9px] font-bold flex items-center justify-center">
                       {p.personAvatar || p.personName.slice(0, 2).toUpperCase()}
                     </span>
-                    <span className="font-semibold">{p.personName}</span>
+                    {/* <span className="font-semibold">{p.personName}</span>
                     {p.personRole && (
                       <span className="text-[10px] opacity-70 hidden sm:inline">
                         • {p.personRole.split(" ")[0]}
                       </span>
-                    )}
+                    )} */}
                     {/* Hover remove button */}
                     <button
                       onClick={(e) => handleRemoveSavedPerson(p.personUserId, e)}
-                      className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 rounded transition-opacity"
+                      className="opacity-40 2xl:opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 rounded transition-opacity"
                       title="Remove from saved"
                     >
                       <X className="w-3 h-3" />
@@ -1544,7 +1596,7 @@ export default function ChatSpaceClient({
         </div>
 
         {/* 4. MESSAGES STREAM */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-3 sm:space-y-4">
           {isLoadingMessages ? (
             <div className="flex items-center justify-center h-48 text-gray-400 text-xs">
               <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent mr-2" />
@@ -1568,10 +1620,10 @@ export default function ChatSpaceClient({
               return (
                 <div
                   key={msg._id}
-                  className="group relative flex items-start gap-3 p-2 rounded-lg hover:bg-white/60 dark:hover:bg-[#1A1C22] transition-colors"
+                  className="group relative flex items-start gap-2.5 sm:gap-3 p-2 rounded-lg hover:bg-white/60 dark:hover:bg-[#1A1C22] transition-colors"
                 >
                   {/* Sender Avatar */}
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-sm">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-[10px] sm:text-xs flex items-center justify-center shrink-0 shadow-sm">
                     {msg.senderAvatar ||
                       msg.senderName
                         .split(" ")
@@ -1582,7 +1634,7 @@ export default function ChatSpaceClient({
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
                       <span className="font-bold text-xs text-gray-900 dark:text-white">
                         {msg.senderName}
                       </span>
@@ -1667,7 +1719,7 @@ export default function ChatSpaceClient({
                       </div>
                     ) : (
                       /* Content with highlighted @mentions */
-                      <div className="text-xs text-gray-800 dark:text-gray-200 leading-relaxed break-words">
+                      <div className="text-xs sm:text-sm text-gray-800 dark:text-gray-200 leading-relaxed break-words [overflow-wrap:anywhere]">
                         {msg.content.split(/(@[A-Za-z0-9\s]+?)(?=\s@|\s|$)/).map((segment, i) => {
                           if (segment.startsWith("@")) {
                             return (
@@ -1848,10 +1900,10 @@ export default function ChatSpaceClient({
         </div>
 
         {/* 5. MESSAGE COMPOSER WITH AUTO-SUGGESTING @MENTIONS */}
-        <div className="p-4 bg-white dark:bg-[#18191E] border-t border-[#E1DFDD] dark:border-[#26282E] relative">
+        <div className="p-2.5 sm:p-4 bg-white dark:bg-[#18191E] border-t border-[#E1DFDD] dark:border-[#26282E] relative">
           {/* Floating Mention Auto-suggest Menu */}
           {showMentionMenu && mentionSuggestions.length > 0 && (
-            <div className="absolute bottom-full left-4 mb-2 w-80 max-h-56 bg-white dark:bg-[#202228] border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl overflow-y-auto z-40 animate-in fade-in-50 slide-in-from-bottom-2">
+            <div className="absolute bottom-full left-2 sm:left-4 mb-2 w-[min(320px,calc(100vw-24px))] max-h-56 bg-white dark:bg-[#202228] border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl overflow-y-auto z-40 animate-in fade-in-50 slide-in-from-bottom-2">
               <div className="p-2 border-b border-gray-100 dark:border-gray-800 text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center justify-between">
                 <span>Matching Persons ({mentionSuggestions.length})</span>
                 <span className="text-blue-500 font-normal">Click or Enter to select</span>
@@ -1883,13 +1935,14 @@ export default function ChatSpaceClient({
           )}
 
           {/* Delivery Scope Selector & Staged Mentions */}
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold text-gray-500">Deliver To:</span>
-              <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center justify-between gap-1.5 mb-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] sm:text-[11px] font-semibold text-gray-500">Deliver To:</span>
+              <div className="flex flex-wrap items-center gap-1">
                 {(["global", "team", "group", "direct"] as const).map((sc) => (
                   <button
                     key={sc}
+                    type="button"
                     onClick={() => {
                       setComposerScope(sc);
                       if (sc === "global") setComposerTargetName("Global All-Hands");
@@ -1897,7 +1950,7 @@ export default function ChatSpaceClient({
                       else if (sc === "group") setComposerTargetName(activeScopeName);
                       else setComposerTargetName("Direct Recipients");
                     }}
-                    className={`px-2 py-0.5 rounded text-[11px] font-semibold capitalize transition-all ${composerScope === sc
+                    className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-semibold capitalize transition-all cursor-pointer ${composerScope === sc
                       ? "bg-blue-600 text-white shadow-xs"
                       : "bg-gray-100 dark:bg-[#24262E] text-gray-600 dark:text-gray-400 hover:bg-gray-200"
                       }`}
@@ -1909,9 +1962,9 @@ export default function ChatSpaceClient({
             </div>
 
             {stagedMentions.length > 0 && (
-              <div className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 font-medium">
-                <AtSign className="w-3 h-3" />
-                <span>Mentions: {stagedMentions.map((m) => m.name).join(", ")}</span>
+              <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-blue-600 dark:text-blue-400 font-medium truncate max-w-full">
+                <AtSign className="w-3 h-3 shrink-0" />
+                <span className="truncate">Mentions: {stagedMentions.map((m) => m.name).join(", ")}</span>
               </div>
             )}
           </div>
@@ -2096,10 +2149,10 @@ export default function ChatSpaceClient({
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploadingAttachment}
                   className={`p-1 transition-colors rounded cursor-pointer ${isUploadingAttachment
-                      ? "text-blue-500 animate-pulse"
-                      : stagedAttachments.length > 0
-                        ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40"
-                        : "text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                    ? "text-blue-500 animate-pulse"
+                    : stagedAttachments.length > 0
+                      ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40"
+                      : "text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
                     }`}
                   title="Attach Image or PDF (Stores in S3, self-deletes in 1 day)"
                 >

@@ -262,7 +262,7 @@ export default function WhiteboardSettingsModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-[#14151B] border border-[#2B2E3A] rounded-xl max-w-lg w-full shadow-2xl p-6 text-gray-200 animate-in fade-in zoom-in-95">
+      <div className="bg-[#14151B] border border-[#2B2E3A] rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 text-gray-200 animate-in fade-in zoom-in-95">
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-3.5 border-b border-[#22242D]">
           <div className="flex items-center gap-2.5">

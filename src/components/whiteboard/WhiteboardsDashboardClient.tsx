@@ -31,6 +31,7 @@ import {
   Check,
   ShieldAlert,
   Settings,
+  Menu,
 } from "lucide-react";
 import { WHITEBOARD_TEMPLATES } from "@/lib/whiteboardTemplates";
 import WhiteboardSettingsModal, {
@@ -76,6 +77,7 @@ export default function WhiteboardsDashboardClient({
   const [sortOrder, setSortOrder] = useState<"recent" | "title">("recent");
   const [isCreating, setIsCreating] = useState(false);
   const [showNewDropdown, setShowNewDropdown] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Creation Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -291,122 +293,179 @@ export default function WhiteboardsDashboardClient({
       (b.authorId && currentUserId && b.authorId === currentUserId)
   ).length;
 
-  return (
-    <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-[#0D0E11] text-[#E1DFDD]">
-      {/* 1. LEFT SIDEBAR */}
-      <aside className="w-64 shrink-0 border-r border-[#22242B] bg-[#121316] flex flex-col justify-between">
-        <div className="p-4 border-b border-[#22242B]">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-base font-bold text-white flex items-center gap-2">
-              <span>Whiteboards</span>
-            </h1>
+  const renderSidebarContent = (isMobile = false) => (
+    <>
+      <div className="p-4 border-b border-[#22242B]">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-base font-bold text-white flex items-center gap-2">
+            <span>Whiteboards</span>
+          </h1>
+          <div className="flex items-center gap-1.5">
             <button
-              onClick={() => openCreateModal("blank")}
+              onClick={() => {
+                if (isMobile) setIsMobileSidebarOpen(false);
+                openCreateModal("blank");
+              }}
               disabled={isCreating}
-              className="w-7 h-7 rounded-md bg-[#23252C] hover:bg-[#2B2E37] text-white flex items-center justify-center transition-colors border border-[#30333D]"
+              className="w-7 h-7 rounded-md bg-[#23252C] hover:bg-[#2B2E37] text-white flex items-center justify-center transition-colors border border-[#30333D] cursor-pointer"
               title="New Whiteboard"
             >
               <Plus className="w-4 h-4" />
             </button>
-          </div>
-
-          {/* Navigation Items */}
-          <nav className="space-y-1">
-            <button
-              onClick={() => setActiveTab("all")}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-colors ${
-                activeTab === "all"
-                  ? "bg-[#23252C] text-white font-semibold"
-                  : "text-gray-400 hover:text-white hover:bg-[#1A1B20]"
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Grid className="w-4 h-4 text-blue-400" />
-                <span>All Whiteboards</span>
-              </div>
-              <span className="text-[11px] text-gray-500 font-semibold">{whiteboards.length}</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("my")}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-colors ${
-                activeTab === "my"
-                  ? "bg-[#23252C] text-white font-semibold"
-                  : "text-gray-400 hover:text-white hover:bg-[#1A1B20]"
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <span className="w-4 h-4 rounded-full bg-blue-600/30 text-blue-400 text-[10px] font-bold flex items-center justify-center">
-                  {(currentUserName || "U")[0]?.toUpperCase()}
-                </span>
-                <span>My Whiteboards</span>
-              </div>
-              <span className="text-[11px] text-gray-500 font-semibold">{myBoardsCount}</span>
-            </button>
-          </nav>
-        </div>
-
-        {/* Favorites Section */}
-        <div className="flex-1 p-4 overflow-y-auto space-y-4">
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2 px-1">
-              Favorites
-            </div>
-            {favoritesCount === 0 ? (
-              <div className="p-4 rounded-lg bg-[#18191E] border border-dashed border-[#282A33] text-center">
-                <Star className="w-5 h-5 text-amber-400 fill-amber-400/20 mx-auto mb-1.5" />
-                <p className="text-[11px] text-gray-400">Star a Whiteboard to see it here</p>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {whiteboards
-                  .filter((b) => b.isFavorite)
-                  .map((b) => (
-                    <Link
-                      key={b._id}
-                      href={`/whiteboards/${b._id}`}
-                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-gray-300 hover:bg-[#1C1E24] hover:text-white transition-colors truncate"
-                    >
-                      <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 shrink-0" />
-                      <span className="truncate">{b.title}</span>
-                    </Link>
-                  ))}
-              </div>
+            {isMobile && (
+              <button
+                type="button"
+                onClick={() => setIsMobileSidebarOpen(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-[#23252C] transition-colors"
+                title="Close Navigation"
+                aria-label="Close Whiteboards Menu"
+              >
+                <X className="w-5 h-5" />
+              </button>
             )}
           </div>
+        </div>
 
-          {/* Recents Section */}
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2 px-1">
-              Recents
+        {/* Navigation Items */}
+        <nav className="space-y-1">
+          <button
+            onClick={() => {
+              setActiveTab("all");
+              if (isMobile) setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+              activeTab === "all"
+                ? "bg-[#23252C] text-white font-semibold"
+                : "text-gray-400 hover:text-white hover:bg-[#1A1B20]"
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <Grid className="w-4 h-4 text-blue-400" />
+              <span>All Whiteboards</span>
             </div>
+            <span className="text-[11px] text-gray-500 font-semibold">{whiteboards.length}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab("my");
+              if (isMobile) setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+              activeTab === "my"
+                ? "bg-[#23252C] text-white font-semibold"
+                : "text-gray-400 hover:text-white hover:bg-[#1A1B20]"
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="w-4 h-4 rounded-full bg-blue-600/30 text-blue-400 text-[10px] font-bold flex items-center justify-center">
+                {(currentUserName || "U")[0]?.toUpperCase()}
+              </span>
+              <span>My Whiteboards</span>
+            </div>
+            <span className="text-[11px] text-gray-500 font-semibold">{myBoardsCount}</span>
+          </button>
+        </nav>
+      </div>
+
+      {/* Favorites Section */}
+      <div className="flex-1 p-4 overflow-y-auto space-y-4">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2 px-1">
+            Favorites
+          </div>
+          {favoritesCount === 0 ? (
+            <div className="p-4 rounded-lg bg-[#18191E] border border-dashed border-[#282A33] text-center">
+              <Star className="w-5 h-5 text-amber-400 fill-amber-400/20 mx-auto mb-1.5" />
+              <p className="text-[11px] text-gray-400">Star a Whiteboard to see it here</p>
+            </div>
+          ) : (
             <div className="space-y-1">
-              {whiteboards.slice(0, 4).map((b) => (
-                <Link
-                  key={b._id}
-                  href={`/whiteboards/${b._id}`}
-                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-gray-300 hover:bg-[#1C1E24] hover:text-white transition-colors truncate"
-                >
-                  <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-                  <span className="truncate">{b.title}</span>
-                </Link>
-              ))}
+              {whiteboards
+                .filter((b) => b.isFavorite)
+                .map((b) => (
+                  <Link
+                    key={b._id}
+                    href={`/whiteboards/${b._id}`}
+                    onClick={() => {
+                      if (isMobile) setIsMobileSidebarOpen(false);
+                    }}
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-gray-300 hover:bg-[#1C1E24] hover:text-white transition-colors truncate"
+                  >
+                    <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 shrink-0" />
+                    <span className="truncate">{b.title}</span>
+                  </Link>
+                ))}
             </div>
+          )}
+        </div>
+
+        {/* Recents Section */}
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2 px-1">
+            Recents
+          </div>
+          <div className="space-y-1">
+            {whiteboards.slice(0, 4).map((b) => (
+              <Link
+                key={b._id}
+                href={`/whiteboards/${b._id}`}
+                onClick={() => {
+                  if (isMobile) setIsMobileSidebarOpen(false);
+                }}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-gray-300 hover:bg-[#1C1E24] hover:text-white transition-colors truncate"
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                <span className="truncate">{b.title}</span>
+              </Link>
+            ))}
           </div>
         </div>
+      </div>
 
-        {/* Bottom Workspace Status */}
-        <div className="p-3 border-t border-[#22242B] bg-[#101115] flex items-center justify-between text-[11px] text-gray-400">
-          <span>Enterprise Canvas</span>
-          <span className="text-emerald-400 font-medium">Online</span>
+      {/* Bottom Workspace Status */}
+      <div className="p-3 border-t border-[#22242B] bg-[#101115] flex items-center justify-between text-[11px] text-gray-400">
+        <span>Enterprise Canvas</span>
+        <span className="text-emerald-400 font-medium">Online</span>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-[#0D0E11] text-[#E1DFDD] relative">
+      {/* 1a. MOBILE SLIDE-OVER SIDEBAR DRAWER */}
+      {isMobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in"
+            onClick={() => setIsMobileSidebarOpen(false)}
+          />
+          <aside className="fixed inset-y-0 left-0 w-72 max-w-[85vw] h-full bg-[#121316] border-r border-[#22242B] shadow-2xl flex flex-col justify-between z-50 animate-in slide-in-from-left duration-200">
+            {renderSidebarContent(true)}
+          </aside>
         </div>
+      )}
+
+      {/* 1b. DESKTOP STATIC LEFT SIDEBAR */}
+      <aside className="hidden lg:flex w-64 shrink-0 border-r border-[#22242B] bg-[#121316] flex-col justify-between">
+        {renderSidebarContent(false)}
       </aside>
 
       {/* 2. MAIN WORKSPACE */}
       <main className="flex-1 flex flex-col min-w-0 bg-[#0D0E11] overflow-y-auto">
         {/* Top Header */}
-        <div className="h-14 px-6 border-b border-[#22242B] bg-[#121316] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
+        <div className="h-14 px-4 sm:px-6 border-b border-[#22242B] bg-[#121316] flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Mobile Hamburger Toggle for Whiteboards Navigation */}
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="p-1.5 -ml-1 sm:p-2 sm:-ml-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#202228] lg:hidden flex items-center gap-1 cursor-pointer"
+              title="Open Whiteboard Navigation"
+              aria-label="Open Whiteboards Menu"
+            >
+              <Menu className="w-5 h-5 text-gray-300" />
+            </button>
             <h2 className="text-sm font-bold text-white">All Whiteboards</h2>
           </div>
 
@@ -414,7 +473,7 @@ export default function WhiteboardsDashboardClient({
           <div className="relative">
             <button
               onClick={() => setShowNewDropdown(!showNewDropdown)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#202228] hover:bg-[#282B33] text-white border border-[#30333D] rounded-md text-xs font-semibold shadow-sm transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#202228] hover:bg-[#282B33] text-white border border-[#30333D] rounded-md text-xs font-semibold shadow-sm transition-all cursor-pointer"
             >
               <span>+ New Whiteboard</span>
               <ChevronDown className="w-3.5 h-3.5" />
@@ -449,7 +508,7 @@ export default function WhiteboardsDashboardClient({
         </div>
 
         {/* Content Body */}
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Templates Row */}
           <div>
             <div className="text-xs font-semibold text-gray-400 mb-3">Templates & Functional Areas</div>
@@ -479,7 +538,7 @@ export default function WhiteboardsDashboardClient({
           </div>
 
           {/* Filter Bar */}
-          <div className="flex items-center justify-between pt-2">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setSortOrder(sortOrder === "recent" ? "title" : "recent")}
