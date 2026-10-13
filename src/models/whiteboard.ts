@@ -80,6 +80,8 @@ export interface IWhiteboardEdge {
   style?: "orthogonal" | "straight" | "curved" | "solid" | "dashed";
   lineStyle?: "solid" | "dashed";
   arrowDirection?: "forward" | "backward" | "bidirectional" | "none";
+  cp1?: { x: number; y: number };
+  cp2?: { x: number; y: number };
 }
 
 export interface IWhiteboard {
@@ -272,6 +274,8 @@ const whiteboardSchema = new Schema<IWhiteboard>(
           enum: ["forward", "backward", "bidirectional", "none"],
           default: "forward",
         },
+        cp1: { type: Schema.Types.Mixed },
+        cp2: { type: Schema.Types.Mixed },
       },
     ],
   },

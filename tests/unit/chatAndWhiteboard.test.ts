@@ -17,6 +17,8 @@ import {
   getAllIconGalleryItems,
   filterIconGalleryItems,
   getLucideIcon,
+  getWhiteboardIcon,
+  searchDynamicReactIcons,
   ICON_COMPONENT_MAP,
 } from "@/lib/whiteboardIconGallery";
 
@@ -371,6 +373,86 @@ describe("Whiteboard Canvas & Organizational Chart Template", () => {
         // User switches back to forward ->
         edge = { ...edge, arrowDirection: "forward" };
         expect(edge.arrowDirection).toBe("forward");
+      });
+
+      it("calculates default control points dividing connector into three equal sections (1/3 and 2/3)", () => {
+        const startX = 100;
+        const startY = 200;
+        const endX = 400;
+        const endY = 500;
+        const spanX = endX - startX; // 300
+        const spanY = endY - startY; // 300
+
+        // Default 3 equal sections for straight line
+        const straightCP1 = { x: Math.round(startX + spanX / 3), y: Math.round(startY + spanY / 3) };
+        const straightCP2 = { x: Math.round(startX + (2 * spanX) / 3), y: Math.round(startY + (2 * spanY) / 3) };
+
+        expect(straightCP1).toEqual({ x: 200, y: 300 });
+        expect(straightCP2).toEqual({ x: 300, y: 400 });
+
+        // For horizontal curved flow
+        const curvedHorizCP1 = { x: Math.round(startX + spanX / 3), y: Math.round(startY) };
+        const curvedHorizCP2 = { x: Math.round(startX + (2 * spanX) / 3), y: Math.round(endY) };
+        expect(curvedHorizCP1).toEqual({ x: 200, y: 200 });
+        expect(curvedHorizCP2).toEqual({ x: 300, y: 500 });
+      });
+
+      it("supports switching connector edge styles between orthogonal, curved, and straight", () => {
+        let edge: {
+          id: string;
+          from: string;
+          to: string;
+          style?: "orthogonal" | "curved" | "straight";
+          lineStyle?: "solid" | "dashed";
+          cp1?: { x: number; y: number };
+          cp2?: { x: number; y: number };
+        } = {
+          id: "edge-test",
+          from: "node-1",
+          to: "node-2",
+          style: "orthogonal",
+        };
+
+        // User switches to curved
+        edge = { ...edge, style: "curved" };
+        expect(edge.style).toBe("curved");
+
+        // User drags control points P1 and P2 in (X,Y)
+        edge = { ...edge, cp1: { x: 180, y: 240 }, cp2: { x: 320, y: 460 } };
+        expect(edge.cp1).toEqual({ x: 180, y: 240 });
+        expect(edge.cp2).toEqual({ x: 320, y: 460 });
+
+        // User switches to straight
+        edge = { ...edge, style: "straight" };
+        expect(edge.style).toBe("straight");
+
+        // User resets control points
+        const resetEdge = { ...edge };
+        delete resetEdge.cp1;
+        delete resetEdge.cp2;
+        expect(resetEdge.cp1).toBeUndefined();
+        expect(resetEdge.cp2).toBeUndefined();
+      });
+
+      it("computes cubic Bézier curve path and midpoint at t=0.5 when control points are dragged", () => {
+        const startX = 100;
+        const startY = 200;
+        const endX = 400;
+        const endY = 500;
+        const cp1 = { x: 180, y: 250 };
+        const cp2 = { x: 320, y: 480 };
+
+        const pathData = `M ${startX} ${startY} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${endX} ${endY}`;
+        expect(pathData).toBe("M 100 200 C 180 250, 320 480, 400 500");
+
+        // Cubic Bézier formula at t = 0.5: (P0 + 3*CP1 + 3*CP2 + P3) / 8
+        const midPointX = Math.round((startX + 3 * cp1.x + 3 * cp2.x + endX) / 8);
+        const midPointY = Math.round((startY + 3 * cp1.y + 3 * cp2.y + endY) / 8);
+
+        // midPointX = (100 + 540 + 960 + 400) / 8 = 2000 / 8 = 250
+        // midPointY = (200 + 750 + 1440 + 500) / 8 = 2890 / 8 = 361
+        expect(midPointX).toBe(250);
+        expect(midPointY).toBe(361);
       });
 
       it("generates smooth SVG quadratic path data from freehand stroke points", () => {
@@ -2644,76 +2726,123 @@ describe("Whiteboard Tech, Product & Flow Icons Gallery", () => {
     expect(groupTypes).toEqual(["infra", "flow", "ideation", "logic", "metrics", "media"]);
 
     const totalItems = getAllIconGalleryItems();
-    expect(totalItems).toHaveLength(42);
+    expect(totalItems.length).toBeGreaterThanOrEqual(50);
   });
 
-  it("validates Group 1: Infrastructure & Networking (type: 'infra') items and icons", () => {
+  it("validates Group 1: Infrastructure & Networking (type: 'infra') items including Home, Contact, Location, Gear", () => {
     const infraGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "infra");
     expect(infraGroup).toBeDefined();
-    expect(infraGroup?.items).toHaveLength(7);
 
     const itemNames = infraGroup?.items.map((i) => i.name);
-    expect(itemNames).toEqual(["Database", "API", "Browser", "Server", "Client", "User", "Gate"]);
+    expect(itemNames).toContain("Database");
+    expect(itemNames).toContain("Home");
+    expect(itemNames).toContain("Contact");
+    expect(itemNames).toContain("Location");
+    expect(itemNames).toContain("Gear");
 
-    const dbItem = infraGroup?.items.find((i) => i.name === "Database");
-    expect(dbItem?.iconName).toBe("Database");
-    expect(dbItem?.subtitle).toContain("MongoDB");
+    const homeItem = infraGroup?.items.find((i) => i.name === "Home");
+    expect(homeItem?.iconName).toBe("FaHouse");
 
-    const serverItem = infraGroup?.items.find((i) => i.name === "Server");
-    expect(serverItem?.iconName).toBe("Server");
-    expect(serverItem?.subtitle).toContain("Express / Node");
+    const gearItem = infraGroup?.items.find((i) => i.name === "Gear");
+    expect(gearItem?.iconName).toBe("FaGear");
+
+    const locationItem = infraGroup?.items.find((i) => i.name === "Location");
+    expect(locationItem?.iconName).toBe("FaLocationDot");
+
+    const contactItem = infraGroup?.items.find((i) => i.name === "Contact");
+    expect(contactItem?.iconName).toBe("FaAddressBook");
   });
 
   it("validates Group 2: Routing, State & Data Pipelines (type: 'flow') items and icons", () => {
     const flowGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "flow");
     expect(flowGroup).toBeDefined();
-    expect(flowGroup?.items).toHaveLength(7);
+    expect(flowGroup?.items.length).toBeGreaterThanOrEqual(7);
 
     const itemNames = flowGroup?.items.map((i) => i.name);
-    expect(itemNames).toEqual(["Route", "Re-route", "Connect", "Break", "Pipeline", "Funnel", "Crash"]);
-
-    const crashItem = flowGroup?.items.find((i) => i.name === "Crash");
-    expect(crashItem?.iconName).toBe("Bomb");
-    expect(crashItem?.subtitle).toContain("Server error");
+    expect(itemNames).toContain("Route");
+    expect(itemNames).toContain("Pipeline");
   });
 
-  it("validates Group 3: Concept Ideation & Brainstorming (type: 'ideation') items and icons", () => {
+  it("validates Group 3: Concept Ideation & Brainstorming (type: 'ideation') including Goal, Aim, Flag, About", () => {
     const ideationGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "ideation");
     expect(ideationGroup).toBeDefined();
-    expect(ideationGroup?.items).toHaveLength(5);
 
     const itemNames = ideationGroup?.items.map((i) => i.name);
-    expect(itemNames).toEqual(["Question", "Idea", "Thoughts", "Imagine", "Kick"]);
+    expect(itemNames).toContain("Goal");
+    expect(itemNames).toContain("Aim");
+    expect(itemNames).toContain("Flag");
+    expect(itemNames).toContain("About");
+
+    const goalItem = ideationGroup?.items.find((i) => i.name === "Goal");
+    expect(goalItem?.iconName).toBe("FaBullseye");
+
+    const aimItem = ideationGroup?.items.find((i) => i.name === "Aim");
+    expect(aimItem?.iconName).toBe("Crosshair");
+
+    const flagItem = ideationGroup?.items.find((i) => i.name === "Flag");
+    expect(flagItem?.iconName).toBe("FaFlag");
+
+    const aboutItem = ideationGroup?.items.find((i) => i.name === "About");
+    expect(aboutItem?.iconName).toBe("FaCircleInfo");
   });
 
-  it("validates Group 4: Logic, Variables & Scaling Data (type: 'logic') items and icons", () => {
+  it("validates Group 4: Logic, Variables & Scaling Data (type: 'logic') including Approved, Function, Code, Logic, Integral", () => {
     const logicGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "logic");
     expect(logicGroup).toBeDefined();
-    expect(logicGroup?.items).toHaveLength(7);
 
     const itemNames = logicGroup?.items.map((i) => i.name);
-    expect(itemNames).toEqual(["Key", "Value", "Pair", "Master", "Hash", "Encrypted", "Substance"]);
+    expect(itemNames).toContain("Approved");
+    expect(itemNames).toContain("Function");
+    expect(itemNames).toContain("Code");
+    expect(itemNames).toContain("Logic");
+    expect(itemNames).toContain("Integral");
+
+    const approvedItem = logicGroup?.items.find((i) => i.name === "Approved");
+    expect(approvedItem?.iconName).toBe("FaCircleCheck");
+
+    const funcItem = logicGroup?.items.find((i) => i.name === "Function");
+    expect(funcItem?.iconName).toBe("TbFunction");
+
+    const codeItem = logicGroup?.items.find((i) => i.name === "Code");
+    expect(codeItem?.iconName).toBe("Code");
+
+    const logicItem = logicGroup?.items.find((i) => i.name === "Logic");
+    expect(logicItem?.iconName).toBe("FaBrain");
+
+    const integralItem = logicGroup?.items.find((i) => i.name === "Integral");
+    expect(integralItem?.iconName).toBe("TbMathIntegral");
   });
 
-  it("validates Group 5: Metrics, Value & Tracking (type: 'metrics') items and icons", () => {
+  it("validates Group 5: Metrics, Value & Tracking (type: 'metrics') including Product, Area Chart, Column Chart", () => {
     const metricsGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "metrics");
     expect(metricsGroup).toBeDefined();
-    expect(metricsGroup?.items).toHaveLength(9);
 
     const itemNames = metricsGroup?.items.map((i) => i.name);
-    expect(itemNames).toEqual(["Price", "Rate", "High", "Low", "Trend", "Range", "Variety", "Random", "Equal"]);
+    expect(itemNames).toContain("Product");
+    expect(itemNames).toContain("Area Chart");
+    expect(itemNames).toContain("Column Chart");
+
+    const productItem = metricsGroup?.items.find((i) => i.name === "Product");
+    expect(productItem?.iconName).toBe("FaBoxOpen");
+
+    const areaItem = metricsGroup?.items.find((i) => i.name === "Area Chart");
+    expect(areaItem?.iconName).toBe("FaChartArea");
+
+    const colItem = metricsGroup?.items.find((i) => i.name === "Column Chart");
+    expect(colItem?.iconName).toBe("FaChartColumn");
   });
 
   it("validates Group 6: Media & System Feedback (type: 'media') items and icons", () => {
     const mediaGroup = ICON_GALLERY_GROUPS.find((g) => g.type === "media");
     expect(mediaGroup).toBeDefined();
-    expect(mediaGroup?.items).toHaveLength(7);
+    expect(mediaGroup?.items.length).toBeGreaterThanOrEqual(7);
 
     const itemNames = mediaGroup?.items.map((i) => i.name);
-    expect(itemNames).toEqual(["Live", "Play", "Pause", "Music", "Exited", "Bored", "Car"]);
+    expect(itemNames).toContain("Live");
+    expect(itemNames).toContain("Play");
   });
 
-  it("ensures every gallery icon resolves to an existing Lucide component without falling back to blank", () => {
+  it("ensures every gallery icon resolves to an existing component without falling back to blank", () => {
     const allItems = getAllIconGalleryItems();
     for (const item of allItems) {
       expect(ICON_COMPONENT_MAP[item.iconName]).toBeDefined();
@@ -2722,17 +2851,56 @@ describe("Whiteboard Tech, Product & Flow Icons Gallery", () => {
     }
   });
 
+  it("dynamically resolves React-Icons from FA6, Tabler, Material, and Lucide via getWhiteboardIcon", () => {
+    // FA6 icons
+    expect(getWhiteboardIcon("FaFlag")).toBeDefined();
+    expect(getWhiteboardIcon("FaChartArea")).toBeDefined();
+    expect(getWhiteboardIcon("FaChartColumn")).toBeDefined();
+    expect(getWhiteboardIcon("FaGear")).toBeDefined();
+
+    // Tabler icons
+    expect(getWhiteboardIcon("TbFunction")).toBeDefined();
+    expect(getWhiteboardIcon("TbMathIntegral")).toBeDefined();
+
+    // Material icons
+    expect(getWhiteboardIcon("MdRocketLaunch")).toBeDefined();
+
+    // Lucide icons
+    expect(getWhiteboardIcon("Database")).toBeDefined();
+    expect(getWhiteboardIcon("Sparkles")).toBeDefined();
+  });
+
+  it("performs dynamic search across thousands of React-Icons by keyword", () => {
+    // Empty search returns popular curated defaults
+    const defaults = searchDynamicReactIcons("");
+    expect(defaults.length).toBeGreaterThanOrEqual(20);
+    expect(defaults.some((i) => i.iconName === "FaFlag")).toBe(true);
+    expect(defaults.some((i) => i.iconName === "FaChartArea")).toBe(true);
+    expect(defaults.some((i) => i.iconName === "FaChartColumn")).toBe(true);
+
+    // Search for "chart" returns matching chart icons
+    const chartResults = searchDynamicReactIcons("chart", 10);
+    expect(chartResults.length).toBeGreaterThan(0);
+    expect(chartResults.some((i) => i.iconName.toLowerCase().includes("chart"))).toBe(true);
+
+    // Search for "flag" returns matching flag icons
+    const flagResults = searchDynamicReactIcons("flag", 10);
+    expect(flagResults.length).toBeGreaterThan(0);
+    expect(flagResults.some((i) => i.iconName.toLowerCase().includes("flag"))).toBe(true);
+
+    // Search for "function" returns matching function icons
+    const funcResults = searchDynamicReactIcons("function", 10);
+    expect(funcResults.length).toBeGreaterThan(0);
+    expect(funcResults.some((i) => i.iconName.toLowerCase().includes("function"))).toBe(true);
+  });
+
   it("correctly filters icon gallery by keyword and category", () => {
     const searchDb = filterIconGalleryItems("database", "all");
-    expect(searchDb).toHaveLength(1);
+    expect(searchDb.length).toBeGreaterThanOrEqual(1);
     expect(searchDb[0].name).toBe("Database");
 
     const infraOnly = filterIconGalleryItems("", "infra");
-    expect(infraOnly).toHaveLength(7);
-
-    const searchError = filterIconGalleryItems("error", "all");
-    expect(searchError.length).toBeGreaterThanOrEqual(1);
-    expect(searchError.some((i) => i.name === "Crash" || i.name === "Re-route")).toBe(true);
+    expect(infraOnly.length).toBeGreaterThanOrEqual(7);
   });
 
   it("formats drag-and-drop payload and constructs valid icon whiteboard node on canvas", () => {

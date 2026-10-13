@@ -84,6 +84,8 @@ import {
   User,
   Sliders,
   CheckCircle,
+  RotateCcw,
+  Spline,
 } from "lucide-react";
 import { IWhiteboardNode, IWhiteboardEdge } from "@/models/whiteboard";
 import {
@@ -91,7 +93,9 @@ import {
   IIconGalleryItem,
   IconGroupType,
   getLucideIcon,
+  getWhiteboardIcon,
   filterIconGalleryItems,
+  searchDynamicReactIcons,
 } from "@/lib/whiteboardIconGallery";
 import { WHITEBOARD_TEMPLATES, createFunctionalArea } from "@/lib/whiteboardTemplates";
 import {
@@ -595,6 +599,12 @@ export default function WhiteboardCanvas({
     x: number;
     y: number;
   } | null>(null);
+  const [draggingEdgeControlPoint, setDraggingEdgeControlPoint] = useState<{
+    edgeId: string;
+    pointIndex: 1 | 2;
+    initialX: number;
+    initialY: number;
+  } | null>(null);
 
   // Directional Arrow Connection State ("<- or -> or <->")
   const [arrowConnectType, setArrowConnectType] = useState<"forward" | "backward" | "bidirectional">("forward");
@@ -890,7 +900,7 @@ export default function WhiteboardCanvas({
     if (isMouseDownRef.current) return true;
     if (draggingNodeId || isDraggingGroup) return true;
     if (resizing || resizingDivider) return true;
-    if (draggingLineTip || draggingLineMiddle || interactiveLineDrawing) return true;
+    if (draggingLineTip || draggingLineMiddle || interactiveLineDrawing || draggingEdgeControlPoint) return true;
     if (isDrawingPen || isSelectingBox || connectingFromNodeId || editingNodeId) return true;
 
     if (typeof document !== "undefined") {
@@ -913,6 +923,7 @@ export default function WhiteboardCanvas({
     draggingLineTip,
     draggingLineMiddle,
     interactiveLineDrawing,
+    draggingEdgeControlPoint,
     isDrawingPen,
     isSelectingBox,
     connectingFromNodeId,
@@ -3241,6 +3252,29 @@ export default function WhiteboardCanvas({
       return;
     }
 
+    // 0.25 Dragging Edge Control Point (Curved Bézier Curve or Segmented Straight Line)
+    if (draggingEdgeControlPoint) {
+      const targetEdgeId = draggingEdgeControlPoint.edgeId;
+      const ptIdx = draggingEdgeControlPoint.pointIndex;
+      const newPt = { x: Math.round(coords.x), y: Math.round(coords.y) };
+
+      const nextEdges = edgesRef.current.map((ed) => {
+        if (ed.id !== targetEdgeId) return ed;
+        if (ptIdx === 1) {
+          return { ...ed, cp1: newPt };
+        } else {
+          return { ...ed, cp2: newPt };
+        }
+      });
+      edgesRef.current = nextEdges;
+
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = requestAnimationFrame(() => {
+        setEdges(nextEdges);
+      });
+      return;
+    }
+
     // 0.3 Dragging Line Tip (Start or End Tip - Rotatable & Extensible independent tip drag)
     if (draggingLineTip) {
       let targetX = coords.x;
@@ -3435,6 +3469,12 @@ export default function WhiteboardCanvas({
       triggerAutoSave(nodesRef.current, edgesRef.current);
     }
 
+    if (draggingEdgeControlPoint) {
+      setDraggingEdgeControlPoint(null);
+      pushHistory(nodesRef.current, edgesRef.current);
+      triggerAutoSave(nodesRef.current, edgesRef.current);
+    }
+
     // Finalize interactive straight line / independent arrow drawing
     if (interactiveLineDrawing) {
       const isArrow = interactiveLineDrawing.tool === "arrow-line";
@@ -3542,7 +3582,17 @@ export default function WhiteboardCanvas({
   const handleDeleteSelected = useCallback(() => {
     const idsToDelete =
       selectedNodeIds.length > 0 ? selectedNodeIds : selectedNodeId ? [selectedNodeId] : [];
-    if (idsToDelete.length === 0) return;
+    if (idsToDelete.length === 0) {
+      if (selectedEdgeId) {
+        const updatedEdges = edges.filter((e) => e.id !== selectedEdgeId);
+        setEdges(updatedEdges);
+        pushHistory(nodes, updatedEdges);
+        triggerAutoSave(nodes, updatedEdges);
+        setSelectedEdgeId(null);
+        setEdgeSettingsPopover(null);
+      }
+      return;
+    }
 
     const targetNodes = nodes.filter((n) => idsToDelete.includes(n.id));
 
@@ -4735,28 +4785,6 @@ export default function WhiteboardCanvas({
           endX = toNode.x + toNode.width;
           endY = toCenterY;
         }
-
-        if (edge.style === "straight") {
-          pathData = `M ${startX} ${startY} L ${endX} ${endY}`;
-          tipFromX = startX;
-          tipFromY = startY;
-          srcFromX = endX;
-          srcFromY = endY;
-        } else if (edge.style === "curved") {
-          const midX = startX + (endX - startX) / 2;
-          pathData = `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`;
-          tipFromX = midX;
-          tipFromY = endY;
-          srcFromX = midX;
-          srcFromY = startY;
-        } else {
-          const midX = startX + (endX - startX) / 2;
-          pathData = `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`;
-          tipFromX = midX;
-          tipFromY = endY;
-          srcFromX = midX;
-          srcFromY = startY;
-        }
       } else {
         // Vertical connection: connect closest vertical faces directly (bottom <-> top)
         if (dy > 0) {
@@ -4770,20 +4798,70 @@ export default function WhiteboardCanvas({
           endX = toCenterX;
           endY = toNode.y + toNode.height;
         }
+      }
 
-        if (edge.style === "straight") {
+      const spanX = endX - startX;
+      const spanY = endY - startY;
+
+      // Default control points dividing the connector span into three equal sections (1/3 and 2/3)
+      const defaultCP1 = isHorizontal
+        ? edge.style === "straight"
+          ? { x: Math.round(startX + spanX / 3), y: Math.round(startY + spanY / 3) }
+          : { x: Math.round(startX + spanX / 3), y: Math.round(startY) }
+        : edge.style === "straight"
+          ? { x: Math.round(startX + spanX / 3), y: Math.round(startY + spanY / 3) }
+          : { x: Math.round(startX), y: Math.round(startY + spanY / 3) };
+
+      const defaultCP2 = isHorizontal
+        ? edge.style === "straight"
+          ? { x: Math.round(startX + (2 * spanX) / 3), y: Math.round(startY + (2 * spanY) / 3) }
+          : { x: Math.round(startX + (2 * spanX) / 3), y: Math.round(endY) }
+        : edge.style === "straight"
+          ? { x: Math.round(startX + (2 * spanX) / 3), y: Math.round(startY + (2 * spanY) / 3) }
+          : { x: Math.round(endX), y: Math.round(startY + (2 * spanY) / 3) };
+
+      const cp1 = edge.cp1 || defaultCP1;
+      const cp2 = edge.cp2 || defaultCP2;
+
+      let midPointX = Math.round((startX + endX) / 2);
+      let midPointY = Math.round((startY + endY) / 2);
+
+      if (edge.style === "straight") {
+        if (edge.cp1 || edge.cp2) {
+          pathData = `M ${startX} ${startY} L ${cp1.x} ${cp1.y} L ${cp2.x} ${cp2.y} L ${endX} ${endY}`;
+          tipFromX = cp2.x;
+          tipFromY = cp2.y;
+          srcFromX = cp1.x;
+          srcFromY = cp1.y;
+          midPointX = Math.round((cp1.x + cp2.x) / 2);
+          midPointY = Math.round((cp1.y + cp2.y) / 2);
+        } else {
           pathData = `M ${startX} ${startY} L ${endX} ${endY}`;
           tipFromX = startX;
           tipFromY = startY;
           srcFromX = endX;
           srcFromY = endY;
-        } else if (edge.style === "curved") {
-          const midY = startY + (endY - startY) / 2;
-          pathData = `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
-          tipFromX = endX;
-          tipFromY = midY;
-          srcFromX = startX;
-          srcFromY = midY;
+          midPointX = Math.round((startX + endX) / 2);
+          midPointY = Math.round((startY + endY) / 2);
+        }
+      } else if (edge.style === "curved") {
+        pathData = `M ${startX} ${startY} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${endX} ${endY}`;
+        tipFromX = cp2.x;
+        tipFromY = cp2.y;
+        srcFromX = cp1.x;
+        srcFromY = cp1.y;
+        // Cubic Bézier formula at t = 0.5: (P0 + 3*CP1 + 3*CP2 + P3) / 8
+        midPointX = Math.round((startX + 3 * cp1.x + 3 * cp2.x + endX) / 8);
+        midPointY = Math.round((startY + 3 * cp1.y + 3 * cp2.y + endY) / 8);
+      } else {
+        // Orthogonal stepped lines (default)
+        if (isHorizontal) {
+          const midX = startX + (endX - startX) / 2;
+          pathData = `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`;
+          tipFromX = midX;
+          tipFromY = endY;
+          srcFromX = midX;
+          srcFromY = startY;
         } else {
           const midY = startY + (endY - startY) / 2;
           pathData = `M ${startX} ${startY} L ${startX} ${midY} L ${endX} ${midY} L ${endX} ${endY}`;
@@ -4792,17 +4870,28 @@ export default function WhiteboardCanvas({
           srcFromX = startX;
           srcFromY = midY;
         }
+        midPointX = Math.round((startX + endX) / 2);
+        midPointY = Math.round((startY + endY) / 2);
       }
 
       const isSelectedEdge = selectedEdgeId === edge.id;
       const isHovered = hoveredEdgeId === edge.id;
+      const isDraggingThisEdgeCP = draggingEdgeControlPoint?.edgeId === edge.id;
       const edgeColor = isSelectedEdge ? "#38BDF8" : isHovered ? "#93C5FD" : edge.color || "#60A5FA";
       const dir = edge.arrowDirection || "forward";
-      const midPointX = (startX + endX) / 2;
-      const midPointY = (startY + endY) / 2;
+      const isDashed = edge.lineStyle === "dashed" || edge.style === "dashed";
+      const strokeW = isSelectedEdge ? 3 : isHovered ? 2.5 : 2;
+      const showControlPoints =
+        (edge.style === "curved" || edge.style === "straight") &&
+        (isSelectedEdge || isHovered || isDraggingThisEdgeCP);
 
       return (
-        <g key={edge.id} className="group">
+        <g
+          key={edge.id}
+          className="group"
+          onMouseEnter={() => setHoveredEdgeId(edge.id)}
+          onMouseLeave={() => setHoveredEdgeId((prev) => (prev === edge.id ? null : prev))}
+        >
           {/* Thick transparent hit-box path for easy click and hover */}
           <path
             d={pathData}
@@ -4810,8 +4899,6 @@ export default function WhiteboardCanvas({
             stroke="transparent"
             strokeWidth="24"
             className="pointer-events-auto cursor-pointer"
-            onMouseEnter={() => setHoveredEdgeId(edge.id)}
-            onMouseLeave={() => setHoveredEdgeId((prev) => (prev === edge.id ? null : prev))}
             onClick={(e) => {
               e.stopPropagation();
               setSelectedEdgeId(edge.id);
@@ -4823,13 +4910,13 @@ export default function WhiteboardCanvas({
             }}
           />
 
-          {/* Visible line */}
+          {/* Visible connector line */}
           <path
             d={pathData}
             fill="none"
             stroke={edgeColor}
-            strokeWidth={isSelectedEdge ? "3" : isHovered ? "2.5" : "2"}
-            strokeDasharray={edge.style === "dashed" ? "6,4" : undefined}
+            strokeWidth={strokeW}
+            strokeDasharray={isDashed ? "6,4" : undefined}
             strokeLinecap="round"
             strokeLinejoin="round"
             className="transition-colors pointer-events-none"
@@ -4837,11 +4924,157 @@ export default function WhiteboardCanvas({
 
           {/* Forward / Target Arrowhead (-> or <->) */}
           {(dir === "forward" || dir === "bidirectional") &&
-            renderArrowhead(endX, endY, tipFromX, tipFromY, edgeColor)}
+            renderArrowhead(endX, endY, tipFromX, tipFromY, edgeColor, strokeW)}
 
           {/* Backward / Source Arrowhead (<- or <->) */}
           {(dir === "backward" || dir === "bidirectional") &&
-            renderArrowhead(startX, startY, srcFromX, srcFromY, edgeColor)}
+            renderArrowhead(startX, startY, srcFromX, srcFromY, edgeColor, strokeW)}
+
+          {/* Draggable Control Points for Three Equal Sections (1/3 and 2/3) */}
+          {showControlPoints && (
+            <g className="animate-in fade-in-50 duration-150">
+              {/* Guidelines from endpoints to control points and between control points */}
+              <line
+                x1={startX}
+                y1={startY}
+                x2={cp1.x}
+                y2={cp1.y}
+                stroke="#38BDF8"
+                strokeWidth="1.2"
+                strokeDasharray="3,3"
+                opacity="0.6"
+                className="pointer-events-none"
+              />
+              <line
+                x1={cp1.x}
+                y1={cp1.y}
+                x2={cp2.x}
+                y2={cp2.y}
+                stroke="#818CF8"
+                strokeWidth="1"
+                strokeDasharray="2,2"
+                opacity="0.45"
+                className="pointer-events-none"
+              />
+              <line
+                x1={cp2.x}
+                y1={cp2.y}
+                x2={endX}
+                y2={endY}
+                stroke="#A855F7"
+                strokeWidth="1.2"
+                strokeDasharray="3,3"
+                opacity="0.6"
+                className="pointer-events-none"
+              />
+
+              {/* Control Point 1 (1/3 section mark) */}
+              <g
+                className="pointer-events-auto cursor-grab active:cursor-grabbing group/cp1"
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setSelectedEdgeId(edge.id);
+                  setDraggingEdgeControlPoint({
+                    edgeId: edge.id,
+                    pointIndex: 1,
+                    initialX: cp1.x,
+                    initialY: cp1.y,
+                  });
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  const updated = edges.map((ed) => {
+                    if (ed.id !== edge.id) return ed;
+                    const nextEd = { ...ed };
+                    delete nextEd.cp1;
+                    return nextEd;
+                  });
+                  edgesRef.current = updated;
+                  setEdges(updated);
+                  pushHistory(nodes, updated);
+                  triggerAutoSave(nodes, updated);
+                }}
+              >
+                <title>Control Point 1 (1/3 section): Drag in (X,Y) to reshape. Double-click to reset.</title>
+                {/* Large transparent hit circle */}
+                <circle cx={cp1.x} cy={cp1.y} r="16" fill="transparent" />
+                {/* Outer halo */}
+                <circle
+                  cx={cp1.x}
+                  cy={cp1.y}
+                  r="7.5"
+                  fill="#0F172A"
+                  stroke="#38BDF8"
+                  strokeWidth="2.5"
+                  className="transition-transform group-hover/cp1:scale-125 filter drop-shadow(0 2px 4px rgba(0,0,0,0.6))"
+                />
+                {/* Center dot */}
+                <circle cx={cp1.x} cy={cp1.y} r="2.8" fill="#38BDF8" />
+                {/* Badge Label */}
+                <g transform={`translate(${cp1.x + 10}, ${cp1.y - 12})`} className="pointer-events-none select-none">
+                  <rect x="-2" y="-10" width="22" height="13" rx="3" fill="#0F172A" stroke="#38BDF8" strokeWidth="1" opacity="0.9" />
+                  <text x="9" y="-1" fill="#38BDF8" fontSize="9" fontWeight="bold" textAnchor="middle">
+                    P1
+                  </text>
+                </g>
+              </g>
+
+              {/* Control Point 2 (2/3 section mark) */}
+              <g
+                className="pointer-events-auto cursor-grab active:cursor-grabbing group/cp2"
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setSelectedEdgeId(edge.id);
+                  setDraggingEdgeControlPoint({
+                    edgeId: edge.id,
+                    pointIndex: 2,
+                    initialX: cp2.x,
+                    initialY: cp2.y,
+                  });
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  const updated = edges.map((ed) => {
+                    if (ed.id !== edge.id) return ed;
+                    const nextEd = { ...ed };
+                    delete nextEd.cp2;
+                    return nextEd;
+                  });
+                  edgesRef.current = updated;
+                  setEdges(updated);
+                  pushHistory(nodes, updated);
+                  triggerAutoSave(nodes, updated);
+                }}
+              >
+                <title>Control Point 2 (2/3 section): Drag in (X,Y) to reshape. Double-click to reset.</title>
+                {/* Large transparent hit circle */}
+                <circle cx={cp2.x} cy={cp2.y} r="16" fill="transparent" />
+                {/* Outer halo */}
+                <circle
+                  cx={cp2.x}
+                  cy={cp2.y}
+                  r="7.5"
+                  fill="#0F172A"
+                  stroke="#A855F7"
+                  strokeWidth="2.5"
+                  className="transition-transform group-hover/cp2:scale-125 filter drop-shadow(0 2px 4px rgba(0,0,0,0.6))"
+                />
+                {/* Center dot */}
+                <circle cx={cp2.x} cy={cp2.y} r="2.8" fill="#A855F7" />
+                {/* Badge Label */}
+                <g transform={`translate(${cp2.x + 10}, ${cp2.y - 12})`} className="pointer-events-none select-none">
+                  <rect x="-2" y="-10" width="22" height="13" rx="3" fill="#0F172A" stroke="#A855F7" strokeWidth="1" opacity="0.9" />
+                  <text x="9" y="-1" fill="#A855F7" fontSize="9" fontWeight="bold" textAnchor="middle">
+                    P2
+                  </text>
+                </g>
+              </g>
+            </g>
+          )}
 
           {/* Interactive Arrow Link Setting Handle: "+" circular button - ONLY VISIBLE ON HOVER OR SELECTED */}
           {(isSelectedEdge || isHovered) && (
@@ -6474,12 +6707,18 @@ export default function WhiteboardCanvas({
         const edge = edges.find((e) => e.id === edgeSettingsPopover.edgeId);
         if (!edge) return null;
 
+        const isCurved = edge.style === "curved";
+        const isStraight = edge.style === "straight";
+        const isOrthogonal = !isCurved && !isStraight;
+        const hasCustomCPs = !!(edge.cp1 || edge.cp2);
+        const isDashed = edge.lineStyle === "dashed" || edge.style === "dashed";
+
         return (
           <div
             className="fixed z-50 bg-[#16171D] border border-blue-500/60 rounded-xl shadow-2xl p-3 w-64 text-xs text-gray-200 animate-in zoom-in-95 duration-100"
             style={{
               left: Math.max(20, Math.min(window.innerWidth - 280, edgeSettingsPopover.x * zoom + pan.x - 120)),
-              top: Math.max(60, Math.min(window.innerHeight - 220, edgeSettingsPopover.y * zoom + pan.y - 80)),
+              top: Math.max(60, Math.min(window.innerHeight - 340, edgeSettingsPopover.y * zoom + pan.y - 120)),
             }}
           >
             <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-800">
@@ -6505,29 +6744,147 @@ export default function WhiteboardCanvas({
                 <span>+ Add Connected Branch</span>
               </button>
 
+              {/* Connector Shape: Orthogonal vs Curved vs Straight */}
+              <div className="pt-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-gray-400 text-[11px] font-semibold">Connector Shape:</span>
+                  {hasCustomCPs && (
+                    <button
+                      onClick={() => {
+                        const updated = edges.map((e) => {
+                          if (e.id !== edge.id) return e;
+                          const next = { ...e };
+                          delete next.cp1;
+                          delete next.cp2;
+                          return next;
+                        });
+                        edgesRef.current = updated;
+                        setEdges(updated);
+                        pushHistory(nodes, updated);
+                        triggerAutoSave(nodes, updated);
+                      }}
+                      className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer hover:underline"
+                      title="Reset handles to 1/3 and 2/3 default positions"
+                    >
+                      <RotateCcw className="w-2.5 h-2.5" />
+                      <span>Reset Handles</span>
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-1 bg-[#121316] p-1 rounded-lg border border-[#282B33]">
+                  <button
+                    onClick={() => {
+                      const updated = edges.map((e) =>
+                        e.id === edge.id ? { ...e, style: "orthogonal" as const } : e
+                      );
+                      edgesRef.current = updated;
+                      setEdges(updated);
+                      pushHistory(nodes, updated);
+                      triggerAutoSave(nodes, updated);
+                    }}
+                    className={`py-1 px-1.5 rounded flex flex-col items-center justify-center gap-0.5 text-[10px] transition-all cursor-pointer ${
+                      isOrthogonal
+                        ? "bg-blue-600 text-white font-bold shadow"
+                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                    }`}
+                    title="Right-angle stepped connector"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M2 13 L2 6 L14 6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span>Orthogonal</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const updated = edges.map((e) =>
+                        e.id === edge.id ? { ...e, style: "curved" as const } : e
+                      );
+                      edgesRef.current = updated;
+                      setEdges(updated);
+                      pushHistory(nodes, updated);
+                      triggerAutoSave(nodes, updated);
+                    }}
+                    className={`py-1 px-1.5 rounded flex flex-col items-center justify-center gap-0.5 text-[10px] transition-all cursor-pointer ${
+                      isCurved
+                        ? "bg-blue-600 text-white font-bold shadow"
+                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                    }`}
+                    title="Smooth Bézier curve with 2 control points at 1/3 and 2/3 sections"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M2 13 C2 4, 14 12, 14 3" strokeLinecap="round" />
+                    </svg>
+                    <span>Curved</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const updated = edges.map((e) =>
+                        e.id === edge.id ? { ...e, style: "straight" as const } : e
+                      );
+                      edgesRef.current = updated;
+                      setEdges(updated);
+                      pushHistory(nodes, updated);
+                      triggerAutoSave(nodes, updated);
+                    }}
+                    className={`py-1 px-1.5 rounded flex flex-col items-center justify-center gap-0.5 text-[10px] transition-all cursor-pointer ${
+                      isStraight
+                        ? "bg-blue-600 text-white font-bold shadow"
+                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                    }`}
+                    title="Straight polyline shaped by control points"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="2" y1="14" x2="14" y2="2" strokeLinecap="round" />
+                    </svg>
+                    <span>Straight</span>
+                  </button>
+                </div>
+                {(isCurved || isStraight) && (
+                  <p className="text-[10px] text-sky-400/90 mt-1 leading-tight">
+                    Drag the <span className="font-bold text-sky-300">P1</span> (1/3) &amp; <span className="font-bold text-purple-300">P2</span> (2/3) points on canvas in (X,Y) to reshape.
+                  </p>
+                )}
+              </div>
+
               {/* Style: Solid vs Dashed */}
               <div className="flex items-center justify-between pt-1">
-                <span className="text-gray-400 text-[11px]">Line Style:</span>
+                <span className="text-gray-400 text-[11px]">Stroke Pattern:</span>
                 <div className="flex items-center gap-1 bg-[#121316] p-0.5 rounded border border-[#282B33]">
                   <button
                     onClick={() => {
-                      const updated = edges.map((e) => (e.id === edge.id ? { ...e, style: "solid" as const } : e));
+                      const updated = edges.map((e) =>
+                        e.id === edge.id
+                          ? { ...e, lineStyle: "solid" as const, style: e.style === "dashed" ? "orthogonal" : e.style }
+                          : e
+                      );
+                      edgesRef.current = updated;
                       setEdges(updated);
                       pushHistory(nodes, updated);
+                      triggerAutoSave(nodes, updated);
                     }}
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${edge.style !== "dashed" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
-                      }`}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
+                      !isDashed ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
+                    }`}
                   >
                     Solid
                   </button>
                   <button
                     onClick={() => {
-                      const updated = edges.map((e) => (e.id === edge.id ? { ...e, style: "dashed" as const } : e));
+                      const updated = edges.map((e) =>
+                        e.id === edge.id
+                          ? { ...e, lineStyle: "dashed" as const, style: e.style === "solid" ? "orthogonal" : e.style }
+                          : e
+                      );
+                      edgesRef.current = updated;
                       setEdges(updated);
                       pushHistory(nodes, updated);
+                      triggerAutoSave(nodes, updated);
                     }}
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${edge.style === "dashed" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
-                      }`}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
+                      isDashed ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
+                    }`}
                   >
                     Dashed
                   </button>
@@ -6543,11 +6900,14 @@ export default function WhiteboardCanvas({
                       key={c}
                       onClick={() => {
                         const updated = edges.map((e) => (e.id === edge.id ? { ...e, color: c } : e));
+                        edgesRef.current = updated;
                         setEdges(updated);
                         pushHistory(nodes, updated);
+                        triggerAutoSave(nodes, updated);
                       }}
-                      className={`w-5 h-5 rounded-full transition-transform hover:scale-110 border cursor-pointer ${edge.color === c ? "ring-2 ring-white scale-110" : "border-white/20"
-                        }`}
+                      className={`w-5 h-5 rounded-full transition-transform hover:scale-110 border cursor-pointer ${
+                        edge.color === c ? "ring-2 ring-white scale-110" : "border-white/20"
+                      }`}
                       style={{ backgroundColor: c }}
                     />
                   ))}
@@ -6563,14 +6923,16 @@ export default function WhiteboardCanvas({
                       const updated = edges.map((e) =>
                         e.id === edge.id ? { ...e, arrowDirection: "backward" as const } : e
                       );
+                      edgesRef.current = updated;
                       setEdges(updated);
                       pushHistory(nodes, updated);
                       triggerAutoSave(nodes, updated);
                     }}
-                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${edge.arrowDirection === "backward"
-                      ? "bg-blue-600 text-white shadow"
-                      : "text-gray-400 hover:text-white hover:bg-[#20222A]"
-                      }`}
+                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
+                      edge.arrowDirection === "backward"
+                        ? "bg-blue-600 text-white shadow"
+                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                    }`}
                     title="Backward arrow: Target points to Source (<-)"
                   >
                     <MoveLeft className="w-3.5 h-3.5" />
@@ -6581,14 +6943,16 @@ export default function WhiteboardCanvas({
                       const updated = edges.map((e) =>
                         e.id === edge.id ? { ...e, arrowDirection: "forward" as const } : e
                       );
+                      edgesRef.current = updated;
                       setEdges(updated);
                       pushHistory(nodes, updated);
                       triggerAutoSave(nodes, updated);
                     }}
-                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${edge.arrowDirection === "forward" || !edge.arrowDirection
-                      ? "bg-blue-600 text-white shadow"
-                      : "text-gray-400 hover:text-white hover:bg-[#20222A]"
-                      }`}
+                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
+                      edge.arrowDirection === "forward" || !edge.arrowDirection
+                        ? "bg-blue-600 text-white shadow"
+                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                    }`}
                     title="Forward arrow: Source points to Target (->)"
                   >
                     <span>-&gt;</span>
@@ -6599,14 +6963,16 @@ export default function WhiteboardCanvas({
                       const updated = edges.map((e) =>
                         e.id === edge.id ? { ...e, arrowDirection: "bidirectional" as const } : e
                       );
+                      edgesRef.current = updated;
                       setEdges(updated);
                       pushHistory(nodes, updated);
                       triggerAutoSave(nodes, updated);
                     }}
-                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${edge.arrowDirection === "bidirectional"
-                      ? "bg-blue-600 text-white shadow"
-                      : "text-gray-400 hover:text-white hover:bg-[#20222A]"
-                      }`}
+                    className={`py-1.5 px-2 rounded flex items-center justify-center gap-1 font-mono text-xs font-bold transition-all cursor-pointer ${
+                      edge.arrowDirection === "bidirectional"
+                        ? "bg-blue-600 text-white shadow"
+                        : "text-gray-400 hover:text-white hover:bg-[#20222A]"
+                    }`}
                     title="Bidirectional arrow: Double-ended (<->)"
                   >
                     <ArrowLeftRight className="w-3.5 h-3.5" />
@@ -6620,8 +6986,10 @@ export default function WhiteboardCanvas({
                 <button
                   onClick={() => {
                     const updated = edges.filter((e) => e.id !== edge.id);
+                    edgesRef.current = updated;
                     setEdges(updated);
                     pushHistory(nodes, updated);
+                    triggerAutoSave(nodes, updated);
                     setEdgeSettingsPopover(null);
                     setSelectedEdgeId(null);
                   }}
@@ -10110,13 +10478,13 @@ export default function WhiteboardCanvas({
                 </button>
               </div>
 
-              {/* Search Box */}
+              {/* Search Box: Direct Dynamic React-Icons Search */}
               <div className="relative">
                 <input
                   type="text"
                   value={iconGallerySearch}
                   onChange={(e) => setIconGallerySearch(e.target.value)}
-                  placeholder="Search icons (database, server, api, route, price)..."
+                  placeholder="Direct dynamic search (e.g. rocket, chart, flag, cloud, gear, user, wifi)..."
                   className="w-full bg-[#0D0E13] border border-[#2B2E3C] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none transition-colors"
                 />
                 {iconGallerySearch && (
@@ -10124,6 +10492,7 @@ export default function WhiteboardCanvas({
                     type="button"
                     onClick={() => setIconGallerySearch("")}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-xs"
+                    title="Clear search"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -10133,22 +10502,59 @@ export default function WhiteboardCanvas({
               {/* Category Filter Tabs */}
               <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none text-[10px]">
                 {[
-                  { id: "all", label: "All (42)", emoji: "✨" },
-                  { id: "infra", label: "Infra (7)", emoji: "🌐" },
-                  { id: "flow", label: "Flow (7)", emoji: "🔄" },
-                  { id: "ideation", label: "Ideation (5)", emoji: "💡" },
-                  { id: "logic", label: "Logic (7)", emoji: "🔢" },
-                  { id: "metrics", label: "Metrics (9)", emoji: "📊" },
-                  { id: "media", label: "Media (7)", emoji: "🎭" },
+                  {
+                    id: "all" as const,
+                    label: `All (${ICON_GALLERY_GROUPS.reduce((acc, g) => acc + g.items.length, 0)})`,
+                    emoji: "✨",
+                  },
+                  {
+                    id: "react-icons" as const,
+                    label: "⚡ React-Icons",
+                    emoji: "⚡",
+                  },
+                  {
+                    id: "infra" as const,
+                    label: `Infra (${ICON_GALLERY_GROUPS.find((g) => g.type === "infra")?.items.length || 0})`,
+                    emoji: "🌐",
+                  },
+                  {
+                    id: "flow" as const,
+                    label: `Flow (${ICON_GALLERY_GROUPS.find((g) => g.type === "flow")?.items.length || 0})`,
+                    emoji: "🔄",
+                  },
+                  {
+                    id: "ideation" as const,
+                    label: `Ideation (${ICON_GALLERY_GROUPS.find((g) => g.type === "ideation")?.items.length || 0})`,
+                    emoji: "💡",
+                  },
+                  {
+                    id: "logic" as const,
+                    label: `Logic (${ICON_GALLERY_GROUPS.find((g) => g.type === "logic")?.items.length || 0})`,
+                    emoji: "🔢",
+                  },
+                  {
+                    id: "metrics" as const,
+                    label: `Metrics (${ICON_GALLERY_GROUPS.find((g) => g.type === "metrics")?.items.length || 0})`,
+                    emoji: "📊",
+                  },
+                  {
+                    id: "media" as const,
+                    label: `Media (${ICON_GALLERY_GROUPS.find((g) => g.type === "media")?.items.length || 0})`,
+                    emoji: "🎭",
+                  },
                 ].map((tab) => (
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => setIconGalleryActiveTab(tab.id as any)}
-                    className={`px-2 py-1 rounded-md shrink-0 font-medium transition-colors cursor-pointer flex items-center gap-1 ${iconGalleryActiveTab === tab.id
-                      ? "bg-cyan-600 text-white font-bold"
-                      : "bg-[#1E202B] text-gray-400 hover:text-gray-200 hover:bg-[#252837]"
-                      }`}
+                    onClick={() => {
+                      setIconGalleryActiveTab(tab.id);
+                      if (iconGallerySearch) setIconGallerySearch("");
+                    }}
+                    className={`px-2 py-1 rounded-md shrink-0 font-medium transition-colors cursor-pointer flex items-center gap-1 ${
+                      !iconGallerySearch && iconGalleryActiveTab === tab.id
+                        ? "bg-cyan-600 text-white font-bold"
+                        : "bg-[#1E202B] text-gray-400 hover:text-gray-200 hover:bg-[#252837]"
+                    }`}
                   >
                     <span>{tab.emoji}</span>
                     <span>{tab.label}</span>
@@ -10156,103 +10562,265 @@ export default function WhiteboardCanvas({
                 ))}
               </div>
 
-              {/* Grouped Icons Content Area */}
-              <div className="overflow-y-auto max-h-[320px] space-y-3 pr-1 scrollbar-thin">
-                {ICON_GALLERY_GROUPS.filter(
-                  (grp) => iconGalleryActiveTab === "all" || iconGalleryActiveTab === grp.type
-                ).map((group) => {
-                  const filteredItems = filterIconGalleryItems(
-                    iconGallerySearch,
-                    group.type
-                  );
-                  if (filteredItems.length === 0) return null;
-
+              {/* Grouped & Dynamic Icons Content Area */}
+              <div className="overflow-y-auto max-h-[360px] space-y-3 pr-1 scrollbar-thin">
+                {/* 1. DIRECT DYNAMIC SEARCH MODE (Active whenever search text is entered) */}
+                {iconGallerySearch.trim() ? (() => {
+                  const dynamicItems = searchDynamicReactIcons(iconGallerySearch, 60);
                   return (
-                    <div key={group.type} className="space-y-1.5">
+                    <div className="space-y-2">
                       <div className="flex items-center justify-between px-1">
-                        <div className="flex items-center gap-1 text-[11px] font-bold text-gray-200">
-                          <span>{group.emoji}</span>
-                          <span>{group.title}</span>
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-cyan-400">
+                          <span>⚡</span>
+                          <span>Dynamic React-Icons Search Results</span>
                           <span className="text-[9px] text-gray-500 font-mono">
-                            ({filteredItems.length})
+                            ({dynamicItems.length} found)
                           </span>
                         </div>
-                        <span className="text-[9px] text-gray-500 font-mono">type: "{group.type}"</span>
+                        <span className="text-[9px] text-gray-400">
+                          Hold &amp; Drag onto canvas
+                        </span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {filteredItems.map((item) => {
-                          const IconComp = getLucideIcon(item.iconName);
-                          return (
-                            <div
-                              key={item.id}
-                              draggable={true}
-                              onDragStart={(e) =>
-                                handleItemDragStart(e, {
-                                  category: "node",
-                                  type: "icon",
-                                  iconName: item.iconName,
-                                  initialTitle: item.name,
-                                  subtitle: item.subtitle,
-                                  iconGroup: item.group,
-                                  color: item.color,
-                                })
-                              }
-                              onClick={() => {
-                                handleAddNode(
-                                  "icon",
-                                  "rectangle",
-                                  item.color,
-                                  false,
-                                  undefined,
-                                  undefined,
-                                  item.name,
-                                  undefined,
-                                  item.iconName,
-                                  item.subtitle,
-                                  item.group
-                                );
-                                setShowIconGallery(false);
-                              }}
-                              className="p-2 rounded-xl bg-[#1C1E27] hover:bg-[#242735] border border-[#2B2E3D] hover:border-cyan-500/40 transition-all flex items-start gap-2.5 cursor-grab active:cursor-grabbing group hover:shadow-lg"
-                              title={`${item.name} - ${item.subtitle} (Click or Hold & Drag onto canvas)`}
-                            >
+                      {dynamicItems.length === 0 ? (
+                        <div className="py-8 text-center text-xs text-gray-500">
+                          No React-Icons found for &quot;{iconGallerySearch}&quot;.
+                          <div className="text-[10px] text-gray-600 mt-1">
+                            Try general terms like &quot;chart&quot;, &quot;flag&quot;, &quot;rocket&quot;, &quot;cloud&quot;, &quot;user&quot;, &quot;gear&quot;, &quot;home&quot;.
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {dynamicItems.map((item) => {
+                            const IconComp = getWhiteboardIcon(item.iconName);
+                            return (
                               <div
-                                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 shadow-xs"
-                                style={{
-                                  backgroundColor: `${item.color}20`,
-                                  color: item.color,
-                                  border: `1px solid ${item.color}40`,
+                                key={item.id}
+                                draggable={true}
+                                onDragStart={(e) =>
+                                  handleItemDragStart(e, {
+                                    category: "node",
+                                    type: "icon",
+                                    iconName: item.iconName,
+                                    initialTitle: item.name,
+                                    subtitle: item.subtitle,
+                                    iconGroup: "react-icons",
+                                    color: item.color,
+                                  })
+                                }
+                                onClick={() => {
+                                  handleAddNode(
+                                    "icon",
+                                    "rectangle",
+                                    item.color,
+                                    false,
+                                    undefined,
+                                    undefined,
+                                    item.name,
+                                    undefined,
+                                    item.iconName,
+                                    item.subtitle,
+                                    "react-icons"
+                                  );
+                                  setShowIconGallery(false);
                                 }}
+                                className="p-2 rounded-xl bg-[#1C1E27] hover:bg-[#242735] border border-[#2B2E3D] hover:border-cyan-500/40 transition-all flex items-start gap-2.5 cursor-grab active:cursor-grabbing group hover:shadow-lg"
+                                title={`${item.name} (${item.iconName}) - Click or Hold & Drag onto canvas`}
                               >
-                                <IconComp className="w-4 h-4" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-xs font-semibold text-gray-200 group-hover:text-white truncate">
-                                  {item.name}
+                                <div
+                                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 shadow-xs"
+                                  style={{
+                                    backgroundColor: `${item.color}20`,
+                                    color: item.color,
+                                    border: `1px solid ${item.color}40`,
+                                  }}
+                                >
+                                  <IconComp className="w-4 h-4" />
                                 </div>
-                                <div className="text-[10px] text-gray-400 line-clamp-1 leading-tight mt-0.5">
-                                  {item.subtitle}
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-xs font-semibold text-gray-200 group-hover:text-white truncate">
+                                    {item.name}
+                                  </div>
+                                  <div className="text-[10px] text-gray-400 line-clamp-1 leading-tight mt-0.5 font-mono">
+                                    {item.subtitle}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
-                })}
+                })() : (
+                  /* 2. CATEGORY BROWSING (When search bar is empty) */
+                  <>
+                    {iconGalleryActiveTab === "react-icons" ? (() => {
+                      const popularReactIcons = searchDynamicReactIcons("", 60);
+                      return (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between px-1">
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-cyan-400">
+                              <span>⚡</span>
+                              <span>Popular React-Icons Showcase</span>
+                              <span className="text-[9px] text-gray-500 font-mono">
+                                ({popularReactIcons.length})
+                              </span>
+                            </div>
+                            <span className="text-[9px] text-gray-400">
+                              Hold &amp; Drag onto canvas
+                            </span>
+                          </div>
 
-                {/* Empty State */}
-                {ICON_GALLERY_GROUPS.filter(
-                  (grp) => iconGalleryActiveTab === "all" || iconGalleryActiveTab === grp.type
-                ).every(
-                  (grp) => filterIconGalleryItems(iconGallerySearch, grp.type).length === 0
-                ) && (
-                    <div className="py-8 text-center text-xs text-gray-500">
-                      No matching icons found for &quot;{iconGallerySearch}&quot;.
-                    </div>
-                  )}
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {popularReactIcons.map((item) => {
+                              const IconComp = getWhiteboardIcon(item.iconName);
+                              return (
+                                <div
+                                  key={item.id}
+                                  draggable={true}
+                                  onDragStart={(e) =>
+                                    handleItemDragStart(e, {
+                                      category: "node",
+                                      type: "icon",
+                                      iconName: item.iconName,
+                                      initialTitle: item.name,
+                                      subtitle: item.subtitle,
+                                      iconGroup: "react-icons",
+                                      color: item.color,
+                                    })
+                                  }
+                                  onClick={() => {
+                                    handleAddNode(
+                                      "icon",
+                                      "rectangle",
+                                      item.color,
+                                      false,
+                                      undefined,
+                                      undefined,
+                                      item.name,
+                                      undefined,
+                                      item.iconName,
+                                      item.subtitle,
+                                      "react-icons"
+                                    );
+                                    setShowIconGallery(false);
+                                  }}
+                                  className="p-2 rounded-xl bg-[#1C1E27] hover:bg-[#242735] border border-[#2B2E3D] hover:border-cyan-500/40 transition-all flex items-start gap-2.5 cursor-grab active:cursor-grabbing group hover:shadow-lg"
+                                  title={`${item.name} (${item.iconName}) - Click or Hold & Drag onto canvas`}
+                                >
+                                  <div
+                                    className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 shadow-xs"
+                                    style={{
+                                      backgroundColor: `${item.color}20`,
+                                      color: item.color,
+                                      border: `1px solid ${item.color}40`,
+                                    }}
+                                  >
+                                    <IconComp className="w-4 h-4" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-semibold text-gray-200 group-hover:text-white truncate">
+                                      {item.name}
+                                    </div>
+                                    <div className="text-[10px] text-gray-400 line-clamp-1 leading-tight mt-0.5 font-mono">
+                                      {item.subtitle}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })() : (
+                      ICON_GALLERY_GROUPS.filter(
+                        (grp) =>
+                          iconGalleryActiveTab === "all" || iconGalleryActiveTab === grp.type
+                      ).map((group) => {
+                        const items = group.items;
+                        if (items.length === 0) return null;
+
+                        return (
+                          <div key={group.type} className="space-y-1.5">
+                            <div className="flex items-center justify-between px-1">
+                              <div className="flex items-center gap-1 text-[11px] font-bold text-gray-200">
+                                <span>{group.emoji}</span>
+                                <span>{group.title}</span>
+                                <span className="text-[9px] text-gray-500 font-mono">
+                                  ({items.length})
+                                </span>
+                              </div>
+                              <span className="text-[9px] text-gray-500 font-mono">
+                                type: &quot;{group.type}&quot;
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {items.map((item) => {
+                                const IconComp = getWhiteboardIcon(item.iconName);
+                                return (
+                                  <div
+                                    key={item.id}
+                                    draggable={true}
+                                    onDragStart={(e) =>
+                                      handleItemDragStart(e, {
+                                        category: "node",
+                                        type: "icon",
+                                        iconName: item.iconName,
+                                        initialTitle: item.name,
+                                        subtitle: item.subtitle,
+                                        iconGroup: item.group,
+                                        color: item.color,
+                                      })
+                                    }
+                                    onClick={() => {
+                                      handleAddNode(
+                                        "icon",
+                                        "rectangle",
+                                        item.color,
+                                        false,
+                                        undefined,
+                                        undefined,
+                                        item.name,
+                                        undefined,
+                                        item.iconName,
+                                        item.subtitle,
+                                        item.group
+                                      );
+                                      setShowIconGallery(false);
+                                    }}
+                                    className="p-2 rounded-xl bg-[#1C1E27] hover:bg-[#242735] border border-[#2B2E3D] hover:border-cyan-500/40 transition-all flex items-start gap-2.5 cursor-grab active:cursor-grabbing group hover:shadow-lg"
+                                    title={`${item.name} - ${item.subtitle} (Click or Hold & Drag onto canvas)`}
+                                  >
+                                    <div
+                                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 shadow-xs"
+                                      style={{
+                                        backgroundColor: `${item.color}20`,
+                                        color: item.color,
+                                        border: `1px solid ${item.color}40`,
+                                      }}
+                                    >
+                                      <IconComp className="w-4 h-4" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-xs font-semibold text-gray-200 group-hover:text-white truncate">
+                                        {item.name}
+                                      </div>
+                                      <div className="text-[10px] text-gray-400 line-clamp-1 leading-tight mt-0.5">
+                                        {item.subtitle}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </>
+                )}
               </div>
             </div>
           )}

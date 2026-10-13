@@ -64,9 +64,39 @@ import {
   Frown,
   Car,
   Boxes,
+  Crosshair,
+  Code,
 } from "lucide-react";
+import {
+  FaFlag,
+  FaChartArea,
+  FaChartColumn,
+  FaGear,
+  FaBullseye,
+  FaCircleCheck,
+  FaHouse,
+  FaAddressBook,
+  FaLocationDot,
+  FaCircleInfo,
+  FaBoxOpen,
+  FaBrain,
+} from "react-icons/fa6";
+import { TbFunction, TbMathIntegral } from "react-icons/tb";
 
-export type IconGroupType = "infra" | "flow" | "ideation" | "logic" | "metrics" | "media";
+// Full namespace packages for dynamic search and resolution across thousands of React Icons
+import * as Fa6 from "react-icons/fa6";
+import * as Tb from "react-icons/tb";
+import * as Md from "react-icons/md";
+import * as Lu from "react-icons/lu";
+
+export type IconGroupType =
+  | "infra"
+  | "flow"
+  | "ideation"
+  | "logic"
+  | "metrics"
+  | "media"
+  | "react-icons";
 
 export interface IIconGalleryItem {
   id: string;
@@ -75,6 +105,7 @@ export interface IIconGalleryItem {
   subtitle: string;
   group: IconGroupType;
   color: string;
+  pack?: string;
 }
 
 export interface IIconGalleryGroup {
@@ -91,7 +122,7 @@ export const ICON_GALLERY_GROUPS: IIconGalleryGroup[] = [
     type: "infra",
     title: "Infrastructure & Networking",
     emoji: "🌐",
-    description: "Database cluster, server compute, endpoints, runtime environments & auth gates",
+    description: "Database cluster, server compute, endpoints, runtime environments, home & settings",
     color: "#0EA5E9",
     items: [
       {
@@ -133,6 +164,38 @@ export const ICON_GALLERY_GROUPS: IIconGalleryGroup[] = [
         subtitle: "Consumer frontend tier",
         group: "infra",
         color: "#8B5CF6",
+      },
+      {
+        id: "infra-home",
+        name: "Home",
+        iconName: "FaHouse",
+        subtitle: "Landing page / root directory",
+        group: "infra",
+        color: "#06B6D4",
+      },
+      {
+        id: "infra-contact",
+        name: "Contact",
+        iconName: "FaAddressBook",
+        subtitle: "Customer outreach & address book",
+        group: "infra",
+        color: "#14B8A6",
+      },
+      {
+        id: "infra-location",
+        name: "Location",
+        iconName: "FaLocationDot",
+        subtitle: "Geographic point / DC region",
+        group: "infra",
+        color: "#F59E0B",
+      },
+      {
+        id: "infra-gear",
+        name: "Gear",
+        iconName: "FaGear",
+        subtitle: "System config & parameters",
+        group: "infra",
+        color: "#94A3B8",
       },
       {
         id: "infra-user",
@@ -200,20 +263,20 @@ export const ICON_GALLERY_GROUPS: IIconGalleryGroup[] = [
         color: "#8B5CF6",
       },
       {
-        id: "flow-funnel",
-        name: "Funnel",
+        id: "flow-filter",
+        name: "Filter",
         iconName: "Filter",
-        subtitle: "User acquisition / conversion paths",
+        subtitle: "Criteria sorting and selective routing",
         group: "flow",
-        color: "#F59E0B",
+        color: "#3B82F6",
       },
       {
-        id: "flow-crash",
-        name: "Crash",
-        iconName: "Bomb",
-        subtitle: "Server error downtime indicators",
+        id: "flow-fallback",
+        name: "Fallback",
+        iconName: "ZapOff",
+        subtitle: "Circuit failsafe alternatives",
         group: "flow",
-        color: "#F43F5E",
+        color: "#F59E0B",
       },
     ],
   },
@@ -221,9 +284,41 @@ export const ICON_GALLERY_GROUPS: IIconGalleryGroup[] = [
     type: "ideation",
     title: "Concept Ideation & Brainstorming",
     emoji: "💡",
-    description: "Architecture questions, feature proposals, feedback bubbles & launchpad triggers",
+    description: "Architecture questions, strategic goals, aims, flags & briefings",
     color: "#F59E0B",
     items: [
+      {
+        id: "ideation-goal",
+        name: "Goal",
+        iconName: "FaBullseye",
+        subtitle: "Key objective & milestone target",
+        group: "ideation",
+        color: "#EF4444",
+      },
+      {
+        id: "ideation-aim",
+        name: "Aim",
+        iconName: "Crosshair",
+        subtitle: "Strategic focus & vector trajectory",
+        group: "ideation",
+        color: "#F97316",
+      },
+      {
+        id: "ideation-flag",
+        name: "Flag",
+        iconName: "FaFlag",
+        subtitle: "Feature flag & marker checkpoint",
+        group: "ideation",
+        color: "#EF4444",
+      },
+      {
+        id: "ideation-about",
+        name: "About",
+        iconName: "FaCircleInfo",
+        subtitle: "Contextual overview & about card",
+        group: "ideation",
+        color: "#38BDF8",
+      },
       {
         id: "ideation-question",
         name: "Question",
@@ -270,9 +365,49 @@ export const ICON_GALLERY_GROUPS: IIconGalleryGroup[] = [
     type: "logic",
     title: "Logic, Variables & Scaling Data",
     emoji: "🔢",
-    description: "Lookup keys, target values, cluster coordinators, encrypted records & payload boxes",
+    description: "Executable routines, lambda functions, approved gates, integrals & reasoning",
     color: "#8B5CF6",
     items: [
+      {
+        id: "logic-approved",
+        name: "Approved",
+        iconName: "FaCircleCheck",
+        subtitle: "Gatekeeper approval & sign-off",
+        group: "logic",
+        color: "#10B981",
+      },
+      {
+        id: "logic-function",
+        name: "Function",
+        iconName: "TbFunction",
+        subtitle: "Callable routine / lambda logic",
+        group: "logic",
+        color: "#6366F1",
+      },
+      {
+        id: "logic-code",
+        name: "Code",
+        iconName: "Code",
+        subtitle: "Source script & implementation",
+        group: "logic",
+        color: "#3B82F6",
+      },
+      {
+        id: "logic-logic",
+        name: "Logic",
+        iconName: "FaBrain",
+        subtitle: "Decision tree & conditional reasoning",
+        group: "logic",
+        color: "#8B5CF6",
+      },
+      {
+        id: "logic-integral",
+        name: "Integral",
+        iconName: "TbMathIntegral",
+        subtitle: "Mathematical integration / sum logic",
+        group: "logic",
+        color: "#EC4899",
+      },
       {
         id: "logic-key",
         name: "Key",
@@ -335,9 +470,33 @@ export const ICON_GALLERY_GROUPS: IIconGalleryGroup[] = [
     type: "metrics",
     title: "Metrics, Value & Tracking",
     emoji: "📊",
-    description: "Workspace billing, throughput rates, peak spikes, timeline trends & validation balances",
+    description: "Workspace billing, products, area charts, column charts & volume trends",
     color: "#3B82F6",
     items: [
+      {
+        id: "metrics-product",
+        name: "Product",
+        iconName: "FaBoxOpen",
+        subtitle: "Shippable SKU / merchandise",
+        group: "metrics",
+        color: "#EAB308",
+      },
+      {
+        id: "metrics-chart-area",
+        name: "Area Chart",
+        iconName: "FaChartArea",
+        subtitle: "Cumulative area distribution",
+        group: "metrics",
+        color: "#8B5CF6",
+      },
+      {
+        id: "metrics-chart-column",
+        name: "Column Chart",
+        iconName: "FaChartColumn",
+        subtitle: "Comparative vertical bars",
+        group: "metrics",
+        color: "#0EA5E9",
+      },
       {
         id: "metrics-price",
         name: "Price",
@@ -460,27 +619,30 @@ export const ICON_GALLERY_GROUPS: IIconGalleryGroup[] = [
         color: "#6B7280",
       },
       {
-        id: "media-bored",
-        name: "Bored",
+        id: "media-halted",
+        name: "Halted",
         iconName: "Frown",
-        subtitle: "Low engagement warning nodes",
+        subtitle: "Process interruption / exceptions",
         group: "media",
-        color: "#F97316",
+        color: "#EF4444",
       },
       {
-        id: "media-car",
-        name: "Car",
+        id: "media-dispatch",
+        name: "Dispatch",
         iconName: "Car",
-        subtitle: "Vehicular logistics or delivery trackers",
+        subtitle: "Logistics or vehicle dispatch tasks",
         group: "media",
-        color: "#0EA5E9",
+        color: "#10B981",
       },
     ],
   },
 ];
 
-// Map of string identifier to Lucide Icon component
-export const ICON_COMPONENT_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+// Curated icon component lookup dictionary
+export const ICON_COMPONENT_MAP: Record<
+  string,
+  React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+> = {
   // 1. Infra
   Database,
   Webhook,
@@ -493,6 +655,11 @@ export const ICON_COMPONENT_MAP: Record<string, React.ComponentType<{ className?
   UserCheck,
   DoorOpen,
   LockKeyhole,
+  FaHouse,
+  FaAddressBook,
+  FaLocationDot,
+  FaGear,
+
   // 2. Flow
   GitFork,
   MoveRight,
@@ -507,14 +674,25 @@ export const ICON_COMPONENT_MAP: Record<string, React.ComponentType<{ className?
   Filter,
   Bomb,
   ZapOff,
+
   // 3. Ideation
+  FaBullseye,
+  Crosshair,
+  FaFlag,
+  FaCircleInfo,
   HelpCircle,
   Lightbulb,
   MessageSquareText,
   Sparkles,
   Wand2,
   Flame,
+
   // 4. Logic
+  FaCircleCheck,
+  TbFunction,
+  Code,
+  FaBrain,
+  TbMathIntegral,
   Key,
   Braces,
   Hash,
@@ -527,7 +705,11 @@ export const ICON_COMPONENT_MAP: Record<string, React.ComponentType<{ className?
   ShieldCheck,
   Component,
   Box,
+
   // 5. Metrics
+  FaBoxOpen,
+  FaChartArea,
+  FaChartColumn,
   Coins,
   DollarSign,
   Percent,
@@ -542,6 +724,7 @@ export const ICON_COMPONENT_MAP: Record<string, React.ComponentType<{ className?
   Layers,
   Dices,
   Equal,
+
   // 6. Media
   Radio,
   Play,
@@ -550,14 +733,46 @@ export const ICON_COMPONENT_MAP: Record<string, React.ComponentType<{ className?
   LogOut,
   Frown,
   Car,
+
   // Default fallback
   Boxes,
 };
 
-export function getLucideIcon(iconName?: string): React.ComponentType<{ className?: string; style?: React.CSSProperties }> {
-  if (!iconName) return Boxes;
-  return ICON_COMPONENT_MAP[iconName] || Boxes;
+/**
+ * Universal dynamic resolver for both preset Lucide icons and any React-Icons (FA6, Tabler, Material, Lucide)
+ */
+export function resolveDynamicReactIcon(
+  iconName?: string
+): React.ComponentType<{ className?: string; style?: React.CSSProperties }> | null {
+  if (!iconName) return null;
+  if (ICON_COMPONENT_MAP[iconName]) return ICON_COMPONENT_MAP[iconName];
+
+  // Dynamic prefix lookup
+  if (iconName.startsWith("Fa") && (Fa6 as any)[iconName]) return (Fa6 as any)[iconName];
+  if (iconName.startsWith("Tb") && (Tb as any)[iconName]) return (Tb as any)[iconName];
+  if (iconName.startsWith("Md") && (Md as any)[iconName]) return (Md as any)[iconName];
+  if (iconName.startsWith("Lu") && (Lu as any)[iconName]) return (Lu as any)[iconName];
+
+  // General lookup across icon packs
+  const fallback =
+    (Fa6 as any)[iconName] ||
+    (Tb as any)[iconName] ||
+    (Md as any)[iconName] ||
+    (Lu as any)[iconName];
+
+  return fallback || null;
 }
+
+export function getWhiteboardIcon(
+  iconName?: string
+): React.ComponentType<{ className?: string; style?: React.CSSProperties }> {
+  if (!iconName) return Boxes;
+  const resolved = resolveDynamicReactIcon(iconName);
+  return resolved || Boxes;
+}
+
+// Backward-compatible alias
+export const getLucideIcon = getWhiteboardIcon;
 
 export function getAllIconGalleryItems(): IIconGalleryItem[] {
   return ICON_GALLERY_GROUPS.flatMap((g) => g.items);
@@ -585,4 +800,104 @@ export function filterIconGalleryItems(
   }
 
   return list;
+}
+
+export interface IDynamicReactIconItem {
+  id: string;
+  name: string;
+  iconName: string;
+  pack: string;
+  color: string;
+  subtitle: string;
+  group: IconGroupType;
+}
+
+/**
+ * Searches across thousands of built-in React Icons dynamically by keyword
+ */
+export function searchDynamicReactIcons(
+  query: string,
+  limit = 48
+): IDynamicReactIconItem[] {
+  const q = query.trim().toLowerCase();
+
+  // Curated showcase when search box is empty
+  if (!q) {
+    const popular: Array<{ name: string; iconName: string; pack: string; color: string }> = [
+      { name: "Flag Checkpoint", iconName: "FaFlag", pack: "FA6", color: "#EF4444" },
+      { name: "Area Chart", iconName: "FaChartArea", pack: "FA6", color: "#8B5CF6" },
+      { name: "Column Chart", iconName: "FaChartColumn", pack: "FA6", color: "#0EA5E9" },
+      { name: "Gear Config", iconName: "FaGear", pack: "FA6", color: "#94A3B8" },
+      { name: "Goal Target", iconName: "FaBullseye", pack: "FA6", color: "#F43F5E" },
+      { name: "Aim Crosshair", iconName: "Crosshair", pack: "Lucide", color: "#F97316" },
+      { name: "Approved Sign-off", iconName: "FaCircleCheck", pack: "FA6", color: "#10B981" },
+      { name: "Function Lambda", iconName: "TbFunction", pack: "Tabler", color: "#6366F1" },
+      { name: "Code Script", iconName: "Code", pack: "Lucide", color: "#3B82F6" },
+      { name: "Logic Brain", iconName: "FaBrain", pack: "FA6", color: "#A855F7" },
+      { name: "Math Integral", iconName: "TbMathIntegral", pack: "Tabler", color: "#EC4899" },
+      { name: "Home Dashboard", iconName: "FaHouse", pack: "FA6", color: "#06B6D4" },
+      { name: "Contact Book", iconName: "FaAddressBook", pack: "FA6", color: "#14B8A6" },
+      { name: "Location Pin", iconName: "FaLocationDot", pack: "FA6", color: "#F59E0B" },
+      { name: "About Info", iconName: "FaCircleInfo", pack: "FA6", color: "#38BDF8" },
+      { name: "Product Box", iconName: "FaBoxOpen", pack: "FA6", color: "#EAB308" },
+      { name: "Rocket Launch", iconName: "MdRocketLaunch", pack: "Material", color: "#FB923C" },
+      { name: "Cloud Compute", iconName: "FaCloud", pack: "FA6", color: "#38BDF8" },
+      { name: "Shield Security", iconName: "FaShieldHalved", pack: "FA6", color: "#10B981" },
+      { name: "Lightning Bolt", iconName: "FaBolt", pack: "FA6", color: "#FBBF24" },
+      { name: "Robot AI", iconName: "FaRobot", pack: "FA6", color: "#A78BFA" },
+      { name: "Database Store", iconName: "FaDatabase", pack: "FA6", color: "#0EA5E9" },
+      { name: "Wifi Signal", iconName: "FaWifi", pack: "FA6", color: "#10B981" },
+      { name: "Credit Card", iconName: "FaCreditCard", pack: "FA6", color: "#6366F1" },
+    ];
+
+    return popular.map((item) => ({
+      id: `dyn-${item.iconName.toLowerCase()}`,
+      name: item.name,
+      iconName: item.iconName,
+      pack: item.pack,
+      color: item.color,
+      subtitle: `${item.pack} • ${item.iconName}`,
+      group: "react-icons",
+    }));
+  }
+
+  const results: IDynamicReactIconItem[] = [];
+  const seen = new Set<string>();
+
+  const scan = (packObj: Record<string, any>, packName: string, color: string) => {
+    for (const key of Object.keys(packObj)) {
+      if (key === "default" || seen.has(key)) continue;
+      if (key.toLowerCase().includes(q)) {
+        seen.add(key);
+        let displayName = key;
+        if (key.startsWith("Fa6")) displayName = key.slice(3);
+        else if (key.startsWith("Fa") || key.startsWith("Tb") || key.startsWith("Md") || key.startsWith("Lu")) {
+          displayName = key.slice(2);
+        }
+        displayName = displayName.replace(/([A-Z])/g, " $1").trim() || key;
+
+        results.push({
+          id: `dyn-${key.toLowerCase()}`,
+          name: displayName,
+          iconName: key,
+          pack: packName,
+          color,
+          subtitle: `${packName} • ${key}`,
+          group: "react-icons",
+        });
+        if (results.length >= limit) return true;
+      }
+    }
+    return false;
+  };
+
+  if (!scan(Fa6, "FA6", "#EF4444")) {
+    if (!scan(Tb, "Tabler", "#6366F1")) {
+      if (!scan(Md, "Material", "#0EA5E9")) {
+        scan(Lu, "Lucide", "#10B981");
+      }
+    }
+  }
+
+  return results;
 }
