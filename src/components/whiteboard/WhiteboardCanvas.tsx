@@ -554,6 +554,15 @@ export default function WhiteboardCanvas({
   const [activeTool, setActiveTool] = useState<
     "select" | "hand" | "task" | "draw" | "shape" | "arrow" | "sticky" | "text" | "frame" | "line" | "arrow-line"
   >("select");
+
+  // Real-time synchronization refs (always up-to-date across all async & persistent event listeners)
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  const panRef = useRef(pan);
+  panRef.current = pan;
+  const activeToolRef = useRef(activeTool);
+  activeToolRef.current = activeTool;
+  const isTouchActiveRef = useRef(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -629,6 +638,7 @@ export default function WhiteboardCanvas({
   // Popovers & Modals
   const [showShapePalette, setShowShapePalette] = useState(false);
   const [showStylePalette, setShowStylePalette] = useState(false);
+  const [showBottomStylePalette, setShowBottomStylePalette] = useState(false);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const stylePaletteRef = useRef<HTMLDivElement>(null);
   const shapePaletteRef = useRef<HTMLDivElement>(null);
@@ -1573,6 +1583,7 @@ export default function WhiteboardCanvas({
         const inPaletteTrigger = targetEl.closest?.("[data-palette-trigger='true']");
         if (!inFormatBarPalette && !inPaletteTrigger) {
           setShowStylePalette(false);
+          setShowBottomStylePalette(false);
         }
       }
       if (shapePaletteRef.current && !shapePaletteRef.current.contains(target)) {
@@ -1606,6 +1617,7 @@ export default function WhiteboardCanvas({
     if (
       showBgColorPicker ||
       showStylePalette ||
+      showBottomStylePalette ||
       showShapePalette ||
       showTemplateSelector ||
       showShapeSwitcher ||
@@ -1622,12 +1634,24 @@ export default function WhiteboardCanvas({
   }, [
     showBgColorPicker,
     showStylePalette,
+    showBottomStylePalette,
     showShapePalette,
     showTemplateSelector,
     showShapeSwitcher,
     showIconGallery,
-    showTableDialog,
   ]);
+
+  // Anchor document window scroll to 0,0 on mobile to prevent virtual keyboard viewport dislocation and black flash
+  useEffect(() => {
+    const handleWindowScroll = () => {
+      if (window.scrollY > 0 || document.documentElement.scrollTop > 0) {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+      }
+    };
+    window.addEventListener("scroll", handleWindowScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleWindowScroll);
+  }, []);
 
   // Push history state with deep clone & boundary checks
   const pushHistory = useCallback(
@@ -1708,12 +1732,14 @@ export default function WhiteboardCanvas({
     }
   }, [triggerAutoSave]);
 
-  // Convert Screen Coordinates to Canvas Coordinates
+  // Convert Screen Coordinates to Canvas Coordinates (Always using real-time panRef and zoomRef)
   const getCanvasCoords = (clientX: number, clientY: number) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = (clientX - rect.left - pan.x) / zoom;
-    const y = (clientY - rect.top - pan.y) / zoom;
+    const curPan = panRef.current || pan;
+    const curZoom = zoomRef.current || zoom;
+    const x = (clientX - rect.left - curPan.x) / curZoom;
+    const y = (clientY - rect.top - curPan.y) / curZoom;
     return { x: Math.round(x), y: Math.round(y) };
   };
 
@@ -2471,8 +2497,11 @@ export default function WhiteboardCanvas({
         y: coords.y - 60,
         width: shapeType === "circle" ? 140 : 160,
         height: shapeType === "circle" ? 140 : 120,
-        title: shapeType.charAt(0).toUpperCase() + shapeType.slice(1),
-        body: "",
+        title:
+          initialTitle !== undefined
+            ? initialTitle
+            : shapeType.charAt(0).toUpperCase() + shapeType.slice(1),
+        body: initialBody || "",
         color: customColor || activeColor,
         fillType: activeFillType,
         zIndex: nodes.length + 1,
@@ -3120,10 +3149,14 @@ export default function WhiteboardCanvas({
 
   // Canvas Mouse Down (Panning, Freehand Drawing, Deselecting, or Starting Rectangular Marquee Selection)
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    if (isTouchActiveRef.current) return;
     setDoubleClickMenu(null);
     setEdgeSettingsPopover(null);
     setShowStylePalette(false);
+    setShowBottomStylePalette(false);
     setShowShapePalette(false);
+    setShowTableDialog(false);
+    setShowIconGallery(false);
     setShowTemplateSelector(false);
     setShowBgColorPicker(false);
     setShowShapeSwitcher(false);
@@ -3189,6 +3222,7 @@ export default function WhiteboardCanvas({
 
   // Global Mouse Move (Dragging Nodes / Group, Rectangular Selection, Pen Drawing, or Panning)
   const handleMouseMove = (e: React.MouseEvent) => {
+    if (isTouchActiveRef.current) return;
     if (isPanning) {
       setPan({
         x: e.clientX - startPanMouse.x,
@@ -4001,6 +4035,10 @@ export default function WhiteboardCanvas({
         setDoubleClickMenu(null);
         setShowShapePalette(false);
         setShowStylePalette(false);
+        setShowBottomStylePalette(false);
+        setShowTableDialog(false);
+        setShowIconGallery(false);
+        setShowTemplateSelector(false);
         setShowBgColorPicker(false);
         setShowLinkMenu(false);
         if (activeTool === "arrow" || activeTool === "draw") {
@@ -4053,25 +4091,13 @@ export default function WhiteboardCanvas({
     showTemporaryToast,
   ]);
 
-  // Synchronize zoom, pan, activeTool, and handler refs for wheel, drag, and touch listeners
-  const zoomRef = useRef(zoom);
-  const panRef = useRef(pan);
-  const activeToolRef = useRef(activeTool);
+  // Synchronize handler refs for wheel, drag, and touch listeners
   const handleMouseMoveRef = useRef(handleMouseMove);
   handleMouseMoveRef.current = handleMouseMove;
   const handleMouseUpRef = useRef(handleMouseUp);
   handleMouseUpRef.current = handleMouseUp;
   const getCanvasCoordsRef = useRef(getCanvasCoords);
   getCanvasCoordsRef.current = getCanvasCoords;
-  useEffect(() => {
-    zoomRef.current = zoom;
-  }, [zoom]);
-  useEffect(() => {
-    panRef.current = pan;
-  }, [pan]);
-  useEffect(() => {
-    activeToolRef.current = activeTool;
-  }, [activeTool]);
 
   // Mouse Wheel Navigation:
   // - scroll: Y axis scroll
@@ -4231,6 +4257,7 @@ export default function WhiteboardCanvas({
       }
 
       if (e.touches.length === 1) {
+        isTouchActiveRef.current = true;
         const t = e.touches[0];
         // 1. Pen tool drawing on mobile touch
         if (activeToolRef.current === "draw") {
@@ -4294,7 +4321,11 @@ export default function WhiteboardCanvas({
         e.preventDefault();
         const t = e.touches[0];
         const coords = getCanvasCoords(t.clientX, t.clientY);
-        setCurrentPenPoints((prev) => [...prev, coords]);
+        setCurrentPenPoints((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.x === coords.x && last.y === coords.y) return prev;
+          return [...prev, coords];
+        });
         return;
       }
 
@@ -4317,6 +4348,9 @@ export default function WhiteboardCanvas({
       }
       if (e.touches.length === 0) {
         isSingleTouchPanning = false;
+        setTimeout(() => {
+          isTouchActiveRef.current = false;
+        }, 150);
         if (activeToolRef.current === "draw") {
           handleMouseUpRef.current();
         }
@@ -4336,7 +4370,7 @@ export default function WhiteboardCanvas({
     };
   }, []);
 
-  // Global touch and mouse drag tracking for dragging nodes, resize handles, pen drawings, or line tips
+  // Global touch and mouse drag tracking for dragging nodes, resize handles, or line tips
   useEffect(() => {
     const isDraggingSomething = Boolean(
       draggingNodeId ||
@@ -4345,7 +4379,6 @@ export default function WhiteboardCanvas({
       resizing ||
       resizingDivider ||
       draggingEdgeControlPoint ||
-      isDrawingPen ||
       interactiveLineDrawing
     );
     if (!isDraggingSomething) return;
@@ -4387,7 +4420,6 @@ export default function WhiteboardCanvas({
     resizing,
     resizingDivider,
     draggingEdgeControlPoint,
-    isDrawingPen,
     interactiveLineDrawing,
   ]);
 
@@ -4397,6 +4429,7 @@ export default function WhiteboardCanvas({
       // 1. If Pen Draw Tool is active, start drawing rather than dragging node
       if (activeToolRef.current === "draw") {
         if (e.touches.length === 1) {
+          isTouchActiveRef.current = true;
           e.preventDefault();
           const t = e.touches[0];
           const coords = getCanvasCoords(t.clientX, t.clientY);
@@ -5537,8 +5570,8 @@ export default function WhiteboardCanvas({
       onDrop={handleCanvasDrop}
       className={`${isFullscreen
         ? "fixed inset-0 z-[999999] w-screen h-screen m-0 p-0"
-        : "relative w-full h-[calc(100vh-64px)]"
-        } overflow-hidden bg-[#0D0E11] text-[#E1DFDD] select-none`}
+        : "relative w-full h-[calc(100vh-64px)] sm:h-[calc(100dvh-64px)]"
+        } overflow-hidden overscroll-none bg-[#0D0E11] text-[#E1DFDD] select-none`}
     >
       {/* Visual Drop Guide Pill when dragging toolbar items */}
       {isDraggingItemOver && (
@@ -10308,73 +10341,14 @@ export default function WhiteboardCanvas({
         </div>
       )}
 
-      <div
-        className={`absolute bottom-5 left-1/2 -translate-x-1/2 z-40 bg-[#16171E]/95 backdrop-blur-md border border-[#262832] rounded-xl shadow-2xl px-2 sm:px-3 py-1.5 flex items-center gap-1 sm:gap-1.5 max-w-[calc(100vw-24px)] md:max-w-[calc(100vw-32px)] xl:max-w-none touch-pan-x scrollbar-none ${showShapePalette ||
-          showTableDialog ||
-          showIconGallery ||
-          showTemplateSelector ||
-          showStylePalette
-          ? "overflow-visible"
-          : "overflow-x-auto"
-          }`}
-      >
-        {/* V - Select Tool */}
-        <button
-          onClick={() => setActiveTool("select")}
-          className={`p-2 rounded-lg transition-colors ${activeTool === "select"
-            ? "bg-blue-600 text-white shadow-sm"
-            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-            }`}
-          title="Select (V)"
+      {/* 5d. FLOATING SHAPE PALETTE POPOVER */}
+      {showShapePalette && (
+        <div
+          ref={shapePaletteRef}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          className="absolute bottom-18 sm:bottom-20 left-1/2 -translate-x-1/2 mb-1 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-3 grid grid-cols-3 gap-2 w-56 max-w-[calc(100vw-32px)] z-50 animate-in fade-in-50"
         >
-          <MousePointer className="w-4 h-4" />
-        </button>
-
-        {/* H - Hand Tool */}
-        <button
-          onClick={() => setActiveTool("hand")}
-          className={`p-2 rounded-lg transition-colors ${activeTool === "hand"
-            ? "bg-blue-600 text-white shadow-sm"
-            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-            }`}
-          title="Pan Hand (H)"
-        >
-          <Hand className="w-4 h-4" />
-        </button>
-
-        {/* Task Card Node Tool */}
-        <button
-          draggable={true}
-          onDragStart={(e) =>
-            handleItemDragStart(e, { category: "node", type: "task" })
-          }
-          onClick={() => {
-            setActiveTool("task");
-            handleAddNode("task");
-          }}
-          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "task"
-            ? "bg-blue-600 text-white shadow-sm"
-            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-            }`}
-          title="Add Org Task Card (Click or Hold & Drag onto canvas)"
-        >
-          <CheckSquare className="w-4 h-4" />
-        </button>
-
-        {/* D - Pen / Draw Tool */}
-        <button
-          onClick={() => setActiveTool(activeTool === "draw" ? "select" : "draw")}
-          className={`p-2 rounded-lg transition-colors ${activeTool === "draw"
-            ? "bg-pink-600 text-white shadow-sm ring-1 ring-pink-400"
-            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-            }`}
-          title="Pen Draw Tool (P or D)"
-        >
-          <PenTool className="w-4 h-4" />
-        </button>
-
-        {/* R - Shapes Tool with Palette Popover (Matching Screenshot 4) */}
-        <div className="relative" ref={shapePaletteRef}>
           <button
             draggable={true}
             onDragStart={(e) =>
@@ -10384,598 +10358,339 @@ export default function WhiteboardCanvas({
                 shapeType: "rectangle",
               })
             }
-            onClick={() => setShowShapePalette(!showShapePalette)}
-            className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${showShapePalette || activeTool === "shape"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-              }`}
-            title="Shapes (Click or Hold & Drag onto canvas)"
+            onClick={() => handleAddNode("shape", "rectangle")}
+            className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+            title="Rectangle Box (Click or Hold & Drag onto canvas)"
           >
             <Square className="w-4 h-4" />
+            <span className="text-[9px]">Box</span>
           </button>
-
-          {/* Screenshot 4: Shape Grid Palette Popover */}
-          {showShapePalette && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-3 grid grid-cols-3 gap-2 w-56 max-w-[calc(100vw-32px)] z-50 animate-in fade-in-50">
-              <button
-                draggable={true}
-                onDragStart={(e) =>
-                  handleItemDragStart(e, {
-                    category: "node",
-                    type: "shape",
-                    shapeType: "rectangle",
-                  })
-                }
-                onClick={() => handleAddNode("shape", "rectangle")}
-                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
-                title="Rectangle Box (Click or Hold & Drag onto canvas)"
-              >
-                <Square className="w-4 h-4" />
-                <span className="text-[9px]">Box</span>
-              </button>
-              <button
-                draggable={true}
-                onDragStart={(e) =>
-                  handleItemDragStart(e, {
-                    category: "node",
-                    type: "shape",
-                    shapeType: "rounded",
-                  })
-                }
-                onClick={() => handleAddNode("shape", "rounded")}
-                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
-                title="Rounded Box (Click or Hold & Drag onto canvas)"
-              >
-                <Square className="w-4 h-4 rounded-md" />
-                <span className="text-[9px]">Rounded</span>
-              </button>
-              <button
-                draggable={true}
-                onDragStart={(e) =>
-                  handleItemDragStart(e, {
-                    category: "node",
-                    type: "shape",
-                    shapeType: "circle",
-                  })
-                }
-                onClick={() => handleAddNode("shape", "circle")}
-                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
-                title="Circle (Click or Hold & Drag onto canvas)"
-              >
-                <Circle className="w-4 h-4" />
-                <span className="text-[9px]">Circle</span>
-              </button>
-              <button
-                draggable={true}
-                onDragStart={(e) =>
-                  handleItemDragStart(e, {
-                    category: "node",
-                    type: "shape",
-                    shapeType: "diamond",
-                  })
-                }
-                onClick={() => handleAddNode("shape", "diamond")}
-                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
-                title="Diamond (Click or Hold & Drag onto canvas)"
-              >
-                <Diamond className="w-4 h-4" />
-                <span className="text-[9px]">Diamond</span>
-              </button>
-              <button
-                draggable={true}
-                onDragStart={(e) =>
-                  handleItemDragStart(e, {
-                    category: "node",
-                    type: "shape",
-                    shapeType: "triangle",
-                  })
-                }
-                onClick={() => handleAddNode("shape", "triangle")}
-                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
-                title="Triangle (Click or Hold & Drag onto canvas)"
-              >
-                <Triangle className="w-4 h-4" />
-                <span className="text-[9px]">Triangle</span>
-              </button>
-              <button
-                draggable={true}
-                onDragStart={(e) =>
-                  handleItemDragStart(e, {
-                    category: "node",
-                    type: "shape",
-                    shapeType: "hexagon",
-                  })
-                }
-                onClick={() => handleAddNode("shape", "hexagon")}
-                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
-                title="Hexagon (Click or Hold & Drag onto canvas)"
-              >
-                <Hexagon className="w-4 h-4" />
-                <span className="text-[9px]">Hexagon</span>
-              </button>
-              <button
-                draggable={true}
-                onDragStart={(e) =>
-                  handleItemDragStart(e, {
-                    category: "node",
-                    type: "line",
-                    shapeType: "line",
-                  })
-                }
-                onClick={() => handleAddNode("line", "line")}
-                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
-                title="Straight Line (Click or Hold & Drag onto canvas)"
-              >
-                <Minus className="w-4 h-4 text-blue-400" />
-                <span className="text-[9px]">Line</span>
-              </button>
-              <button
-                draggable={true}
-                onDragStart={(e) =>
-                  handleItemDragStart(e, {
-                    category: "node",
-                    type: "line",
-                    shapeType: "arrow",
-                  })
-                }
-                onClick={() => handleAddNode("line", "arrow")}
-                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
-                title="Independent Arrow (Click or Hold & Drag onto canvas)"
-              >
-                <ArrowUpRight className="w-4 h-4 text-blue-400" />
-                <span className="text-[9px]">Arrow</span>
-              </button>
-              <button
-                draggable={true}
-                onDragStart={(e) =>
-                  handleItemDragStart(e, {
-                    category: "node",
-                    type: "shape",
-                    shapeType: "star",
-                  })
-                }
-                onClick={() => handleAddNode("shape", "star")}
-                className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
-                title="Star (Click or Hold & Drag onto canvas)"
-              >
-                <Star className="w-4 h-4" />
-                <span className="text-[9px]">Star</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* L - Straight Line Tool */}
-        <button
-          draggable={true}
-          onDragStart={(e) =>
-            handleItemDragStart(e, {
-              category: "node",
-              type: "line",
-              shapeType: "line",
-            })
-          }
-          onClick={() =>
-            setActiveTool(activeTool === "line" ? "select" : "line")
-          }
-          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "line"
-            ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-400"
-            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-            }`}
-          title="Straight Line (L) - Click to draw or drag onto canvas"
-        >
-          <Minus className="w-4 h-4" />
-        </button>
-
-        {/* Independent Arrow Tool */}
-        <button
-          draggable={true}
-          onDragStart={(e) =>
-            handleItemDragStart(e, {
-              category: "node",
-              type: "line",
-              shapeType: "arrow",
-            })
-          }
-          onClick={() =>
-            setActiveTool(activeTool === "arrow-line" ? "select" : "arrow-line")
-          }
-          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "arrow-line"
-            ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-400"
-            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-            }`}
-          title="Independent Arrow - Click to draw or drag onto canvas"
-        >
-          <ArrowUpRight className="w-4 h-4" />
-        </button>
-
-        {/* A - Arrow / Connector Tool */}
-        <button
-          onClick={() => {
-            if (activeTool === "arrow") {
-              setActiveTool("select");
-              setConnectingFromNodeId(null);
-              setConnectingMousePos(null);
-            } else {
-              setActiveTool("arrow");
-            }
-          }}
-          className={`p-2 rounded-lg transition-colors ${activeTool === "arrow"
-            ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-400"
-            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-            }`}
-          title="Arrow Connector <- -> <-> (A)"
-        >
-          <MoveRight className="w-4 h-4" />
-        </button>
-
-        {/* Sticky Note Tool (Text File Structuring) */}
-        <button
-          draggable={true}
-          onDragStart={(e) =>
-            handleItemDragStart(e, {
-              category: "node",
-              type: "sticky",
-              noteFormat: "text",
-              isChecklist: false,
-            })
-          }
-          onClick={() => {
-            setActiveTool("sticky");
-            handleAddNode("sticky", "rectangle", "#EC4899", false, undefined, "text");
-          }}
-          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "sticky"
-            ? "bg-pink-600/30 text-pink-300 shadow-sm"
-            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-            }`}
-          title="Sticky Note - Text File Structuring (Click or Hold & Drag)"
-        >
-          <StickyNote className="w-4 h-4 text-pink-400" />
-        </button>
-
-        {/* JSON Note Tool */}
-        <button
-          draggable={true}
-          onDragStart={(e) =>
-            handleItemDragStart(e, {
-              category: "node",
-              type: "sticky",
-              color: "#F59E0B",
-              isChecklist: false,
-              noteFormat: "json",
-            })
-          }
-          onClick={() => {
-            setActiveTool("sticky");
-            handleAddNode("sticky", "rectangle", "#F59E0B", false, undefined, "json");
-          }}
-          className="p-2 rounded-lg text-amber-400 hover:text-amber-300 hover:bg-[#22242D] transition-colors cursor-grab active:cursor-grabbing"
-          title="JSON Note - Syntax Highlighted & Auto-Format Structure (Click or Hold & Drag)"
-        >
-          <Braces className="w-4 h-4" />
-        </button>
-
-        {/* Markdown Note Tool */}
-        <button
-          draggable={true}
-          onDragStart={(e) =>
-            handleItemDragStart(e, {
-              category: "node",
-              type: "sticky",
-              color: "#6366F1",
-              isChecklist: false,
-              noteFormat: "markdown",
-            })
-          }
-          onClick={() => {
-            setActiveTool("sticky");
-            handleAddNode("sticky", "rectangle", "#6366F1", false, undefined, "markdown");
-          }}
-          className="p-2 rounded-lg text-indigo-400 hover:text-indigo-300 hover:bg-[#22242D] transition-colors cursor-grab active:cursor-grabbing"
-          title="Markdown Note - Rendered Markdown & Checklists (Click or Hold & Drag)"
-        >
-          <FileCode className="w-4 h-4" />
-        </button>
-
-        {/* Direct Add .md / .json File Tool */}
-        <button
-          type="button"
-          onClick={() => directFileInputRef.current?.click()}
-          className="p-2 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-[#22242D] transition-colors cursor-pointer"
-          title="Direct Add .md / .json / .txt File from PC"
-        >
-          <FileUp className="w-4 h-4" />
-        </button>
-
-        {/* Shift+N - Todo / Checklist Sticky Tool */}
-        <button
-          draggable={true}
-          onDragStart={(e) =>
-            handleItemDragStart(e, {
-              category: "node",
-              type: "sticky",
-              isChecklist: true,
-              color: "#38BDF8",
-              noteFormat: "checklist",
-            })
-          }
-          onClick={() => {
-            setActiveTool("sticky");
-            handleAddNode("sticky", "rectangle", "#38BDF8", true, undefined, "checklist");
-          }}
-          className="p-2 rounded-lg text-cyan-400 hover:text-cyan-300 hover:bg-[#22242D] transition-colors cursor-grab active:cursor-grabbing"
-          title="Todo / Checklist Note with Checkboxes (Click or Hold & Drag onto canvas)"
-        >
-          <ListTodo className="w-4 h-4" />
-        </button>
-
-        {/* T - Text Tool */}
-        <button
-          draggable={true}
-          onDragStart={(e) =>
-            handleItemDragStart(e, { category: "node", type: "text" })
-          }
-          onClick={() => {
-            setActiveTool("text");
-            handleAddNode("text");
-          }}
-          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "text"
-            ? "bg-blue-600 text-white shadow-sm"
-            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-            }`}
-          title="Text (Click or Hold & Drag onto canvas)"
-        >
-          <Type className="w-4 h-4" />
-        </button>
-
-        {/* F - Frame Tool */}
-        <button
-          draggable={true}
-          onDragStart={(e) =>
-            handleItemDragStart(e, {
-              category: "node",
-              type: "shape",
-              shapeType: "rectangle",
-              color: "#60A5FA",
-            })
-          }
-          onClick={() => handleAddNode("shape", "rectangle", "#60A5FA")}
-          className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#22242D] transition-colors cursor-grab active:cursor-grabbing"
-          title="Frame (Click or Hold & Drag onto canvas)"
-        >
-          <Maximize className="w-4 h-4" />
-        </button>
-
-        {/* Table Grid Tool (R x C arrangement of boxes) */}
-        <div className="relative" ref={tableDialogRef}>
           <button
-            type="button"
-            onClick={() => setShowTableDialog(!showTableDialog)}
-            className={`p-2 rounded-lg transition-colors cursor-pointer relative ${showTableDialog
-              ? "bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400"
-              : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-              }`}
-            title="Create Table Grid (Rows × Cols of boxes - Click or Drag onto canvas)"
+            draggable={true}
+            onDragStart={(e) =>
+              handleItemDragStart(e, {
+                category: "node",
+                type: "shape",
+                shapeType: "rounded",
+              })
+            }
+            onClick={() => handleAddNode("shape", "rounded")}
+            className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+            title="Rounded Box (Click or Hold & Drag onto canvas)"
           >
-            <Table className="w-4 h-4 text-emerald-400" />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#121316]" />
+            <Square className="w-4 h-4 rounded-md" />
+            <span className="text-[9px]">Rounded</span>
           </button>
+          <button
+            draggable={true}
+            onDragStart={(e) =>
+              handleItemDragStart(e, {
+                category: "node",
+                type: "shape",
+                shapeType: "circle",
+              })
+            }
+            onClick={() => handleAddNode("shape", "circle")}
+            className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+            title="Circle (Click or Hold & Drag onto canvas)"
+          >
+            <Circle className="w-4 h-4" />
+            <span className="text-[9px]">Circle</span>
+          </button>
+          <button
+            draggable={true}
+            onDragStart={(e) =>
+              handleItemDragStart(e, {
+                category: "node",
+                type: "shape",
+                shapeType: "diamond",
+              })
+            }
+            onClick={() => handleAddNode("shape", "diamond")}
+            className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+            title="Diamond (Click or Hold & Drag onto canvas)"
+          >
+            <Diamond className="w-4 h-4" />
+            <span className="text-[9px]">Diamond</span>
+          </button>
+          <button
+            draggable={true}
+            onDragStart={(e) =>
+              handleItemDragStart(e, {
+                category: "node",
+                type: "shape",
+                shapeType: "triangle",
+              })
+            }
+            onClick={() => handleAddNode("shape", "triangle")}
+            className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+            title="Triangle (Click or Hold & Drag onto canvas)"
+          >
+            <Triangle className="w-4 h-4" />
+            <span className="text-[9px]">Triangle</span>
+          </button>
+          <button
+            draggable={true}
+            onDragStart={(e) =>
+              handleItemDragStart(e, {
+                category: "node",
+                type: "shape",
+                shapeType: "hexagon",
+              })
+            }
+            onClick={() => handleAddNode("shape", "hexagon")}
+            className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+            title="Hexagon (Click or Hold & Drag onto canvas)"
+          >
+            <Hexagon className="w-4 h-4" />
+            <span className="text-[9px]">Hexagon</span>
+          </button>
+          <button
+            draggable={true}
+            onDragStart={(e) =>
+              handleItemDragStart(e, {
+                category: "node",
+                type: "line",
+                shapeType: "line",
+              })
+            }
+            onClick={() => handleAddNode("line", "line")}
+            className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+            title="Straight Line (Click or Hold & Drag onto canvas)"
+          >
+            <Minus className="w-4 h-4 text-blue-400" />
+            <span className="text-[9px]">Line</span>
+          </button>
+          <button
+            draggable={true}
+            onDragStart={(e) =>
+              handleItemDragStart(e, {
+                category: "node",
+                type: "line",
+                shapeType: "arrow",
+              })
+            }
+            onClick={() => handleAddNode("line", "arrow")}
+            className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+            title="Independent Arrow (Click or Hold & Drag onto canvas)"
+          >
+            <ArrowUpRight className="w-4 h-4 text-blue-400" />
+            <span className="text-[9px]">Arrow</span>
+          </button>
+          <button
+            draggable={true}
+            onDragStart={(e) =>
+              handleItemDragStart(e, {
+                category: "node",
+                type: "shape",
+                shapeType: "star",
+              })
+            }
+            onClick={() => handleAddNode("shape", "star")}
+            className="p-2 hover:bg-[#242630] rounded flex flex-col items-center justify-center text-gray-300 hover:text-white gap-1 cursor-grab active:cursor-grabbing"
+            title="Star (Click or Hold & Drag onto canvas)"
+          >
+            <Star className="w-4 h-4" />
+            <span className="text-[9px]">Star</span>
+          </button>
+        </div>
+      )}
 
-          {showTableDialog && (
-            <div
-              onMouseDown={(e) => e.stopPropagation()}
-              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#151720] border border-[#2D3039] rounded-2xl shadow-2xl p-3.5 w-72 max-w-[calc(100vw-32px)] flex flex-col gap-3 z-50 animate-in fade-in-50 backdrop-blur-xl"
+      {/* 5e. FLOATING TABLE DIALOG POPOVER */}
+      {showTableDialog && (
+        <div
+          ref={tableDialogRef}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          className="absolute bottom-18 sm:bottom-20 left-1/2 -translate-x-1/2 mb-1 bg-[#151720] border border-[#2D3039] rounded-2xl shadow-2xl p-3.5 w-72 max-w-[calc(100vw-32px)] flex flex-col gap-3 z-50 animate-in fade-in-50 backdrop-blur-xl"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between pb-1.5 border-b border-[#252834]">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <Table className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-white">Create Table Grid</div>
+                <div className="text-[10px] text-gray-400">R × C arrangement of boxes</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowTableDialog(false)}
+              className="p-1 rounded-lg hover:bg-[#232530] text-gray-400 hover:text-white transition-colors cursor-pointer"
             >
-              {/* Header */}
-              <div className="flex items-center justify-between pb-1.5 border-b border-[#252834]">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                    <Table className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-white">Create Table Grid</div>
-                    <div className="text-[10px] text-gray-400">R × C arrangement of boxes</div>
-                  </div>
-                </div>
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Visual 6x6 Grid Hover Picker */}
+          <div className="flex flex-col items-center gap-1.5 bg-[#0D0E13] p-2.5 rounded-xl border border-[#262935]">
+            <div className="text-[11px] font-mono font-semibold text-emerald-400">
+              {hoveredGridCell
+                ? `${hoveredGridCell.r} Rows × ${hoveredGridCell.c} Columns`
+                : `${tableRows} Rows × ${tableCols} Columns (${tableRows * tableCols} Boxes)`}
+            </div>
+            <div
+              className="grid grid-cols-6 gap-1 p-1"
+              onMouseLeave={() => setHoveredGridCell(null)}
+            >
+              {Array.from({ length: 6 }).map((_, rIdx) =>
+                Array.from({ length: 6 }).map((_, cIdx) => {
+                  const r = rIdx + 1;
+                  const c = cIdx + 1;
+                  const isHovered =
+                    hoveredGridCell && r <= hoveredGridCell.r && c <= hoveredGridCell.c;
+                  const isSelected =
+                    !hoveredGridCell && r <= tableRows && c <= tableCols;
+                  const active = isHovered || isSelected;
+
+                  return (
+                    <div
+                      key={`${r}-${c}`}
+                      onMouseEnter={() => setHoveredGridCell({ r, c })}
+                      onClick={() => {
+                        setTableRows(r);
+                        setTableCols(c);
+                        handleCreateTableGrid(r, c, tableGap);
+                      }}
+                      className={`w-6 h-5 rounded transition-all cursor-pointer border ${active
+                        ? "bg-emerald-500/30 border-emerald-400 scale-105"
+                        : "bg-[#1E202B] border-[#2E3140] hover:border-gray-500"
+                        }`}
+                      title={`${r} × ${c} Table`}
+                    />
+                  );
+                })
+              )}
+            </div>
+            <div className="text-[9px] text-gray-500">
+              Hover to select, click to create instantly
+            </div>
+          </div>
+
+          {/* Row & Col Inputs */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                Rows
+              </label>
+              <div className="flex items-center bg-[#0D0E13] border border-[#2B2E3C] rounded-lg overflow-hidden">
                 <button
                   type="button"
-                  onClick={() => setShowTableDialog(false)}
-                  className="p-1 rounded-lg hover:bg-[#232530] text-gray-400 hover:text-white transition-colors cursor-pointer"
+                  onClick={() => setTableRows(Math.max(1, tableRows - 1))}
+                  className="px-2 py-1 text-gray-400 hover:text-white hover:bg-[#20222D] text-xs font-bold"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  -
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={tableRows}
+                  onChange={(e) =>
+                    setTableRows(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))
+                  }
+                  className="w-full text-center bg-transparent text-white text-xs py-1 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setTableRows(Math.min(20, tableRows + 1))}
+                  className="px-2 py-1 text-gray-400 hover:text-white hover:bg-[#20222D] text-xs font-bold"
+                >
+                  +
                 </button>
               </div>
-
-              {/* Visual 6x6 Grid Hover Picker */}
-              <div className="flex flex-col items-center gap-1.5 bg-[#0D0E13] p-2.5 rounded-xl border border-[#262935]">
-                <div className="text-[11px] font-mono font-semibold text-emerald-400">
-                  {hoveredGridCell
-                    ? `${hoveredGridCell.r} Rows × ${hoveredGridCell.c} Columns`
-                    : `${tableRows} Rows × ${tableCols} Columns (${tableRows * tableCols} Boxes)`}
-                </div>
-                <div
-                  className="grid grid-cols-6 gap-1 p-1"
-                  onMouseLeave={() => setHoveredGridCell(null)}
-                >
-                  {Array.from({ length: 6 }).map((_, rIdx) =>
-                    Array.from({ length: 6 }).map((_, cIdx) => {
-                      const r = rIdx + 1;
-                      const c = cIdx + 1;
-                      const isHovered =
-                        hoveredGridCell && r <= hoveredGridCell.r && c <= hoveredGridCell.c;
-                      const isSelected =
-                        !hoveredGridCell && r <= tableRows && c <= tableCols;
-                      const active = isHovered || isSelected;
-
-                      return (
-                        <div
-                          key={`${r}-${c}`}
-                          onMouseEnter={() => setHoveredGridCell({ r, c })}
-                          onClick={() => {
-                            setTableRows(r);
-                            setTableCols(c);
-                            handleCreateTableGrid(r, c, tableGap);
-                          }}
-                          className={`w-6 h-5 rounded transition-all cursor-pointer border ${active
-                            ? "bg-emerald-500/30 border-emerald-400 scale-105"
-                            : "bg-[#1E202B] border-[#2E3140] hover:border-gray-500"
-                            }`}
-                          title={`${r} × ${c} Table`}
-                        />
-                      );
-                    })
-                  )}
-                </div>
-                <div className="text-[9px] text-gray-500">
-                  Hover to select, click to create instantly
-                </div>
-              </div>
-
-              {/* Row & Col Inputs */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                    Rows
-                  </label>
-                  <div className="flex items-center bg-[#0D0E13] border border-[#2B2E3C] rounded-lg overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setTableRows(Math.max(1, tableRows - 1))}
-                      className="px-2 py-1 text-gray-400 hover:text-white hover:bg-[#20222D] text-xs font-bold"
-                    >
-                      -
-                    </button>
-                    <input
-                      type="number"
-                      min={1}
-                      max={20}
-                      value={tableRows}
-                      onChange={(e) =>
-                        setTableRows(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))
-                      }
-                      className="w-full text-center bg-transparent text-white text-xs py-1 focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setTableRows(Math.min(20, tableRows + 1))}
-                      className="px-2 py-1 text-gray-400 hover:text-white hover:bg-[#20222D] text-xs font-bold"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                    Columns
-                  </label>
-                  <div className="flex items-center bg-[#0D0E13] border border-[#2B2E3C] rounded-lg overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setTableCols(Math.max(1, tableCols - 1))}
-                      className="px-2 py-1 text-gray-400 hover:text-white hover:bg-[#20222D] text-xs font-bold"
-                    >
-                      -
-                    </button>
-                    <input
-                      type="number"
-                      min={1}
-                      max={20}
-                      value={tableCols}
-                      onChange={(e) =>
-                        setTableCols(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))
-                      }
-                      className="w-full text-center bg-transparent text-white text-xs py-1 focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setTableCols(Math.min(20, tableCols + 1))}
-                      className="px-2 py-1 text-gray-400 hover:text-white hover:bg-[#20222D] text-xs font-bold"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Spacing Option (Seamless vs Spaced) */}
-              <div className="flex items-center justify-between text-[11px] px-0.5">
-                <span className="text-gray-400 text-[10px]">Box Spacing:</span>
-                <div className="flex items-center gap-1 bg-[#0D0E13] p-0.5 rounded-lg border border-[#282B38]">
-                  {[
-                    { label: "Seamless (0px)", val: 0 },
-                    { label: "Spaced (6px)", val: 6 },
-                  ].map((opt) => (
-                    <button
-                      key={opt.val}
-                      type="button"
-                      onClick={() => setTableGap(opt.val)}
-                      className={`px-2 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${tableGap === opt.val
-                        ? "bg-emerald-600 text-white font-bold"
-                        : "text-gray-400 hover:text-white"
-                        }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Insert / Drag Button */}
-              <button
-                type="button"
-                draggable={true}
-                onDragStart={(e) =>
-                  handleItemDragStart(e, {
-                    category: "table-grid",
-                    rows: tableRows,
-                    cols: tableCols,
-                    gap: tableGap,
-                  })
-                }
-                onClick={() => handleCreateTableGrid(tableRows, tableCols, tableGap)}
-                className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-grab active:cursor-grabbing shadow-lg shadow-emerald-950/40"
-                title="Click to insert or drag onto canvas"
-              >
-                <Table className="w-4 h-4" />
-                <span>
-                  Create Table ({tableRows} × {tableCols} = {tableRows * tableCols} Boxes)
-                </span>
-              </button>
             </div>
-          )}
-        </div>
 
-        {/* Upload Media / Files / Graphs / SVGs / Diagrams from PC (AWS S3) */}
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="p-2 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-[#22242D] transition-colors cursor-pointer"
-          title="Upload or Drag & Drop .graphml, .pdf, .json, .md, images or diagrams (Hosted on AWS S3)"
-        >
-          <Upload className="w-4 h-4" />
-        </button>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                Columns
+              </label>
+              <div className="flex items-center bg-[#0D0E13] border border-[#2B2E3C] rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setTableCols(Math.max(1, tableCols - 1))}
+                  className="px-2 py-1 text-gray-400 hover:text-white hover:bg-[#20222D] text-xs font-bold"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={tableCols}
+                  onChange={(e) =>
+                    setTableCols(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))
+                  }
+                  className="w-full text-center bg-transparent text-white text-xs py-1 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setTableCols(Math.min(20, tableCols + 1))}
+                  className="px-2 py-1 text-gray-400 hover:text-white hover:bg-[#20222D] text-xs font-bold"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </div>
 
-        {/* Tech, Product & Flow Icons Gallery Drawer */}
-        <div className="relative" ref={iconGalleryRef}>
+          {/* Spacing Option (Seamless vs Spaced) */}
+          <div className="flex items-center justify-between text-[11px] px-0.5">
+            <span className="text-gray-400 text-[10px]">Box Spacing:</span>
+            <div className="flex items-center gap-1 bg-[#0D0E13] p-0.5 rounded-lg border border-[#282B38]">
+              {[
+                { label: "Seamless (0px)", val: 0 },
+                { label: "Spaced (6px)", val: 6 },
+              ].map((opt) => (
+                <button
+                  key={opt.val}
+                  type="button"
+                  onClick={() => setTableGap(opt.val)}
+                  className={`px-2 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${tableGap === opt.val
+                    ? "bg-emerald-600 text-white font-bold"
+                    : "text-gray-400 hover:text-white"
+                    }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Insert / Drag Button */}
           <button
             type="button"
-            onClick={() => setShowIconGallery(!showIconGallery)}
-            className={`p-2 rounded-lg transition-colors cursor-pointer relative ${showIconGallery
-              ? "bg-cyan-600 text-white shadow-sm ring-1 ring-cyan-400"
-              : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-              }`}
-            title="Tech, Product & Flow Icons Gallery (Click or Drag into draw board)"
+            draggable={true}
+            onDragStart={(e) =>
+              handleItemDragStart(e, {
+                category: "table-grid",
+                rows: tableRows,
+                cols: tableCols,
+                gap: tableGap,
+              })
+            }
+            onClick={() => handleCreateTableGrid(tableRows, tableCols, tableGap)}
+            className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-grab active:cursor-grabbing shadow-lg shadow-emerald-950/40"
+            title="Click to insert or drag onto canvas"
           >
-            <Boxes className="w-4 h-4 text-cyan-400" />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-cyan-400 ring-2 ring-[#121316]" />
+            <Table className="w-4 h-4" />
+            <span>
+              Create Table ({tableRows} × {tableCols} = {tableRows * tableCols} Boxes)
+            </span>
           </button>
+        </div>
+      )}
 
-          {showIconGallery && (
-            <div
-              onMouseDown={(e) => e.stopPropagation()}
-              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#151720] border border-[#2D3039] rounded-2xl shadow-2xl p-3 w-[min(460px,calc(100vw-32px))] max-h-[min(520px,75vh)] flex flex-col gap-2.5 z-50 animate-in fade-in-50 backdrop-blur-xl"
-            >
-              {/* Header */}
+      {/* 5f. FLOATING ICON GALLERY DRAWER */}
+      {showIconGallery && (
+        <div
+          ref={iconGalleryRef}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          className="absolute bottom-18 sm:bottom-20 left-1/2 -translate-x-1/2 mb-1 bg-[#151720] border border-[#2D3039] rounded-2xl shadow-2xl p-3 w-[min(460px,calc(100vw-32px))] max-h-[min(520px,75vh)] flex flex-col gap-2.5 z-50 animate-in fade-in-50 backdrop-blur-xl"
+        >              {/* Header */}
               <div className="flex items-center justify-between pb-1.5 border-b border-[#252834]">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
@@ -11347,207 +11062,590 @@ export default function WhiteboardCanvas({
               </div>
             </div>
           )}
+
+      {/* 5g. FLOATING TEMPLATE SELECTOR DRAWER */}
+      {showTemplateSelector && (
+        <div
+          ref={templateSelectorRef}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          className="absolute bottom-18 sm:bottom-20 left-1/2 -translate-x-1/2 mb-1 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-2.5 w-64 max-w-[calc(100vw-32px)] z-50 animate-in fade-in-50"
+        >
+          <div className="px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+            <span>Insert Functional Area</span>
+            <button
+              onClick={() => setShowTemplateSelector(false)}
+              className="hover:text-white cursor-pointer"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+
+          <div className="space-y-1">
+            <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "functional-area",
+                  areaType: "meeting-notes",
+                })
+              }
+              onClick={() => handleInsertFunctionalArea("meeting-notes")}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors cursor-grab active:cursor-grabbing"
+              title="Meeting Notes Area (Click or Hold & Drag onto canvas)"
+            >
+              <Calendar className="w-4 h-4 text-blue-400 shrink-0" />
+              <div>
+                <div>Meeting Notes Area</div>
+                <div className="text-[10px] text-gray-400 font-normal">Agendas & Action Items</div>
+              </div>
+            </button>
+
+            <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "functional-area",
+                  areaType: "notes",
+                })
+              }
+              onClick={() => handleInsertFunctionalArea("notes")}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors cursor-grab active:cursor-grabbing"
+              title="Notes & Brainstorm Area (Click or Hold & Drag onto canvas)"
+            >
+              <StickyNote className="w-4 h-4 text-amber-400 shrink-0" />
+              <div>
+                <div>Notes & Brainstorm Area</div>
+                <div className="text-[10px] text-gray-400 font-normal">Color-Coded Stickies</div>
+              </div>
+            </button>
+
+            <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "functional-area",
+                  areaType: "diagram",
+                })
+              }
+              onClick={() => handleInsertFunctionalArea("diagram")}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors cursor-grab active:cursor-grabbing"
+              title="System Diagram Area (Click or Hold & Drag onto canvas)"
+            >
+              <GitFork className="w-4 h-4 text-cyan-400 shrink-0" />
+              <div>
+                <div>System Diagram Area</div>
+                <div className="text-[10px] text-gray-400 font-normal">Architecture & Flow</div>
+              </div>
+            </button>
+
+            <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "functional-area",
+                  areaType: "project-planner",
+                })
+              }
+              onClick={() => handleInsertFunctionalArea("project-planner")}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors cursor-grab active:cursor-grabbing"
+              title="Project Planner Area (Click or Hold & Drag onto canvas)"
+            >
+              <Kanban className="w-4 h-4 text-purple-400 shrink-0" />
+              <div>
+                <div>Project Planner Area</div>
+                <div className="text-[10px] text-gray-400 font-normal">Phases & Milestones</div>
+              </div>
+            </button>
+
+            <button
+              draggable={true}
+              onDragStart={(e) =>
+                handleItemDragStart(e, {
+                  category: "functional-area",
+                  areaType: "org-chart",
+                })
+              }
+              onClick={() => handleInsertFunctionalArea("org-chart")}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors cursor-grab active:cursor-grabbing"
+              title="Organizational Chart Area (Click or Hold & Drag onto canvas)"
+            >
+              <CheckSquare className="w-4 h-4 text-blue-400 shrink-0" />
+              <div>
+                <div>Organizational Chart Area</div>
+                <div className="text-[10px] text-gray-400 font-normal">Hierarchy & Roles</div>
+              </div>
+            </button>
+          </div>
         </div>
+      )}
+
+      {/* 5h. FLOATING BOTTOM STYLE PALETTE POPOVER */}
+      {showBottomStylePalette && (
+        <div
+          ref={stylePaletteRef}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          className="absolute bottom-18 sm:bottom-20 left-1/2 -translate-x-1/2 mb-1 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-3 w-64 max-w-[calc(100vw-32px)] z-50 animate-in fade-in-50"
+        >
+          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+            Color Palette
+          </div>
+          <div className="grid grid-cols-5 gap-2 mb-3">
+            {COLOR_PALETTE.map((c) => (
+              <button
+                key={c.name}
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => {
+                  setActiveColor(c.value);
+                  if (selectedNodeId || selectedNodeIds.length > 0) updateSelectedNode({ color: c.value });
+                }}
+                className="w-7 h-7 rounded-full border border-white/20 hover:scale-110 transition-transform cursor-pointer"
+                style={{ backgroundColor: c.value }}
+                title={c.name}
+              />
+            ))}
+          </div>
+
+          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+            Fill Style
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {(["solid", "tint", "none"] as const).map((ft) => (
+              <button
+                key={ft}
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => {
+                  setActiveFillType(ft);
+                  if (selectedNodeId || selectedNodeIds.length > 0) updateSelectedNode({ fillType: ft });
+                }}
+                className={`px-2 py-1 rounded text-xs capitalize cursor-pointer ${activeFillType === ft
+                  ? "bg-blue-600 text-white font-semibold"
+                  : "bg-[#22242D] text-gray-300 hover:text-white"
+                  }`}
+              >
+                {ft}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div
+        className="absolute bottom-5 left-1/2 -translate-x-1/2 z-40 bg-[#16171E]/95 backdrop-blur-md border border-[#262832] rounded-xl shadow-2xl px-2 sm:px-3 py-1.5 flex items-center gap-1 sm:gap-1.5 max-w-[calc(100vw-24px)] md:max-w-[calc(100vw-32px)] xl:max-w-none touch-pan-x scrollbar-none overflow-x-auto [&>*]:shrink-0"
+      >
+        {/* V - Select Tool */}
+        <button
+          onClick={() => setActiveTool("select")}
+          className={`p-2 rounded-lg transition-colors ${activeTool === "select"
+            ? "bg-blue-600 text-white shadow-sm"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Select (V)"
+        >
+          <MousePointer className="w-4 h-4" />
+        </button>
+
+        {/* H - Hand Tool */}
+        <button
+          onClick={() => setActiveTool("hand")}
+          className={`p-2 rounded-lg transition-colors ${activeTool === "hand"
+            ? "bg-blue-600 text-white shadow-sm"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Pan Hand (H)"
+        >
+          <Hand className="w-4 h-4" />
+        </button>
+
+        {/* Task Card Node Tool */}
+        <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, { category: "node", type: "task" })
+          }
+          onClick={() => {
+            setActiveTool("task");
+            handleAddNode("task");
+          }}
+          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "task"
+            ? "bg-blue-600 text-white shadow-sm"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Add Org Task Card (Click or Hold & Drag onto canvas)"
+        >
+          <CheckSquare className="w-4 h-4" />
+        </button>
+
+        {/* D - Pen / Draw Tool */}
+        <button
+          onClick={() => {
+            setActiveTool(activeTool === "draw" ? "select" : "draw");
+            setShowShapePalette(false);
+            setShowTableDialog(false);
+            setShowIconGallery(false);
+            setShowTemplateSelector(false);
+            setShowBottomStylePalette(false);
+          }}
+          className={`p-2 rounded-lg transition-colors ${activeTool === "draw"
+            ? "bg-pink-600 text-white shadow-sm ring-1 ring-pink-400"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Pen Draw Tool (P or D)"
+        >
+          <PenTool className="w-4 h-4" />
+        </button>
+
+        {/* R - Shapes Tool */}
+        <button
+          type="button"
+          data-shape-trigger="true"
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "node",
+              type: "shape",
+              shapeType: "rectangle",
+            })
+          }
+          onClick={() => {
+            const next = !showShapePalette;
+            setShowShapePalette(next);
+            if (next) {
+              setShowTableDialog(false);
+              setShowIconGallery(false);
+              setShowTemplateSelector(false);
+              setShowBottomStylePalette(false);
+            }
+          }}
+          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing shrink-0 ${showShapePalette || activeTool === "shape"
+            ? "bg-blue-600 text-white shadow-sm"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Shapes (Click or Hold & Drag onto canvas)"
+        >
+          <Square className="w-4 h-4" />
+        </button>
+
+        {/* L - Straight Line Tool */}
+        <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "node",
+              type: "line",
+              shapeType: "line",
+            })
+          }
+          onClick={() =>
+            setActiveTool(activeTool === "line" ? "select" : "line")
+          }
+          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "line"
+            ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-400"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Straight Line (L) - Click to draw or drag onto canvas"
+        >
+          <Minus className="w-4 h-4" />
+        </button>
+
+        {/* Independent Arrow Tool */}
+        <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "node",
+              type: "line",
+              shapeType: "arrow",
+            })
+          }
+          onClick={() =>
+            setActiveTool(activeTool === "arrow-line" ? "select" : "arrow-line")
+          }
+          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "arrow-line"
+            ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-400"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Independent Arrow - Click to draw or drag onto canvas"
+        >
+          <ArrowUpRight className="w-4 h-4" />
+        </button>
+
+        {/* A - Arrow / Connector Tool */}
+        <button
+          onClick={() => {
+            if (activeTool === "arrow") {
+              setActiveTool("select");
+              setConnectingFromNodeId(null);
+              setConnectingMousePos(null);
+            } else {
+              setActiveTool("arrow");
+            }
+          }}
+          className={`p-2 rounded-lg transition-colors ${activeTool === "arrow"
+            ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-400"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Arrow Connector <- -> <-> (A)"
+        >
+          <MoveRight className="w-4 h-4" />
+        </button>
+
+        {/* Sticky Note Tool (Text File Structuring) */}
+        <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "node",
+              type: "sticky",
+              noteFormat: "text",
+              isChecklist: false,
+            })
+          }
+          onClick={() => {
+            setActiveTool("sticky");
+            handleAddNode("sticky", "rectangle", "#EC4899", false, undefined, "text");
+          }}
+          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "sticky"
+            ? "bg-pink-600/30 text-pink-300 shadow-sm"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Sticky Note - Text File Structuring (Click or Hold & Drag)"
+        >
+          <StickyNote className="w-4 h-4 text-pink-400" />
+        </button>
+
+        {/* JSON Note Tool */}
+        <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "node",
+              type: "sticky",
+              color: "#F59E0B",
+              isChecklist: false,
+              noteFormat: "json",
+            })
+          }
+          onClick={() => {
+            setActiveTool("sticky");
+            handleAddNode("sticky", "rectangle", "#F59E0B", false, undefined, "json");
+          }}
+          className="p-2 rounded-lg text-amber-400 hover:text-amber-300 hover:bg-[#22242D] transition-colors cursor-grab active:cursor-grabbing"
+          title="JSON Note - Syntax Highlighted & Auto-Format Structure (Click or Hold & Drag)"
+        >
+          <Braces className="w-4 h-4" />
+        </button>
+
+        {/* Markdown Note Tool */}
+        <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "node",
+              type: "sticky",
+              color: "#6366F1",
+              isChecklist: false,
+              noteFormat: "markdown",
+            })
+          }
+          onClick={() => {
+            setActiveTool("sticky");
+            handleAddNode("sticky", "rectangle", "#6366F1", false, undefined, "markdown");
+          }}
+          className="p-2 rounded-lg text-indigo-400 hover:text-indigo-300 hover:bg-[#22242D] transition-colors cursor-grab active:cursor-grabbing"
+          title="Markdown Note - Rendered Markdown & Checklists (Click or Hold & Drag)"
+        >
+          <FileCode className="w-4 h-4" />
+        </button>
+
+        {/* Direct Add .md / .json File Tool */}
+        <button
+          type="button"
+          onClick={() => directFileInputRef.current?.click()}
+          className="p-2 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-[#22242D] transition-colors cursor-pointer"
+          title="Direct Add .md / .json / .txt File from PC"
+        >
+          <FileUp className="w-4 h-4" />
+        </button>
+
+        {/* Shift+N - Todo / Checklist Sticky Tool */}
+        <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "node",
+              type: "sticky",
+              isChecklist: true,
+              color: "#38BDF8",
+              noteFormat: "checklist",
+            })
+          }
+          onClick={() => {
+            setActiveTool("sticky");
+            handleAddNode("sticky", "rectangle", "#38BDF8", true, undefined, "checklist");
+          }}
+          className="p-2 rounded-lg text-cyan-400 hover:text-cyan-300 hover:bg-[#22242D] transition-colors cursor-grab active:cursor-grabbing"
+          title="Todo / Checklist Note with Checkboxes (Click or Hold & Drag onto canvas)"
+        >
+          <ListTodo className="w-4 h-4" />
+        </button>
+
+        {/* T - Text Tool */}
+        <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, { category: "node", type: "text" })
+          }
+          onClick={() => {
+            setActiveTool("text");
+            handleAddNode("text");
+          }}
+          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${activeTool === "text"
+            ? "bg-blue-600 text-white shadow-sm"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Text (Click or Hold & Drag onto canvas)"
+        >
+          <Type className="w-4 h-4" />
+        </button>
+
+        {/* F - Frame Tool (Empty rectangle shape with switcher, color, branch, copy) */}
+        <button
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "node",
+              type: "shape",
+              shapeType: "rectangle",
+              color: "#60A5FA",
+              initialTitle: "",
+            })
+          }
+          onClick={() => handleAddNode("shape", "rectangle", "#60A5FA", false, undefined, undefined, "")}
+          className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#22242D] transition-colors cursor-grab active:cursor-grabbing shrink-0"
+          title="Frame - Empty Rectangle (Click or Hold & Drag onto canvas)"
+        >
+          <Maximize className="w-4 h-4" />
+        </button>
+
+        {/* Table Grid Tool (R x C arrangement of boxes) */}
+        <button
+          type="button"
+          data-table-trigger="true"
+          onClick={() => {
+            const next = !showTableDialog;
+            setShowTableDialog(next);
+            if (next) {
+              setShowShapePalette(false);
+              setShowIconGallery(false);
+              setShowTemplateSelector(false);
+              setShowBottomStylePalette(false);
+            }
+          }}
+          className={`p-2 rounded-lg transition-colors cursor-pointer relative shrink-0 ${showTableDialog
+            ? "bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Create Table Grid (Rows × Cols of boxes - Click or Drag onto canvas)"
+        >
+          <Table className="w-4 h-4 text-emerald-400" />
+          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#121316]" />
+        </button>
+
+        {/* Upload Media / Files / Graphs / SVGs / Diagrams from PC (AWS S3) */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="p-2 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-[#22242D] transition-colors cursor-pointer"
+          title="Upload or Drag & Drop .graphml, .pdf, .json, .md, images or diagrams (Hosted on AWS S3)"
+        >
+          <Upload className="w-4 h-4" />
+        </button>
+
+        {/* Tech, Product & Flow Icons Gallery */}
+        <button
+          type="button"
+          data-icon-trigger="true"
+          onClick={() => {
+            const next = !showIconGallery;
+            setShowIconGallery(next);
+            if (next) {
+              setShowShapePalette(false);
+              setShowTableDialog(false);
+              setShowTemplateSelector(false);
+              setShowBottomStylePalette(false);
+            }
+          }}
+          className={`p-2 rounded-lg transition-colors cursor-pointer relative shrink-0 ${showIconGallery
+            ? "bg-cyan-600 text-white shadow-sm ring-1 ring-cyan-400"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Tech, Product & Flow Icons Gallery (Click or Drag into draw board)"
+        >
+          <Boxes className="w-4 h-4 text-cyan-400" />
+          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-cyan-400 ring-2 ring-[#121316]" />
+        </button>
 
         {/* Templates & Functional Areas Drawer */}
-        <div className="relative" ref={templateSelectorRef}>
-          <button
-            draggable={true}
-            onDragStart={(e) =>
-              handleItemDragStart(e, {
-                category: "functional-area",
-                areaType: "project-planner",
-              })
+        <button
+          type="button"
+          data-template-trigger="true"
+          draggable={true}
+          onDragStart={(e) =>
+            handleItemDragStart(e, {
+              category: "functional-area",
+              areaType: "project-planner",
+            })
+          }
+          onClick={() => {
+            const next = !showTemplateSelector;
+            setShowTemplateSelector(next);
+            if (next) {
+              setShowShapePalette(false);
+              setShowTableDialog(false);
+              setShowIconGallery(false);
+              setShowBottomStylePalette(false);
             }
-            onClick={() => setShowTemplateSelector(!showTemplateSelector)}
-            className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${showTemplateSelector
-              ? "bg-purple-600 text-white shadow-sm"
-              : "text-gray-400 hover:text-white hover:bg-[#22242D]"
-              }`}
-            title="Templates & Functional Areas (Click or Hold & Drag onto canvas)"
-          >
-            <LayoutGrid className="w-4 h-4 text-purple-400" />
-          </button>
+          }}
+          className={`p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing shrink-0 ${showTemplateSelector
+            ? "bg-purple-600 text-white shadow-sm"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Templates & Functional Areas (Click or Hold & Drag onto canvas)"
+        >
+          <LayoutGrid className="w-4 h-4 text-purple-400" />
+        </button>
 
-          {showTemplateSelector && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-2.5 w-64 max-w-[calc(100vw-32px)] z-50 animate-in fade-in-50">
-              <div className="px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center justify-between">
-                <span>Insert Functional Area</span>
-                <button
-                  onClick={() => setShowTemplateSelector(false)}
-                  className="hover:text-white"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
+        <div className="h-5 w-px bg-[#262832] shrink-0" />
 
-              <div className="space-y-1">
-                <button
-                  draggable={true}
-                  onDragStart={(e) =>
-                    handleItemDragStart(e, {
-                      category: "functional-area",
-                      areaType: "meeting-notes",
-                    })
-                  }
-                  onClick={() => handleInsertFunctionalArea("meeting-notes")}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors cursor-grab active:cursor-grabbing"
-                  title="Meeting Notes Area (Click or Hold & Drag onto canvas)"
-                >
-                  <Calendar className="w-4 h-4 text-blue-400 shrink-0" />
-                  <div>
-                    <div>Meeting Notes Area</div>
-                    <div className="text-[10px] text-gray-400 font-normal">Agendas & Action Items</div>
-                  </div>
-                </button>
+        {/* Color / Fill Palette (Bottom Toolbar) */}
+        <button
+          type="button"
+          data-palette-trigger="true"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={() => {
+            const next = !showBottomStylePalette;
+            setShowBottomStylePalette(next);
+            if (next) {
+              setShowShapePalette(false);
+              setShowTableDialog(false);
+              setShowIconGallery(false);
+              setShowTemplateSelector(false);
+            }
+          }}
+          className={`p-2 rounded-lg transition-colors cursor-pointer shrink-0 ${showBottomStylePalette
+            ? "bg-blue-600 text-white shadow-sm"
+            : "text-gray-400 hover:text-white hover:bg-[#22242D]"
+            }`}
+          title="Style Palette"
+        >
+          <Palette className="w-4 h-4" />
+        </button>
 
-                <button
-                  draggable={true}
-                  onDragStart={(e) =>
-                    handleItemDragStart(e, {
-                      category: "functional-area",
-                      areaType: "notes",
-                    })
-                  }
-                  onClick={() => handleInsertFunctionalArea("notes")}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors cursor-grab active:cursor-grabbing"
-                  title="Notes & Brainstorm Area (Click or Hold & Drag onto canvas)"
-                >
-                  <StickyNote className="w-4 h-4 text-amber-400 shrink-0" />
-                  <div>
-                    <div>Notes & Brainstorm Area</div>
-                    <div className="text-[10px] text-gray-400 font-normal">Color-Coded Stickies</div>
-                  </div>
-                </button>
-
-                <button
-                  draggable={true}
-                  onDragStart={(e) =>
-                    handleItemDragStart(e, {
-                      category: "functional-area",
-                      areaType: "diagram",
-                    })
-                  }
-                  onClick={() => handleInsertFunctionalArea("diagram")}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors cursor-grab active:cursor-grabbing"
-                  title="System Diagram Area (Click or Hold & Drag onto canvas)"
-                >
-                  <GitFork className="w-4 h-4 text-cyan-400 shrink-0" />
-                  <div>
-                    <div>System Diagram Area</div>
-                    <div className="text-[10px] text-gray-400 font-normal">Architecture & Flow</div>
-                  </div>
-                </button>
-
-                <button
-                  draggable={true}
-                  onDragStart={(e) =>
-                    handleItemDragStart(e, {
-                      category: "functional-area",
-                      areaType: "project-planner",
-                    })
-                  }
-                  onClick={() => handleInsertFunctionalArea("project-planner")}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors cursor-grab active:cursor-grabbing"
-                  title="Project Planner Area (Click or Hold & Drag onto canvas)"
-                >
-                  <Kanban className="w-4 h-4 text-purple-400 shrink-0" />
-                  <div>
-                    <div>Project Planner Area</div>
-                    <div className="text-[10px] text-gray-400 font-normal">Phases & Milestones</div>
-                  </div>
-                </button>
-
-                <button
-                  draggable={true}
-                  onDragStart={(e) =>
-                    handleItemDragStart(e, {
-                      category: "functional-area",
-                      areaType: "org-chart",
-                    })
-                  }
-                  onClick={() => handleInsertFunctionalArea("org-chart")}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-200 hover:bg-[#23252E] hover:text-white text-left transition-colors cursor-grab active:cursor-grabbing"
-                  title="Organizational Chart Area (Click or Hold & Drag onto canvas)"
-                >
-                  <CheckSquare className="w-4 h-4 text-blue-400 shrink-0" />
-                  <div>
-                    <div>Organizational Chart Area</div>
-                    <div className="text-[10px] text-gray-400 font-normal">Hierarchy & Roles</div>
-                  </div>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="h-5 w-px bg-[#262832]" />
-
-        {/* Color / Fill Palette (Matching Screenshot 5) */}
-        <div className="relative" ref={stylePaletteRef}>
-          <button
-            type="button"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={() => setShowStylePalette(!showStylePalette)}
-            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#22242D] transition-colors cursor-pointer"
-            title="Style Palette"
-          >
-            <Palette className="w-4 h-4" />
-          </button>
-
-          {showStylePalette && (
-            <div
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#181920] border border-[#2D3039] rounded-xl shadow-2xl p-3 w-64 max-w-[calc(100vw-32px)] z-50 animate-in fade-in-50"
-            >
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                Color Palette
-              </div>
-              <div className="grid grid-cols-5 gap-2 mb-3">
-                {COLOR_PALETTE.map((c) => (
-                  <button
-                    key={c.name}
-                    type="button"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={() => {
-                      setActiveColor(c.value);
-                      if (selectedNodeId || selectedNodeIds.length > 0) updateSelectedNode({ color: c.value });
-                    }}
-                    className="w-7 h-7 rounded-full border border-white/20 hover:scale-110 transition-transform cursor-pointer"
-                    style={{ backgroundColor: c.value }}
-                    title={c.name}
-                  />
-                ))}
-              </div>
-
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                Fill Style
-              </div>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(["solid", "tint", "none"] as const).map((ft) => (
-                  <button
-                    key={ft}
-                    type="button"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={() => {
-                      setActiveFillType(ft);
-                      if (selectedNodeId || selectedNodeIds.length > 0) updateSelectedNode({ fillType: ft });
-                    }}
-                    className={`px-2 py-1 rounded text-xs capitalize cursor-pointer ${activeFillType === ft
-                      ? "bg-blue-600 text-white font-semibold"
-                      : "bg-[#22242D] text-gray-300 hover:text-white"
-                      }`}
-                  >
-                    {ft}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="h-5 w-px bg-[#262832]" />
+        <div className="h-5 w-px bg-[#262832] shrink-0" />
 
         {/* Undo / Redo */}
         <button
