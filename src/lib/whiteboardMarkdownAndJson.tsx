@@ -3,12 +3,103 @@ import { Check, Copy, Code, CheckSquare, Square, FileText, Braces } from "lucide
 import katex from "katex";
 
 /**
+ * Normalizes mathematical expressions and restores unescaped LaTeX keywords so that
+ * mathematical formulas are never rendered as run-together "combined words"
+ * (e.g. "equiv", "pmod", "implies", "mathbb{Z}") but as true mathematical symbols.
+ */
+function escapeSetBraces(str: string): string {
+  let result = "";
+  let i = 0;
+  while (i < str.length) {
+    if (str[i] === "{" && (i === 0 || str[i - 1] !== "\\")) {
+      // Check if this { is preceded by a LaTeX command like \mathbb or \mathbf
+      let k = i - 1;
+      while (k >= 0 && /\s/.test(str[k])) k--;
+      const endWord = k;
+      while (k >= 0 && /[a-zA-Z\\]/.test(str[k])) k--;
+      let prevWord = "";
+      if (endWord >= 0) {
+        prevWord = str.substring(k + 1, endWord + 1);
+      }
+      const isMacroArg = prevWord.startsWith("\\") || prevWord === "^" || prevWord === "_";
+
+      if (!isMacroArg) {
+        // Find matching closing brace
+        let depth = 1;
+        let j = i + 1;
+        while (j < str.length && depth > 0) {
+          if (str[j] === "{" && str[j - 1] !== "\\") depth++;
+          else if (str[j] === "}" && str[j - 1] !== "\\") depth--;
+          j++;
+        }
+        if (depth === 0) {
+          const inner = str.substring(i + 1, j - 1);
+          // If inner has colon (set builder) or commas (set elements) or dots
+          if (inner.includes(":") || inner.includes(",") || inner.includes("\\dots") || inner.includes("dots")) {
+            result += "\\{" + escapeSetBraces(inner) + "\\}";
+            i = j;
+            continue;
+          }
+        }
+      }
+    }
+    result += str[i];
+    i++;
+  }
+  return result;
+}
+
+export function preprocessLaTeX(raw: string): string {
+  if (!raw) return "";
+  let s = raw.trim();
+
+  // 1. Recover control characters that got swallowed (e.g. \t -> tab, \b -> backspace, etc.)
+  s = s
+    .replace(/\t\s*ext\b/g, "\\text")
+    .replace(/\t\s*imes\b/g, "\\times")
+    .replace(/\t\s*herefore\b/g, "\\therefore")
+    .replace(/[\b]\s*mod\b/g, "\\bmod")
+    .replace(/[\r\n]\s*eq\b/g, "\\neq");
+
+  // 2. Multi-char LaTeX keywords that are definitely macros if unescaped
+  const macros = [
+    "equiv", "pmod", "bmod", "implies", "iff", "mathbb", "mathbf", "mathrm",
+    "mathit", "cdot", "times", "dots", "ldots", "cdots", "therefore",
+    "quad", "qquad", "forall", "exists", "subset", "subseteq", "emptyset",
+    "notin", "leftarrow", "rightarrow", "Leftarrow", "Rightarrow",
+    "div", "sqrt", "frac", "cap", "cup", "mid", "text"
+  ];
+  for (const m of macros) {
+    const reg = new RegExp("(?<![\\\\a-zA-Z])" + m + "(?![a-zA-Z])", "g");
+    s = s.replace(reg, "\\" + m);
+  }
+
+  // 3. Short relational tokens (in, le, ge, ne, neq, pm)
+  const rels = ["in", "le", "ge", "ne", "neq", "pm"];
+  for (const r of rels) {
+    const reg = new RegExp("(?<![\\\\a-zA-Z])" + r + "(?![a-zA-Z])", "g");
+    s = s.replace(reg, "\\" + r);
+  }
+
+  // 4. Modulo syntax
+  s = s.replace(/\(\s*\\?bmod\s+([a-zA-Z0-9]+)\s*\)/g, "\\pmod{$1}");
+  s = s.replace(/\(\s*mod\s+([a-zA-Z0-9]+)\s*\)/g, "\\pmod{$1}");
+  s = s.replace(/(?<![\\a-zA-Z])mod(?![a-zA-Z])/g, "\\bmod");
+
+  // 5. Bare set braces
+  s = escapeSetBraces(s);
+
+  return s;
+}
+
+/**
  * Renders LaTeX math formulas into authentic mathematical typography via KaTeX.
  * Safe fallback in case of syntax error prevents canvas crashes.
  */
 export function renderKaTeXToString(latex: string, displayMode: boolean = false): string {
   try {
-    return katex.renderToString(latex.trim(), {
+    const preprocessed = preprocessLaTeX(latex);
+    return katex.renderToString(preprocessed, {
       displayMode,
       throwOnError: false,
       output: "htmlAndMathml",
@@ -33,13 +124,19 @@ export function isLikelyMathExpression(content: string): boolean {
   if (t.includes("\\")) return true;
   // If it has math relations or operators
   if (/[=<>+\-*\/^_|:≡≠≤≥∈∉∪∩⊂⊆∅]/.test(t)) return true;
-  // If it is a mathematical variable or notation (e.g. [a], Z_m, r, n, q)
+  // If it has math words
   if (
-    /^[a-zA-Z0-9_{}\[\]\(\)\s\.,\+-]+$/.test(t) &&
-    !/\b(and|or|the|is|are|was|were|total|for|with|from|to)\b/i.test(t)
-  ) {
-    // If it is solely a digit or price, it is probably currency like $50
-    if (/^\d+(\.\d+)?$/.test(t)) return false;
+    /\b(equiv|pmod|bmod|implies|iff|mathbb|mathbf|cdot|times|dots|therefore|quad|subset|subseteq|cap|cup|emptyset|notin|mod)\b/i.test(
+      t
+    )
+  )
+    return true;
+  // If it contains non-math English sentence words, it is likely prose
+  if (/\b(and|or|the|is|are|was|were|total|for|with|from|to|item|items|price|cost|dollars?|cents?)\b/i.test(t)) {
+    return false;
+  }
+  // Math variables, numbers, exponents, subscripts, brackets, sets
+  if (/^[a-zA-Z0-9_{}\[\]\(\)\s\.,\+-]+$/.test(t)) {
     return true;
   }
   return false;
