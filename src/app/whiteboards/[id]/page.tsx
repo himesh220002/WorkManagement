@@ -7,6 +7,9 @@ import { serializeDocs } from "@/lib/serialize";
 import WhiteboardCanvas from "@/components/whiteboard/WhiteboardCanvas";
 import { ORG_CHART_NODES, ORG_CHART_EDGES } from "@/lib/whiteboardTemplates";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = {
   title: "Whiteboard Editor | TaskPMS",
   description: "Collaborative canvas and visual organization blueprints",

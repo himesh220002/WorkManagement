@@ -151,4 +151,16 @@
   .neon-border-emerald {
     border-color: var(--color-status-success) !important;
   }
+
+  /* KaTeX Mathematical Equation Styling */
+  .katex-display {
+    margin: 0.35em 0 !important;
+    text-align: center;
+  }
+  .katex {
+    text-rendering: geometricPrecision;
+  }
+  .katex-html {
+    white-space: normal;
+  }
 }

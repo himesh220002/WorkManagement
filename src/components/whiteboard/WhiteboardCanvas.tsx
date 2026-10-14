@@ -117,6 +117,7 @@ import {
   validateJson,
   renderJsonSyntaxHighlighted,
   renderMarkdownToJsx,
+  renderInlineMarkdown,
   toggleMarkdownCheckbox,
   NoteFormat,
 } from "@/lib/whiteboardMarkdownAndJson";
@@ -171,9 +172,27 @@ const CANVAS_BG_THEMES = [
   { name: "Charcoal", label: "Charcoal", value: "#18181B" },
 ];
 
-function isLightBackground(hex: string): boolean {
-  if (!hex) return false;
-  const cleanHex = hex.replace("#", "");
+function isLightBackground(color: string): boolean {
+  if (!color) return false;
+  const c = color.trim().toLowerCase();
+  if (c === "white" || c === "#fff" || c === "#ffffff" || c === "#faf9f8" || c === "#f8fafc") return true;
+  if (c === "black" || c === "#000" || c === "#000000" || c === "#0d0e11" || c === "#1b1a19") return false;
+
+  const rgbMatch = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (rgbMatch) {
+    const r = parseInt(rgbMatch[1], 10);
+    const g = parseInt(rgbMatch[2], 10);
+    const b = parseInt(rgbMatch[3], 10);
+    return (r * 299 + g * 587 + b * 114) / 1000 > 160;
+  }
+
+  const cleanHex = c.replace("#", "");
+  if (cleanHex.length === 3) {
+    const r = parseInt(cleanHex[0] + cleanHex[0], 16);
+    const g = parseInt(cleanHex[1] + cleanHex[1], 16);
+    const b = parseInt(cleanHex[2] + cleanHex[2], 16);
+    return (r * 299 + g * 587 + b * 114) / 1000 > 160;
+  }
   if (cleanHex.length === 6) {
     const r = parseInt(cleanHex.substring(0, 2), 16);
     const g = parseInt(cleanHex.substring(2, 4), 16);
@@ -1441,7 +1460,7 @@ export default function WhiteboardCanvas({
         // 2. If server data was updated more recently than local cache, prefer server!
         const preferServer =
           !isDefaultOrTemplate &&
-          (initialNodesCount > cachedNodesCount || initialTime > cacheTime);
+          (initialNodesCount > cachedNodesCount || initialTime >= cacheTime - 5000);
 
         if (preferServer) {
           lastSyncedUpdatedAtRef.current = initialTime;
@@ -8563,7 +8582,10 @@ export default function WhiteboardCanvas({
               const isMarkdown = format === "markdown";
               const isText = format === "text";
 
-              const stickyTextColor = getStickyTextColor(node.color, node.textColor);
+              const isLightCanvas = isLightBackground(canvasBgColor);
+              const stickyTextColor = isLightCanvas
+                ? "#0F172A"
+                : getStickyTextColor(node.color, node.textColor);
               const items = isChecklist ? parseNodeChecklist(node) : [];
               const completedCount = items.filter((i) => i.completed).length;
               const totalCount = items.length;
@@ -9048,7 +9070,10 @@ export default function WhiteboardCanvas({
               const upperFontSize = parseFontSizePx(node.fontSize, 16);
               const upperTextColor = node.textColor || "#FFFFFF";
               const lowerFontSize = parseFontSizePx(node.bodyFontSize, 12);
-              const lowerTextColor = node.bodyTextColor || "#FFFFFF";
+              const isLightCanvas = isLightBackground(canvasBgColor);
+              const lowerTextColor = isLightCanvas && node.fillType !== "solid"
+                ? "#0F172A"
+                : (node.bodyTextColor || "#FFFFFF");
 
               const lowerContent = (() => {
                 if (node.body && node.subtitle && !node.body.includes(node.subtitle)) {
@@ -9859,7 +9884,7 @@ export default function WhiteboardCanvas({
                           color: node.textColor || node.color || "#FFFFFF",
                         }}
                       >
-                        {node.title || "Text block"}
+                        {node.title ? renderInlineMarkdown(node.title, `txt-${node.id}`) : "Text block"}
                       </span>
                     </div>
                   )}
@@ -10244,7 +10269,7 @@ export default function WhiteboardCanvas({
                         color: node.textColor || "#FFFFFF",
                       }}
                     >
-                      {node.title || ""}
+                      {node.title ? renderInlineMarkdown(node.title, `shp-${node.id}`) : ""}
                     </span>
                   )}
                 </div>

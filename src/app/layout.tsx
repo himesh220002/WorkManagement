@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import "./frappe-gantt.css";
+import "katex/dist/katex.min.css";
 import { AppShell } from "@/components/shell/AppShell";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import { ToastProvider } from "@/components/ui/Toast";

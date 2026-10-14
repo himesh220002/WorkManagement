@@ -1,5 +1,49 @@
 import React from "react";
 import { Check, Copy, Code, CheckSquare, Square, FileText, Braces } from "lucide-react";
+import katex from "katex";
+
+/**
+ * Renders LaTeX math formulas into authentic mathematical typography via KaTeX.
+ * Safe fallback in case of syntax error prevents canvas crashes.
+ */
+export function renderKaTeXToString(latex: string, displayMode: boolean = false): string {
+  try {
+    return katex.renderToString(latex.trim(), {
+      displayMode,
+      throwOnError: false,
+      output: "htmlAndMathml",
+      strict: false,
+    });
+  } catch {
+    const escaped = latex
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    return `<span class="katex-error text-amber-300 font-mono text-[11px]">${escaped}</span>`;
+  }
+}
+
+/**
+ * Detects if content inside $ ... $ is a mathematical expression rather than currency
+ */
+export function isLikelyMathExpression(content: string): boolean {
+  const t = content.trim();
+  if (!t) return false;
+  // If it has LaTeX backslashes or macros (\pmod, \equiv, \mathbb, etc.)
+  if (t.includes("\\")) return true;
+  // If it has math relations or operators
+  if (/[=<>+\-*\/^_|:≡≠≤≥∈∉∪∩⊂⊆∅]/.test(t)) return true;
+  // If it is a mathematical variable or notation (e.g. [a], Z_m, r, n, q)
+  if (
+    /^[a-zA-Z0-9_{}\[\]\(\)\s\.,\+-]+$/.test(t) &&
+    !/\b(and|or|the|is|are|was|were|total|for|with|from|to)\b/i.test(t)
+  ) {
+    // If it is solely a digit or price, it is probably currency like $50
+    if (/^\d+(\.\d+)?$/.test(t)) return false;
+    return true;
+  }
+  return false;
+}
 
 export type NoteFormat = "text" | "json" | "markdown" | "checklist";
 
@@ -178,7 +222,7 @@ export function renderJsonSyntaxHighlighted(
 }
 
 /**
- * Parses inline markdown tokens (bold, italic, inline code, strike, link)
+ * Parses inline markdown tokens (math $...$, display math $$...$$, bold, italic, inline code, strike, link)
  */
 export function renderInlineMarkdown(
   text: string,
@@ -186,12 +230,41 @@ export function renderInlineMarkdown(
   options?: { isLight?: boolean }
 ): React.ReactNode[] {
   const isLight = Boolean(options?.isLight);
-  const regex = /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|~~[^~]+~~|\[[^\]]+\]\([^)]+\))/g;
+  const regex = /(\$\$[^\$]+?\$\$|\$[^$\n]+?\$|`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|~~[^~]+~~|\[[^\]]+\]\([^)]+\))/g;
   const parts = text.split(regex);
   return parts.map((part, idx) => {
     const key = `${keyPrefix}-${idx}`;
     if (!part) return null;
 
+    // 1. Display Math: $$ ... $$
+    if (part.startsWith("$$") && part.endsWith("$$") && part.length > 4) {
+      const latex = part.slice(2, -2);
+      const html = renderKaTeXToString(latex, true);
+      return (
+        <span
+          key={key}
+          className="katex-display-inline my-1.5 block text-center overflow-x-auto select-text scrollbar-thin py-1.5 px-3 rounded-lg bg-slate-900/10 dark:bg-black/35 border border-current/15"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      );
+    }
+
+    // 2. Inline Math: $ ... $
+    if (part.startsWith("$") && part.endsWith("$") && part.length > 2) {
+      const latex = part.slice(1, -1);
+      if (isLikelyMathExpression(latex)) {
+        const html = renderKaTeXToString(latex, false);
+        return (
+          <span
+            key={key}
+            className="katex-inline px-0.5 mx-0.5 select-text inline-block align-baseline font-serif"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        );
+      }
+    }
+
+    // 3. Inline code
     if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
       return (
         <code
@@ -206,6 +279,8 @@ export function renderInlineMarkdown(
         </code>
       );
     }
+
+    // 4. Bold (recursively parses math inside bold)
     if (
       (part.startsWith("**") && part.endsWith("**") && part.length > 4) ||
       (part.startsWith("__") && part.endsWith("__") && part.length > 4)
@@ -215,10 +290,12 @@ export function renderInlineMarkdown(
           key={key}
           className={`font-bold ${isLight ? "text-slate-900" : "text-current"}`}
         >
-          {part.slice(2, -2)}
+          {renderInlineMarkdown(part.slice(2, -2), `${key}-b`, options)}
         </strong>
       );
     }
+
+    // 5. Italic (recursively parses math inside italic)
     if (
       (part.startsWith("*") && part.endsWith("*") && part.length > 2) ||
       (part.startsWith("_") && part.endsWith("_") && part.length > 2)
@@ -228,17 +305,21 @@ export function renderInlineMarkdown(
           key={key}
           className={`italic ${isLight ? "text-slate-700" : "text-current opacity-90"}`}
         >
-          {part.slice(1, -1)}
+          {renderInlineMarkdown(part.slice(1, -1), `${key}-i`, options)}
         </em>
       );
     }
+
+    // 6. Strikethrough
     if (part.startsWith("~~") && part.endsWith("~~") && part.length > 4) {
       return (
         <del key={key} className={`line-through ${isLight ? "text-slate-400" : "text-gray-400"}`}>
-          {part.slice(2, -2)}
+          {renderInlineMarkdown(part.slice(2, -2), `${key}-d`, options)}
         </del>
       );
     }
+
+    // 7. Links
     const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
     if (linkMatch) {
       return (
@@ -258,6 +339,7 @@ export function renderInlineMarkdown(
         </a>
       );
     }
+
     return <span key={key}>{part}</span>;
   });
 }
@@ -300,7 +382,11 @@ export function parseTableCells(rowStr: string): string[] {
   for (let i = 0; i < clean.length; i++) {
     const char = clean[i];
     if (inEscape) {
-      current += char;
+      if (char === "|") {
+        current += "|";
+      } else {
+        current += "\\" + char;
+      }
       inEscape = false;
     } else if (char === "\\") {
       inEscape = true;
@@ -311,6 +397,7 @@ export function parseTableCells(rowStr: string): string[] {
       current += char;
     }
   }
+  if (inEscape) current += "\\";
   cells.push(current.trim());
   return cells;
 }
@@ -403,6 +490,50 @@ export function renderMarkdownToJsx(
     if (inCodeBlock) {
       codeBlockLines.push(line);
       continue;
+    }
+
+    // 1.5 Display Math Block: $$ ... $$ (single-line or multi-line)
+    if (trimmed.startsWith("$$")) {
+      if (trimmed.endsWith("$$") && trimmed.length > 2) {
+        const latex = trimmed.slice(2, -2).trim();
+        const html = renderKaTeXToString(latex, true);
+        nodes.push(
+          <div
+            key={`math-block-${i}`}
+            className="my-2 py-2 px-3 rounded-lg bg-slate-900/10 dark:bg-black/35 border border-current/15 text-center overflow-x-auto select-text scrollbar-thin shadow-xs"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        );
+        continue;
+      } else {
+        const mathLines: string[] = [trimmed.slice(2)];
+        let j = i + 1;
+        let closed = false;
+        while (j < rawLines.length) {
+          const candidate = rawLines[j];
+          const trimmedCandidate = candidate.trim();
+          if (trimmedCandidate.endsWith("$$")) {
+            const lastPart = trimmedCandidate.slice(0, -2);
+            if (lastPart) mathLines.push(lastPart);
+            closed = true;
+            break;
+          } else {
+            mathLines.push(candidate);
+          }
+          j++;
+        }
+        const fullLatex = mathLines.join("\n").trim();
+        const html = renderKaTeXToString(fullLatex, true);
+        nodes.push(
+          <div
+            key={`math-block-${i}`}
+            className="my-2 py-2 px-3 rounded-lg bg-slate-900/10 dark:bg-black/35 border border-current/15 text-center overflow-x-auto select-text scrollbar-thin shadow-xs"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        );
+        i = closed ? j : j - 1;
+        continue;
+      }
     }
 
     // 2. Horizontal Divider: --- or ***
